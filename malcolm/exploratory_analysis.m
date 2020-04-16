@@ -7,8 +7,8 @@ addpath(genpath('C:\code\patch_foraging_neuropix\malcolm\functions'));
 
 % analysis options
 opt = struct;
-opt.tbin = 0.001;
-opt.smoothSigma_time = 0.1;
+opt.tbin = 0.02; % time bin for whole session rate matrix (in sec)
+opt.smoothSigma_time = 0.1; % gauss smoothing sigma for rate matrix (in sec)
 
 sessions = dir(fullfile(paths.data,'*.mat'));
 sessions = {sessions.name};
@@ -86,8 +86,7 @@ for sIdx = 1:numel(sessions)
     atitle('STOP/LICK/ALL TRIALS');
     subplot(4,4,14);
     plot_timecourse('timestamp',lickt_ms,t_align,t_start,t_end,rew_size);
-    atitle('STOP/LICK/SPLIT BY REW SIZE');
-    
+    atitle('STOP/LICK/SPLIT BY REW SIZE');   
 
     % patch leave
     t_align = patchleave_ms;
