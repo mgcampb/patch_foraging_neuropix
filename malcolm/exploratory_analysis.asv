@@ -370,6 +370,8 @@ for sIdx = 1:numel(sessions)
     % compute firing rate mat
     fr_mat = calcFRVsTime(good_cells,dat,opt);
     fr_mat_zscore = my_zscore(fr_mat);
+    
+    keyboard
 
     % pca on firing rate matrix
     [coeffs,score,~,~,expl] = pca(fr_mat_zscore');
@@ -412,12 +414,12 @@ for sIdx = 1:numel(sessions)
     t_start{4} = rew_ms-1000; % -1 to +1 sec rel. to reward
     t_end{4} = rew_ms+1000;
     
-    % group by rew size:
-    grp = cell(4,1);
-    grp{1} = rew_size;
-    grp{2} = rew_size;
-    grp{3} = rew_size;
-    grp{4} = rew_size_indiv;    
+    % groupings by rew size:
+    groupings = cell(4,1);
+    groupings{1} = rew_size;
+    groupings{2} = rew_size;
+    groupings{3} = rew_size;
+    groupings{4} = rew_size_indiv;    
     
     for aIdx = 1:4       
         fig_counter = fig_counter+1;
@@ -425,12 +427,11 @@ for sIdx = 1:numel(sessions)
         hfig(fig_counter).Name = sprintf('%s - pca whole session - task aligned - %s',session,psth_label{aIdx});
         
         for pIdx = 1:6
-            tbin_ms = opt.tbin*1000;
             subplot(2,6,pIdx);
-            plot_timecourse('stream',score(:,pIdx)',t_align{aIdx}/tbin_ms,t_start{aIdx}/tbin_ms,t_end{aIdx}/tbin_ms,[],'resample_bin',1);
+            plot_timecourse('stream',score(:,pIdx)',t_align{aIdx},t_start{aIdx},t_end{aIdx});
             atitle(sprintf('PC%d/%s/ALL TRIALS/',pIdx,psth_label{aIdx}));
             subplot(2,6,pIdx+6);
-            plot_timecourse('stream',score(:,pIdx)',t_align{aIdx}/tbin_ms,t_start{aIdx}/tbin_ms,t_end{aIdx}/tbin_ms,grp{aIdx},'resample_bin',1);
+            plot_timecourse('stream',score(:,pIdx)',t_align{aIdx},t_start{aIdx},t_end{aIdx},groupings{aIdx});
             atitle(sprintf('PC%d/%s/SPLIT BY REW SIZE/',pIdx,psth_label{aIdx}));
         end
     end
