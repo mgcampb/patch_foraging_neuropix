@@ -434,6 +434,40 @@ for sIdx = 1:numel(sessions)
         end
     end
     
+    % plot PC's vs running speed in inter-patch intervals
+    
+    interpatch = true(size(dat.velt));
+    for tIdx = 2:numel(dat.velt)
+        [~,closest_cue] = min(abs(dat.patchCSL(:,1)-dat.velt(tIdx)));
+        [~,closest_leave] = min(abs(dat.patchCSL(:,3)-dat.velt(tIdx)));
+        closest_cue = dat.patchCSL(closest_cue,1);
+        closest_leave = dat.patchCSL(closest_leave,3);
+        if dat.velt(tIdx)>=closest_cue && dat.velt(tIdx-1)<closest_cue
+            interpatch(tIdx) = false;
+        elseif dat.velt(tIdx)>=closest_leave && dat.velt(tIdx-1)<closest_leave
+            interpatch(tIdx) = true;
+        else
+            interpatch(tIdx) = interpatch(tIdx-1);
+        end
+    end
+    
+    fig_counter = fig_counter+1;
+    hfig(fig_counter) = figure('Position',[100 100 2300 700]);
+    hfig(fig_counter).Name = sprintf('%s - pca whole session - speed interpatch - %s',session,psth_label{aIdx});
+    for pIdx = 1:6
+        pc = interp1(tbincent,score(:,pIdx),dat.velt);
+        subplot(2,6,pIdx);
+        my_scatter(dat.vel(~interpatch),pc(~interpatch),'k',0.01);   
+        xlabel('Speed');
+        ylabel('PC val');
+        title(sprintf('PC%d\nIn Patch',pIdx));
+        subplot(2,6,pIdx+6);
+        my_scatter(dat.vel(interpatch),pc(interpatch),'k',0.01);  
+        xlabel('Speed');
+        ylabel('PC val');
+        title('Interpatch');
+    end
+
 end
 toc
 save_figs(fullfile(paths.figs,'pca_whole_session'),hfig,'png');
