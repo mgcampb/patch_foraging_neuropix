@@ -434,8 +434,8 @@ for sIdx = 1:numel(sessions)
         end
     end
     
-    % plot PC's vs running speed in inter-patch intervals
-    
+    % plot PCs vs running speed in inter-patch intervals
+    % first, find interpatch intervals:
     interpatch = true(size(dat.velt));
     for tIdx = 2:numel(dat.velt)
         [~,closest_cue] = min(abs(dat.patchCSL(:,1)-dat.velt(tIdx)));
@@ -450,7 +450,7 @@ for sIdx = 1:numel(sessions)
             interpatch(tIdx) = interpatch(tIdx-1);
         end
     end
-    
+    % make plot:
     fig_counter = fig_counter+1;
     hfig(fig_counter) = figure('Position',[100 100 2300 700]);
     hfig(fig_counter).Name = sprintf('%s - pca whole session - speed interpatch - %s',session,psth_label{aIdx});

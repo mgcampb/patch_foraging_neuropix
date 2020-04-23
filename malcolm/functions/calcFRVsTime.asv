@@ -13,7 +13,6 @@ if ~exist('opt','var')
 end
 
 tbinedge = opt.tstart:opt.tbin:opt.tend;
-tbincent = tbinedge(1:end-1)+opt.tbin/2;
 
 % firing rate matrix
 fr = nan(numel(cell_id),numel(tbinedge)-1);
