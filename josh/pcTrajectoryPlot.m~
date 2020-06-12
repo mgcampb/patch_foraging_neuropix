@@ -209,6 +209,7 @@ for sIdx = 3:3 % replace this when doing multiple sessions
     
     max_len = max(cellfun(@(x)  size(x,1),trial_pc_traj{sIdx}(sample)));
     figure(1)
+    colormap(cool(max_len)); % 541 is the max trial length
     
     for j = 1:numel(sample)
         iTrial = sample(j);
@@ -218,8 +219,6 @@ for sIdx = 3:3 % replace this when doing multiple sessions
         %         display(t_len)
         t = (1:t_len) ./ (t_len / max_len); % scale the colormap according to the length of the trial so we use all of the colormap
 
-        figure(1)
-        colormap(cool(max_len)); % 541 is the max trial length
         subplot(2,1,1)
         patch([trial_pc_traj{sIdx}{iTrial}(:,1)' nan],[trial_pc_traj{sIdx}{iTrial}(:,2)' nan],[t nan],'FaceColor','none','EdgeColor','interp','LineWidth',.5) % color by PRT
         hold on
@@ -229,33 +228,6 @@ for sIdx = 3:3 % replace this when doing multiple sessions
 %         scatter(trial_pc_traj{sIdx}{iTrial}(rew_idx,1),trial_pc_traj{sIdx}{iTrial}(rew_idx,2),'k*') % reward timing (every second)
         xlabel('PC 1')
         ylabel('PC 2')
-        title(sprintf('Session %s Random Sample of 20 Single Trial Trajectories through 2 PC Space',session));
-
-        subplot(2,1,2)
-        patch([trial_pc_traj{sIdx}{iTrial}(:,1)' nan],[trial_pc_traj{sIdx}{iTrial}(:,2)' nan],[trial_pc_traj{sIdx}{iTrial}(:,3)' nan],[t nan],'FaceColor','none','EdgeColor','interp','LineWidth',.5) % color by PRT
-        view(3)
-        grid()
-        hold on
-        scatter3(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),trial_pc_traj{sIdx}{iTrial}(1,3),'bo')
-        scatter3(trial_pc_traj{sIdx}{iTrial}(end,1),trial_pc_traj{sIdx}{iTrial}(end,2),trial_pc_traj{sIdx}{iTrial}(end,3),'rx')
-%         scatter3(trial_pc_traj{sIdx}{iTrial}(rew_idx,1),trial_pc_traj{sIdx}{iTrial}(rew_idx,2),trial_pc_traj{sIdx}{iTrial}(rew_idx,3),'k*') % reward timing (every second)
-
-        xlabel('PC 1')
-        ylabel('PC 2')
-        zlabel('PC 3')
-        title(sprintf('Session %s Random Sample of 20 Single Trial Trajectories through 3 PC Space',session));
-        
-        figure(2)
-        colormap(cool(max_len)); % 541 is the max trial length
-        subplot(2,1,1)
-        patch([trial_pc_traj{sIdx}{iTrial}(:,1)' nan],[trial_pc_traj{sIdx}{iTrial}(:,3)' nan],[t nan],'FaceColor','none','EdgeColor','interp','LineWidth',.5) % color by PRT
-        hold on
-        grid()
-        scatter(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,3),'bo') % start
-        scatter(trial_pc_traj{sIdx}{iTrial}(end,1),trial_pc_traj{sIdx}{iTrial}(end,3),'rx') % end
-%         scatter(trial_pc_traj{sIdx}{iTrial}(rew_idx,1),trial_pc_traj{sIdx}{iTrial}(rew_idx,2),'k*') % reward timing (every second)
-        xlabel('PC 1')
-        ylabel('PC 3')
         title(sprintf('Session %s Random Sample of 20 Single Trial Trajectories through 2 PC Space',session));
 
         subplot(2,1,2)
@@ -404,12 +376,12 @@ for sIdx = 3:3 % replace this when doing multiple sessions
         mean_trajectory = mean(cat(3,padded_trajectories{:}),3);
         
         subplot(2,1,1)
-        plot(mean_trajectory(:,1),mean_trajectory(:,3),'Color',prt_color_grad(q,:),'LineWidth',1.5) % color by PRT
+        plot(mean_trajectory(:,1),mean_trajectory(:,2),'Color',prt_color_grad(q,:),'LineWidth',1.5) % color by PRT
         hold on
-        scatter(mean_trajectory(1,1),mean_trajectory(1,3),'bo')
-        scatter(mean_trajectory(end,1),mean_trajectory(end,3),'rx')
+        scatter(mean_trajectory(1,1),mean_trajectory(1,2),'bo')
+        scatter(mean_trajectory(end,1),mean_trajectory(end,2),'rx')
         xlabel('PC 1')
-        ylabel('PC 3')
+        ylabel('PC 2')
         title(sprintf('Session %s PRT-Quartile Averaged Trial Trajectories through 2 PC Space',session));
         
         subplot(2,1,2)
@@ -566,25 +538,24 @@ for sIdx = 3:3 % replace this when doing multiple sessions
         t2_1 = 1:sec2idx;
         t2_2 = (1:sec2idx) + sec2idx;
         t2_rew = (1000/tbin_ms);
-        patch([mean10x(:,1)' nan],[mean10x(:,3)' nan],[t2_1 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5) % color by PRT
+        patch([mean10x(:,1)' nan],[mean10x(:,2)' nan],[t2_1 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5) % color by PRT
         hold on
-        patch([mean11x(:,1)' nan],[mean11x(:,3)' nan],[t2_2 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5) % color by PRT
+        patch([mean11x(:,1)' nan],[mean11x(:,2)' nan],[t2_2 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5) % color by PRT
         view(2)
         grid()
-        scatter([mean10x(1,1) mean11x(1,1)],[mean10x(1,3) mean11x(1,3)],'bo')
-        scatter([mean10x(end,1) mean11x(end,1)],[mean10x(end,3) mean11x(end,3)],'rx')
-        scatter(mean11x(t2_rew,1),mean11x(t2_rew,3),'k*')
+        scatter([mean10x(1,1) mean11x(1,1)],[mean10x(1,2) mean11x(1,2)],'bo')
+        scatter([mean10x(end,1) mean11x(end,1)],[mean10x(end,2) mean11x(end,2)],'rx')
+        scatter(mean11x(t2_rew,1),mean11x(t2_rew,2),'k*')
         xlabel('PC 1')
-        ylabel('PC 3')
+        ylabel('PC 2')
         title(sprintf('Session %s %i%iX vs %i0X Trajectories through 2 PC Space',session,iRewsize,iRewsize,iRewsize));
         % now 3 dimensions
         subplot(2,1,2)
         patch([mean10x(:,1)' nan],[mean10x(:,2)' nan],[mean10x(:,3)' nan],[t2_1 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5) % color by PRT
         hold on
-%         patch([mean10x(:,1)' nan],[ones(size(mean10x(:,2)')) nan],[mean10x(:,3)' nan],[t2_1 nan],'FaceColor','none','EdgeColor',[.5,1,1],'LineWidth',1.5) % shadow
+        patch([mean10x(:,1)' nan],[mean10x(:,2)' nan],[mean10x(:,3)' nan],[t2_1 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5) % color by PRT
 %         plot3(mean11x(:,1),mean11x(:,2),mean11x(:,3),'Color',barcode_colorgrad2(2,:),'LineWidth',1.5)
         patch([mean11x(:,1)' nan],[mean11x(:,2)' nan],[mean11x(:,3)' nan],[t2_2 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5) % color by PRT
-%         patch([mean11x(:,1)' nan],[ones(size(mean11x(:,2)')) nan],[mean11x(:,3)' nan],[t2_1 nan],'FaceColor','none','EdgeColor',[1,.5,.5],'LineWidth',1.5) % shadow
         view(3)
         grid()
         scatter3([mean10x(1,1) mean11x(1,1)],[mean10x(1,2) mean11x(1,2)],[mean10x(1,3) mean11x(1,3)],'bo')
@@ -609,17 +580,17 @@ for sIdx = 3:3 % replace this when doing multiple sessions
             t3_rew01 = (2000/tbin_ms);
             t3_rew11 = [(1000/tbin_ms) (2000/tbin_ms)];
 
-            patch([mean100x(:,1)' nan],[mean100x(:,3)' nan],[t3_1 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5) 
+            patch([mean100x(:,1)' nan],[mean100x(:,2)' nan],[t3_1 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5) 
             hold on
-            patch([mean110x(:,1)' nan],[mean110x(:,3)' nan],[t3_2 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5)
-            patch([mean101x(:,1)' nan],[mean101x(:,3)' nan],[t3_3 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5)
-            patch([mean111x(:,1)' nan],[mean111x(:,3)' nan],[t3_4 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5) 
+            patch([mean110x(:,1)' nan],[mean110x(:,2)' nan],[t3_2 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5)
+            patch([mean101x(:,1)' nan],[mean101x(:,2)' nan],[t3_3 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5)
+            patch([mean111x(:,1)' nan],[mean111x(:,2)' nan],[t3_4 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5) 
 
-            scatter([mean100x(1,1) mean110x(1,1) mean101x(1,1) mean111x(1,1)],[mean100x(1,3) mean110x(1,3) mean101x(1,3) mean111x(1,3)],'bo')
-            scatter([mean100x(end,1) mean110x(end,1) mean101x(end,1) mean111x(end,1)],[mean100x(end,3) mean110x(end,3) mean101x(end,3) mean111x(end,3)],'rx')
-            scatter([mean110x(t3_rew10,1) mean101x(t3_rew01,1) mean111x(t3_rew11,1)'],[mean110x(t3_rew10,3) mean101x(t3_rew01,3) mean111x(t3_rew11,3)'],'k*')
+            scatter([mean100x(1,1) mean110x(1,1) mean101x(1,1) mean111x(1,1)],[mean100x(1,2) mean110x(1,2) mean101x(1,2) mean111x(1,2)],'bo')
+            scatter([mean100x(end,1) mean110x(end,1) mean101x(end,1) mean111x(end,1)],[mean100x(end,2) mean110x(end,2) mean101x(end,2) mean111x(end,2)],'rx')
+            scatter([mean110x(t3_rew10,1) mean101x(t3_rew01,1) mean111x(t3_rew11,1)'],[mean110x(t3_rew10,2) mean101x(t3_rew01,2) mean111x(t3_rew11,2)'],'k*')
             xlabel('PC 1')
-            ylabel('PC 3')
+            ylabel('PC 2')
             
             grid()
             view(2)
@@ -650,15 +621,15 @@ for sIdx = 3:3 % replace this when doing multiple sessions
             t3_rew10 = (1000/tbin_ms); % reward timing for star visualization
             t3_rew01 = (2000/tbin_ms);
 
-            patch([mean110x(:,1)' nan],[mean110x(:,3)' nan],[t3_1 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5)
+            patch([mean110x(:,1)' nan],[mean110x(:,2)' nan],[t3_1 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5)
             hold on
-            patch([mean101x(:,1)' nan],[mean101x(:,3)' nan],[t3_2 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5)
+            patch([mean101x(:,1)' nan],[mean101x(:,2)' nan],[t3_2 nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5)
 
-            scatter([mean110x(1,1) mean101x(1,1)],[mean110x(1,3) mean101x(1,3)],'bo')
-            scatter([mean110x(end,1) mean101x(end,1)],[mean110x(end,3) mean101x(end,3)],'rx')
-            scatter([mean110x(t3_rew10,1) mean101x(t3_rew01,1)],[mean110x(t3_rew10,3) mean101x(t3_rew01,3)],'k*')
+            scatter([mean110x(1,1) mean101x(1,1)],[mean110x(1,2) mean101x(1,2)],'bo')
+            scatter([mean110x(end,1) mean101x(end,1)],[mean110x(end,2) mean101x(end,2)],'rx')
+            scatter([mean110x(t3_rew10,1) mean101x(t3_rew01,1)],[mean110x(t3_rew10,2) mean101x(t3_rew01,2)],'k*')
             xlabel('PC 1')
-            ylabel('PC 3')
+            ylabel('PC 2')
             grid()
             view(2)
             title(sprintf('Session %s %i0%iX vs %i%i0X Trajectories through 2 PC Space',session,iRewsize,iRewsize,iRewsize,iRewsize));
@@ -719,13 +690,13 @@ for sIdx = 3:3 % replace this when doing multiple sessions
         rewtimes = (1000/tbin_ms):(1000/tbin_ms):t_len;
         subplot(2,1,1)
         grid()
-        p1 = patch([mean_trajectory(:,1)' nan],[mean_trajectory(:,3)' nan],[t nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5); % color by PRT
+        p1 = patch([mean_trajectory(:,1)' nan],[mean_trajectory(:,2)' nan],[t nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5); % color by PRT
         hold on
-        scatter(mean_trajectory(1,1),mean_trajectory(1,3),'bo') % start
-        scatter(mean_trajectory(end,1),mean_trajectory(end,3),'rx') % end
-        scatter(mean_trajectory(rewtimes,1),mean_trajectory(rewtimes,3),'*','MarkerFaceColor',[.4 .4 .4],'MarkerEdgeColor',[.4 .4 .4]) % reward timing (every second)
+        scatter(mean_trajectory(1,1),mean_trajectory(1,2),'bo') % start
+        scatter(mean_trajectory(end,1),mean_trajectory(end,2),'rx') % end
+        scatter(mean_trajectory(rewtimes,1),mean_trajectory(rewtimes,2),'k*') % reward timing (every second)
         xlabel('PC 1')
-        ylabel('PC 3')
+        ylabel('PC 2')
         title(sprintf('Session %s early/mid/late PRT Trajectories through 2 PC Space',session));
         
         subplot(2,1,2)
@@ -735,7 +706,7 @@ for sIdx = 3:3 % replace this when doing multiple sessions
         hold on
         scatter3(mean_trajectory(1,1),mean_trajectory(1,2),mean_trajectory(1,3),'bo')
         scatter3(mean_trajectory(end,1),mean_trajectory(end,2),mean_trajectory(end,3),'rx')
-        scatter3(mean_trajectory(rewtimes,1),mean_trajectory(rewtimes,2),mean_trajectory(rewtimes,3),'*','MarkerFaceColor',[.4 .4 .4],'MarkerEdgeColor',[.4 .4 .4]) % reward timing (every second)
+        scatter3(mean_trajectory(rewtimes,1),mean_trajectory(rewtimes,2),mean_trajectory(rewtimes,3),'k*') % reward timing (every second)
         
         xlabel('PC 1')
         ylabel('PC 2')
