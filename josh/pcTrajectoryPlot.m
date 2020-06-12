@@ -192,7 +192,7 @@ end
 
 %% Visualize PC Trajectories
 % first just take a random sample of single trials and color with cool gradient
-% this doesn't look great lol
+
 for sIdx = 3:3 % replace this when doing multiple sessions
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
@@ -275,161 +275,7 @@ for sIdx = 3:3 % replace this when doing multiple sessions
 
 end
 
-%% Plot averaged trajectories colored by time of leaving, separated by
-% rewsize
-figcounter = 1;
-for sIdx = 3:3 % replace this when doing multiple sessions
-    session = sessions{sIdx}(1:end-4);
-    data = load(fullfile(paths.data,session));
-    session = erase(sessions{sIdx}(1:end-4),'_');
-    
-    % Trial level features
-    patches = data.patches;
-    patchCSL = data.patchCSL;
-    prts = patchCSL(:,3) - patchCSL(:,2);
-    patchType = patches(:,2);
-    rewsize = mod(patchType,10);
-    
-    for iRewsize = [1,2,4]
-        iSizeTrials = find(rewsize == iRewsize);
-        round_prts = round(prts);
-        max_prt = max(round_prts(iSizeTrials));
-        % create a linear color map ranging from dark light blue, coloring
-        % trajectories by PRT rounded to the nearest second
-        if iRewsize == 4
-            len = max_prt;
-            blue = [0, 0, 1];
-            teal = [0 1 1];
-            prt_color_grad = [linspace(teal(1),blue(1),len)', linspace(teal(2),blue(2),len)', linspace(teal(3),blue(3),len)'];
-        end
-        
-        if iRewsize == 2
-            len = max_prt;
-            red = [1, 0, 0];
-            yellow = [1 1 0];
-            prt_color_grad = [linspace(yellow(1),red(1),len)', linspace(yellow(2),red(2),len)', linspace(yellow(3),red(3),len)'];
-        end
-        
-        if iRewsize == 1
-            len = max_prt;
-            black = [32/255, 32/255, 32/255];
-            grey = [224/255 224/255 224/255];
-            prt_color_grad = [linspace(grey(1),black(1),len)', linspace(grey(2),black(2),len)', linspace(grey(3),black(3),len)'];
-        end
-        figure(figcounter);
-        % every trial
-        for j = 1:numel(iSizeTrials) % only look at large reward where mice seem to discern frequency
-            iTrial = iSizeTrials(j);
-            subplot(2,1,1)
-            scatter(trial_pc_traj{sIdx}{iTrial}(end,1),trial_pc_traj{sIdx}{iTrial}(end,2),'rx') % traj end pt
-            hold on
-            scatter(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),'bo') % traj start pt
-            plot(trial_pc_traj{sIdx}{iTrial}(:,1),trial_pc_traj{sIdx}{iTrial}(:,2),'Color',prt_color_grad(round_prts(iTrial),:)) % color by PRT
-            xlabel('PC 1')
-            ylabel('PC 2')
-            title(sprintf('Session %s %i uL Rew Trial Trajectories through 2 PC Space',session,iRewsize));
-
-            subplot(2,1,2)
-            scatter3(trial_pc_traj{sIdx}{iTrial}(end,1),trial_pc_traj{sIdx}{iTrial}(end,2),trial_pc_traj{sIdx}{iTrial}(end,3),'rx') % traj end pt
-            hold on
-            scatter3(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),trial_pc_traj{sIdx}{iTrial}(1,3),'bo') % traj start pt
-            plot3(trial_pc_traj{sIdx}{iTrial}(:,1),trial_pc_traj{sIdx}{iTrial}(:,2),trial_pc_traj{sIdx}{iTrial}(:,3),'Color',prt_color_grad(round_prts(iTrial),:)) % color by PRT
-            xlabel('PC 1')
-            ylabel('PC 2')
-            zlabel('PC 3')
-            title(sprintf('Session %s %i uL Rew Trial Trajectories through 3 PC Space',session,iRewsize));
-        end
-
-        figure(figcounter+1);
-        % prt group averages
-        unique_round_prts = unique(round_prts(iSizeTrials));
-        for j = 1:numel(unique_round_prts)
-            iPRT = unique_round_prts(j);
-            max_len = max(cellfun(@(x)  size(x,1),trial_pc_traj{sIdx}(round_prts == iPRT)));
-            padded_trajectories = cellfun(@(x) [x ; zeros(max_len-size(x,1),3)],trial_pc_traj{sIdx}(round_prts == iPRT),'un',0); %,'un',0);
-            mean_trajectory = mean(cat(3,padded_trajectories{:}),3);
-
-            iTrial = iSizeTrials(j);
-            subplot(2,1,1)
-            scatter(mean_trajectory(end,1),mean_trajectory(end,2),'rx')
-            hold on
-            scatter(mean_trajectory(1,1),mean_trajectory(1,2),'bo')
-            plot(mean_trajectory(:,1),mean_trajectory(:,2),'Color',prt_color_grad(j,:)) % color by PRT
-            xlabel('PC 1')
-            ylabel('PC 2')
-            title(sprintf('Session %s PRT-Averaged %i uL Rew Trial Trajectories through 2 PC Space',session,iRewsize));
-
-            subplot(2,1,2)
-            scatter3(mean_trajectory(end,1),mean_trajectory(end,2),mean_trajectory(end,3),'rx')
-            hold on
-            scatter3(mean_trajectory(1,1),mean_trajectory(1,2),mean_trajectory(1,3),'bo')
-            plot3(mean_trajectory(:,1),mean_trajectory(:,2),mean_trajectory(:,3),'Color',prt_color_grad(j,:)) % color by PRT
-            xlabel('PC 1')
-            ylabel('PC 2')
-            zlabel('PC 3')
-            title(sprintf('Session %s PRT-Averaged %i uL Rew Trial Trajectories through 3 PC Space',session,iRewsize));
-        end
-        figcounter = figcounter + 2;
-    end
-end
-
-%% Now just separate by PRT quartile
-% this plot is actually not as nice as the one above
-% could be alignment issues
-
-figcounter = 1;
-for sIdx = 3:3 % replace this when doing multiple sessions
-    session = sessions{sIdx}(1:end-4);
-    data = load(fullfile(paths.data,session));
-    session = erase(sessions{sIdx}(1:end-4),'_');
-    
-    % Trial level features
-    patches = data.patches;
-    patchCSL = data.patchCSL;
-    prts = patchCSL(:,3) - patchCSL(:,2);
-    patchType = patches(:,2);
-    rewsize = mod(patchType,10);
-    quartiles = [0,quantile(prts,[.25,.5,.75,1.])];
-    
-    len = 4;
-    blue = [0, 0, 1];
-    teal = [0 1 1];
-    prt_color_grad = [linspace(teal(1),blue(1),len)', linspace(teal(2),blue(2),len)', linspace(teal(3),blue(3),len)'];
-    
-    for q = 1:4
-        thisQuartileTrials = find(prts > quartiles(q) & prts < quartiles(q + 1));
-        
-        max_len = max(cellfun(@(x)  size(x,1),trial_pc_traj{sIdx}(thisQuartileTrials)));
-        padded_trajectories = cellfun(@(x) [x ; zeros(max_len-size(x,1),3)],trial_pc_traj{sIdx}(thisQuartileTrials),'un',0); %,'un',0);
-        mean_trajectory = mean(cat(3,padded_trajectories{:}),3);
-        
-        subplot(2,1,1)
-        plot(mean_trajectory(:,1),mean_trajectory(:,3),'Color',prt_color_grad(q,:),'LineWidth',1.5) % color by PRT
-        hold on
-        scatter(mean_trajectory(1,1),mean_trajectory(1,3),'bo')
-        scatter(mean_trajectory(end,1),mean_trajectory(end,3),'rx')
-        xlabel('PC 1')
-        ylabel('PC 3')
-        title(sprintf('Session %s PRT-Quartile Averaged Trial Trajectories through 2 PC Space',session));
-        
-        subplot(2,1,2)
-        plot3(mean_trajectory(:,1),mean_trajectory(:,2),mean_trajectory(:,3),'Color',prt_color_grad(q,:),'LineWidth',1.5) % color by PRT
-        hold on
-        scatter3(mean_trajectory(1,1),mean_trajectory(1,2),mean_trajectory(1,3),'bo')
-        scatter3(mean_trajectory(end,1),mean_trajectory(end,2),mean_trajectory(end,3),'rx')
-        xlabel('PC 1')
-        ylabel('PC 2')
-        zlabel('PC 3')
-        title(sprintf('Session %s PRT-Quartile Averaged Trial Trajectories through 3 PC Space',session));
-        
-    end
-end
-
 %% Now looking at how individual reward events might affect these trajectories 
-% this currently doesn't look great. 
-% add a marker for when reward is delivered 
-% it's possible alignment issues are a problem for this analysis in
-% particular
 
 sec2idx = round(2000/tbin_ms);
 sec3idx = round(3000/tbin_ms);
@@ -686,6 +532,7 @@ end
 
 %% Experimenting with color gradients over time 
 % Early mid late w/ gradient 
+% Again, not that beautiful
 
 figcounter = 1;
 colormap([hot(116);summer(171);cool(541)]) % 541 is the max trial length
@@ -746,7 +593,7 @@ for sIdx = 3:3 % replace this when doing multiple sessions
 end
 
 %% Trajectories separated by reward size
-% compare 11X, 22X, and 44X
+% not that beautiful
 
 figcounter = 1;
 colormap([hot(726);summer(726);cool(726)]) % 541 is the max trial length
@@ -785,7 +632,7 @@ for sIdx = 3:3 % replace this when doing multiple sessions
         scatter(mean_trajectory(rewtimes,1),mean_trajectory(rewtimes,2),'k*') % reward timing (every second)
         xlabel('PC 1')
         ylabel('PC 2')
-        title(sprintf('Session %s early/mid/late PRT Trajectories through 2 PC Space',session));
+        title(sprintf('Session %s small/medium/large rew Trajectories through 2 PC Space',session));
         
         subplot(2,1,2)
         grid()
@@ -799,7 +646,162 @@ for sIdx = 3:3 % replace this when doing multiple sessions
         xlabel('PC 1')
         ylabel('PC 2')
         zlabel('PC 3')
-        title(sprintf('Session %s early/mid/late PRT Trial Trajectories through 3 PC Space',session));
+        title(sprintf('Session %s small/medium/large rew Trial Trajectories through 3 PC Space',session));
+        
+    end
+end
+
+
+
+%% Code that is not interesting %%
+
+
+%% Plot averaged trajectories colored by time of leaving, separated by
+% rewsize
+figcounter = 1;
+for sIdx = 3:3 % replace this when doing multiple sessions
+    session = sessions{sIdx}(1:end-4);
+    data = load(fullfile(paths.data,session));
+    session = erase(sessions{sIdx}(1:end-4),'_');
+    
+    % Trial level features
+    patches = data.patches;
+    patchCSL = data.patchCSL;
+    prts = patchCSL(:,3) - patchCSL(:,2);
+    patchType = patches(:,2);
+    rewsize = mod(patchType,10);
+    
+    for iRewsize = [1,2,4]
+        iSizeTrials = find(rewsize == iRewsize);
+        round_prts = round(prts);
+        max_prt = max(round_prts(iSizeTrials));
+        % create a linear color map ranging from dark light blue, coloring
+        % trajectories by PRT rounded to the nearest second
+        if iRewsize == 4
+            len = max_prt;
+            blue = [0, 0, 1];
+            teal = [0 1 1];
+            prt_color_grad = [linspace(teal(1),blue(1),len)', linspace(teal(2),blue(2),len)', linspace(teal(3),blue(3),len)'];
+        end
+        
+        if iRewsize == 2
+            len = max_prt;
+            red = [1, 0, 0];
+            yellow = [1 1 0];
+            prt_color_grad = [linspace(yellow(1),red(1),len)', linspace(yellow(2),red(2),len)', linspace(yellow(3),red(3),len)'];
+        end
+        
+        if iRewsize == 1
+            len = max_prt;
+            black = [32/255, 32/255, 32/255];
+            grey = [224/255 224/255 224/255];
+            prt_color_grad = [linspace(grey(1),black(1),len)', linspace(grey(2),black(2),len)', linspace(grey(3),black(3),len)'];
+        end
+        figure(figcounter);
+        % every trial
+        for j = 1:numel(iSizeTrials) % only look at large reward where mice seem to discern frequency
+            iTrial = iSizeTrials(j);
+            subplot(2,1,1)
+            scatter(trial_pc_traj{sIdx}{iTrial}(end,1),trial_pc_traj{sIdx}{iTrial}(end,2),'rx') % traj end pt
+            hold on
+            scatter(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),'bo') % traj start pt
+            plot(trial_pc_traj{sIdx}{iTrial}(:,1),trial_pc_traj{sIdx}{iTrial}(:,2),'Color',prt_color_grad(round_prts(iTrial),:)) % color by PRT
+            xlabel('PC 1')
+            ylabel('PC 2')
+            title(sprintf('Session %s %i uL Rew Trial Trajectories through 2 PC Space',session,iRewsize));
+
+            subplot(2,1,2)
+            scatter3(trial_pc_traj{sIdx}{iTrial}(end,1),trial_pc_traj{sIdx}{iTrial}(end,2),trial_pc_traj{sIdx}{iTrial}(end,3),'rx') % traj end pt
+            hold on
+            scatter3(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),trial_pc_traj{sIdx}{iTrial}(1,3),'bo') % traj start pt
+            plot3(trial_pc_traj{sIdx}{iTrial}(:,1),trial_pc_traj{sIdx}{iTrial}(:,2),trial_pc_traj{sIdx}{iTrial}(:,3),'Color',prt_color_grad(round_prts(iTrial),:)) % color by PRT
+            xlabel('PC 1')
+            ylabel('PC 2')
+            zlabel('PC 3')
+            title(sprintf('Session %s %i uL Rew Trial Trajectories through 3 PC Space',session,iRewsize));
+        end
+
+        figure(figcounter+1);
+        % prt group averages
+        unique_round_prts = unique(round_prts(iSizeTrials));
+        for j = 1:numel(unique_round_prts)
+            iPRT = unique_round_prts(j);
+            max_len = max(cellfun(@(x)  size(x,1),trial_pc_traj{sIdx}(round_prts == iPRT)));
+            padded_trajectories = cellfun(@(x) [x ; zeros(max_len-size(x,1),3)],trial_pc_traj{sIdx}(round_prts == iPRT),'un',0); %,'un',0);
+            mean_trajectory = mean(cat(3,padded_trajectories{:}),3);
+
+            iTrial = iSizeTrials(j);
+            subplot(2,1,1)
+            scatter(mean_trajectory(end,1),mean_trajectory(end,2),'rx')
+            hold on
+            scatter(mean_trajectory(1,1),mean_trajectory(1,2),'bo')
+            plot(mean_trajectory(:,1),mean_trajectory(:,2),'Color',prt_color_grad(j,:)) % color by PRT
+            xlabel('PC 1')
+            ylabel('PC 2')
+            title(sprintf('Session %s PRT-Averaged %i uL Rew Trial Trajectories through 2 PC Space',session,iRewsize));
+
+            subplot(2,1,2)
+            scatter3(mean_trajectory(end,1),mean_trajectory(end,2),mean_trajectory(end,3),'rx')
+            hold on
+            scatter3(mean_trajectory(1,1),mean_trajectory(1,2),mean_trajectory(1,3),'bo')
+            plot3(mean_trajectory(:,1),mean_trajectory(:,2),mean_trajectory(:,3),'Color',prt_color_grad(j,:)) % color by PRT
+            xlabel('PC 1')
+            ylabel('PC 2')
+            zlabel('PC 3')
+            title(sprintf('Session %s PRT-Averaged %i uL Rew Trial Trajectories through 3 PC Space',session,iRewsize));
+        end
+        figcounter = figcounter + 2;
+    end
+end
+
+%% Now just separate by PRT quartile
+% this plot is actually not as nice as the one above
+% could be alignment issues
+
+figcounter = 1;
+for sIdx = 3:3 % replace this when doing multiple sessions
+    session = sessions{sIdx}(1:end-4);
+    data = load(fullfile(paths.data,session));
+    session = erase(sessions{sIdx}(1:end-4),'_');
+    
+    % Trial level features
+    patches = data.patches;
+    patchCSL = data.patchCSL;
+    prts = patchCSL(:,3) - patchCSL(:,2);
+    patchType = patches(:,2);
+    rewsize = mod(patchType,10);
+    quartiles = [0,quantile(prts,[.25,.5,.75,1.])];
+    
+    len = 4;
+    blue = [0, 0, 1];
+    teal = [0 1 1];
+    prt_color_grad = [linspace(teal(1),blue(1),len)', linspace(teal(2),blue(2),len)', linspace(teal(3),blue(3),len)'];
+    
+    for q = 1:4
+        thisQuartileTrials = find(prts > quartiles(q) & prts < quartiles(q + 1));
+        
+        max_len = max(cellfun(@(x)  size(x,1),trial_pc_traj{sIdx}(thisQuartileTrials)));
+        padded_trajectories = cellfun(@(x) [x ; zeros(max_len-size(x,1),3)],trial_pc_traj{sIdx}(thisQuartileTrials),'un',0); %,'un',0);
+        mean_trajectory = mean(cat(3,padded_trajectories{:}),3);
+        
+        subplot(2,1,1)
+        plot(mean_trajectory(:,1),mean_trajectory(:,3),'Color',prt_color_grad(q,:),'LineWidth',1.5) % color by PRT
+        hold on
+        scatter(mean_trajectory(1,1),mean_trajectory(1,3),'bo')
+        scatter(mean_trajectory(end,1),mean_trajectory(end,3),'rx')
+        xlabel('PC 1')
+        ylabel('PC 3')
+        title(sprintf('Session %s PRT-Quartile Averaged Trial Trajectories through 2 PC Space',session));
+        
+        subplot(2,1,2)
+        plot3(mean_trajectory(:,1),mean_trajectory(:,2),mean_trajectory(:,3),'Color',prt_color_grad(q,:),'LineWidth',1.5) % color by PRT
+        hold on
+        scatter3(mean_trajectory(1,1),mean_trajectory(1,2),mean_trajectory(1,3),'bo')
+        scatter3(mean_trajectory(end,1),mean_trajectory(end,2),mean_trajectory(end,3),'rx')
+        xlabel('PC 1')
+        ylabel('PC 2')
+        zlabel('PC 3')
+        title(sprintf('Session %s PRT-Quartile Averaged Trial Trajectories through 3 PC Space',session));
         
     end
 end
