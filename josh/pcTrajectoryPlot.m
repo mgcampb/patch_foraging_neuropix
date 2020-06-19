@@ -204,7 +204,7 @@ for sIdx = 3:3 % replace this when doing multiple sessions
     patchType = patches(:,2);
     rewsize = mod(patchType,10);
     
-    k = 20;
+    k = 5;
     sample = randsample(size(trial_pc_traj{sIdx},2),k);
     
     max_len = max(cellfun(@(x)  size(x,1),trial_pc_traj{sIdx}(sample)));
@@ -280,6 +280,8 @@ end
 sec2idx = round(2000/tbin_ms);
 sec3idx = round(3000/tbin_ms);
 
+% drawArrow = @(x,y,varargin) quiver( x(1),y(1),x(2)-x(1),y(2)-y(1),0, varargin{:}) ;
+
 for sIdx = 3:3 % replace this when doing multiple sessions
     figcounter = 1;
     
@@ -314,7 +316,7 @@ for sIdx = 3:3 % replace this when doing multiple sessions
         % two seconds
         trials10x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == 0 & prts > 2.55);
         trials11x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & prts > 2.55);
-        trial2secIdVec = zeros(length(iSizeTrials),1); 
+        trial2secIdVec = zeros(15,1); 
         trial2secIdVec(trials10x) = 1;
         trial2secIdVec(trials11x) = 2;
         
@@ -324,72 +326,86 @@ for sIdx = 3:3 % replace this when doing multiple sessions
             trials110x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) == 0 & prts > 3.55);
             trials101x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == 0 & rew_barcode(:,3) == iRewsize & prts > 3.55);
             trials111x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) == iRewsize & prts > 3.55);
-            trial3secIdVec = zeros(length(iSizeTrials),1); 
+            trial3secIdVec = zeros(15,1); 
             trial3secIdVec(trials100x) = 1;
             trial3secIdVec(trials110x) = 2;
             trial3secIdVec(trials101x) = 3;
             trial3secIdVec(trials111x) = 4;
         end
         
-        % now plot pc trajectories for 2 seconds of performance, colored by
-        % whether reward was received at the 2nd second every trial
-% individual traces
-%         for j = 1:numel(iSizeTrials) 
-%             iTrial = iSizeTrials(j);
-%             if prts(iTrial) > 2.5 % not sure why needs to be > 2.5- this is a real problem
-%                 figure(figcounter)
-%                 subplot(2,1,1)
-%                 scatter(trial_pc_traj{sIdx}{iTrial}(sec2idx,1),trial_pc_traj{sIdx}{iTrial}(sec2idx,2),'rx') % traj end pt
-%                 hold on
-%                 scatter(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),'bo') % traj start pt
-%                 plot(trial_pc_traj{sIdx}{iTrial}(1:sec2idx,1),trial_pc_traj{sIdx}{iTrial}(1:sec2idx,2),'Color',barcode_colorgrad2(trial2secIdVec(j),:)) % color by PRT
-%                 xlabel('PC 1')
-%                 ylabel('PC 2')
-%                 title(sprintf('Session %s %i uL Rew Trial Trajectories through 2 PC Space',session,iRewsize));
-%                 
-%                 subplot(2,1,2)
-%                 scatter3(trial_pc_traj{sIdx}{iTrial}(sec2idx),trial_pc_traj{sIdx}{iTrial}(sec2idx,2),trial_pc_traj{sIdx}{iTrial}(sec2idx,3),'rx') % traj end pt
-%                 hold on
-%                 scatter3(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),trial_pc_traj{sIdx}{iTrial}(1,3),'bo') % traj start pt
-%                 plot3(trial_pc_traj{sIdx}{iTrial}(1:sec2idx,1),trial_pc_traj{sIdx}{iTrial}(1:sec2idx,2),trial_pc_traj{sIdx}{iTrial}(1:sec2idx,3),'Color',barcode_colorgrad2(trial2secIdVec(j),:)) % color by PRT
-%                 xlabel('PC 1')
-%                 ylabel('PC 2')
-%                 zlabel('PC 3')
-%                 title(sprintf('Session %s %i uL Rew Trial Trajectories through 3 PC Space',session,iRewsize));
-%             end
-%             
-%             if prts(iTrial) > 3.5
-%                 figure(figcounter+1)
-%                 subplot(2,1,1)
-%                 scatter(trial_pc_traj{sIdx}{iTrial}(sec3idx,1),trial_pc_traj{sIdx}{iTrial}(sec3idx,2),'rx') % traj end pt
-%                 hold on
-%                 scatter(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),'bo') % traj start pt
-%                 plot(trial_pc_traj{sIdx}{iTrial}(1:sec3idx,1),trial_pc_traj{sIdx}{iTrial}(1:sec3idx,2),'Color',barcode_colorgrad4(trial3secIdVec(j),:)) % color by PRT
-%                 xlabel('PC 1')
-%                 ylabel('PC 2')
-%                 title(sprintf('Session %s %i uL Rew Trial Trajectories through 2 PC Space',session,iRewsize));
-%                 
-%                 subplot(2,1,2)
-%                 scatter3(trial_pc_traj{sIdx}{iTrial}(sec3idx),trial_pc_traj{sIdx}{iTrial}(sec3idx,2),trial_pc_traj{sIdx}{iTrial}(sec3idx,3),'rx') % traj end pt
-%                 hold on
-%                 scatter3(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),trial_pc_traj{sIdx}{iTrial}(1,3),'bo') % traj start pt
-%                 plot3(trial_pc_traj{sIdx}{iTrial}(1:sec3idx,1),trial_pc_traj{sIdx}{iTrial}(1:sec3idx,2),trial_pc_traj{sIdx}{iTrial}(1:sec3idx,3),'Color',barcode_colorgrad4(trial3secIdVec(j),:)) % color by PRT
-%                 xlabel('PC 1')
-%                 ylabel('PC 2')
-%                 zlabel('PC 3')
-%                 title(sprintf('Session %s %i uL Rew Trial Trajectories through 3 PC Space',session,iRewsize));
-%             end
-%         end
+        k = 5;
         
-        % last, plot barcode-pooled mean traces
-%         cat2sec = cellfun(@(x) x(1:sec2idx,:),trial_pc_traj{sIdx}(prts > 2.55),'un',0);
-%         cat3sec = cellfun(@(x) x(1:sec3idx,:),trial_pc_traj{sIdx}(prts > 3.55),'un',0);
+        for j = 1:k
+            iTrial = trials10x(j);
+            figure(figcounter)
+            colormap(cool(sec2idx))
+            t2_1 = 1:sec2idx;
+            t2_2 = (1:sec2idx) + sec2idx;
+            subplot(2,1,1)
+            patch([trial_pc_traj{sIdx}{iTrial}(1:sec2idx,1)' nan],[trial_pc_traj{sIdx}{iTrial}(1:sec2idx,3)' nan],[t2_1 nan],'FaceColor','none','EdgeColor','interp','LineWidth',.5) % color by PRT
+            hold on
+            scatter(trial_pc_traj{sIdx}{iTrial}(sec2idx,1),trial_pc_traj{sIdx}{iTrial}(sec2idx,3),'rx') % traj end pt
+            grad = gradient(trial_pc_traj{sIdx}{iTrial}(sec2idx - 1:sec2idx,[1,3]));
+%             quiver(trial_pc_traj{sIdx}{iTrial}(sec2idx,1),trial_pc_traj{sIdx}{iTrial}(sec2idx,3),grad(1,1),grad(2,1)) % traj end pt
+%             drawArrow(trial_pc_traj{sIdx}{iTrial}(sec2idx-1:sec2idx,1),trial_pc_traj{sIdx}{iTrial}(sec2idx-1:sec2idx,3),'linewidth',.5,'color','r','maxheadsize',.5)
+            scatter(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,3),'bo') % traj start pt
+            
+            xlabel('PC 1')
+            ylabel('PC 3')
+            title(sprintf('Session %s %i0X Trial Trajectories through 2 PC Space',session,iRewsize));
+            grid()
+            
+            subplot(2,1,2)
+            patch([trial_pc_traj{sIdx}{iTrial}(1:sec2idx,1)' nan],[trial_pc_traj{sIdx}{iTrial}(1:sec2idx,2)' nan],[trial_pc_traj{sIdx}{iTrial}(1:sec2idx,3)' nan],[t2_1 nan],'FaceColor','none','EdgeColor','interp','LineWidth',.5)
+            hold on
+            scatter3(trial_pc_traj{sIdx}{iTrial}(sec2idx),trial_pc_traj{sIdx}{iTrial}(sec2idx,2),trial_pc_traj{sIdx}{iTrial}(sec2idx,3),'rx') % traj end pt
+            hold on
+            scatter3(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),trial_pc_traj{sIdx}{iTrial}(1,3),'bo') % traj start pt
+            xlabel('PC 1')
+            ylabel('PC 2')
+            zlabel('PC 3')
+            title(sprintf('Session %s %i0X Trial Trajectories through 3 PC Space',session,iRewsize));
+            view(3)
+            grid()
+        end
+        
+        % similarly plot the RRX
+        for j = 1:k
+            iTrial = trials11x(j);
+            figure(figcounter+1)
+            colormap(autumn(sec2idx + 500))
+            t2_1 = 1:sec2idx;
+            t2_2 = (1:sec2idx) + sec2idx;
+            subplot(2,1,1)
+            patch([trial_pc_traj{sIdx}{iTrial}(1:sec2idx,1)' nan],[trial_pc_traj{sIdx}{iTrial}(1:sec2idx,3)' nan],[t2_1 nan],'FaceColor','none','EdgeColor','interp','LineWidth',.5) % color by PRT
+            hold on
+            scatter(trial_pc_traj{sIdx}{iTrial}(2000/tbin_ms,1),trial_pc_traj{sIdx}{iTrial}(2000/tbin_ms,3),'rx') % traj end pt
+%             quiver(trial_pc_traj{sIdx}{iTrial}(sec2idx,1),trial_pc_traj{sIdx}{iTrial}(sec2idx,3),grad(1,1),grad(2,1)) % traj end pt
+%             drawArrow(trial_pc_traj{sIdx}{iTrial}(sec2idx-1:sec2idx,1),trial_pc_traj{sIdx}{iTrial}(sec2idx-1:sec2idx,3),'linewidth',.5,'color','r','maxheadsize',.5)
+            scatter(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,3),'bo') % traj start pt
+            scatter(trial_pc_traj{sIdx}{iTrial}(1000/tbin_ms,1),trial_pc_traj{sIdx}{iTrial}(1000/tbin_ms,3),'k*')
+            
+            xlabel('PC 1')
+            ylabel('PC 3')
+            title(sprintf('Session %s %i%iX Trial Trajectories through 2 PC Space',session,iRewsize,iRewsize));
+            grid()
+            
+            subplot(2,1,2)
+            patch([trial_pc_traj{sIdx}{iTrial}(1:sec2idx,1)' nan],[trial_pc_traj{sIdx}{iTrial}(1:sec2idx,2)' nan],[trial_pc_traj{sIdx}{iTrial}(1:sec2idx,3)' nan],[t2_1 nan],'FaceColor','none','EdgeColor','interp','LineWidth',.5)
+            hold on
+            scatter3(trial_pc_traj{sIdx}{iTrial}(sec2idx),trial_pc_traj{sIdx}{iTrial}(sec2idx,2),trial_pc_traj{sIdx}{iTrial}(sec2idx,3),'rx') % traj end pt
+            scatter3(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),trial_pc_traj{sIdx}{iTrial}(1,3),'bo') % traj start pt
+            xlabel('PC 1')
+            ylabel('PC 2')
+            zlabel('PC 3')
+            title(sprintf('Session %s %i%iX Trial Trajectories through 3 PC Space',session,iRewsize,iRewsize));
+            view(3)
+            grid()
+        end
 
         cat10x = cellfun(@(x) x(1:sec2idx,:),trial_pc_traj{sIdx}(trials10x),'un',0);
         cat11x = cellfun(@(x) x(1:sec2idx,:),trial_pc_traj{sIdx}(trials11x),'un',0);
-        
-%         cat10x = cat2sec(trials10x);
-%         cat11x = cat2sec(trials11x);
+
         mean10x = mean(cat(6,cat10x{:}),6);
         mean11x = mean(cat(6,cat11x{:}),6);
         
@@ -406,7 +422,7 @@ for sIdx = 3:3 % replace this when doing multiple sessions
         end
         
         % first 2-second pooling
-        figure(figcounter)
+        figure(figcounter+2)
         colormap([cool(sec2idx);hot(sec2idx)]) 
         subplot(2,1,1)
         t2_1 = 1:sec2idx;
@@ -444,7 +460,7 @@ for sIdx = 3:3 % replace this when doing multiple sessions
         
         if iRewsize > 1 % rewsize 1 dont stay long enough
             % last, 3-second pooling
-            figure(figcounter + 1)
+            figure(figcounter + 3)
             subplot(2,1,1)
             colormap([cool(sec3idx*2);winter(sec3idx*2);summer(sec3idx*2);hot(sec3idx*2)]) 
             t3_1 = 1:sec3idx;
@@ -487,7 +503,7 @@ for sIdx = 3:3 % replace this when doing multiple sessions
             title(sprintf('Session %s 3 Second Reward Timing Averaged %i uL Rew Trial Trajectories through 3 PC Space',session,iRewsize));
 
             % now just look at 101X vs 110X
-            figure(figcounter + 2)
+            figure(figcounter + 4)
             subplot(2,1,1)
             colormap([hot(sec3idx * 2);cool(sec3idx * 2)]) 
             t3_1 = 1:sec3idx;
@@ -523,12 +539,91 @@ for sIdx = 3:3 % replace this when doing multiple sessions
             zlabel('PC 3')
             title(sprintf('Session %s %i0%iX vs %i%i0X Trajectories through 3 PC Space',session,iRewsize,iRewsize,iRewsize,iRewsize));
 
-            figcounter = figcounter + 3;
+            figcounter = figcounter + 5;
         else
-            figcounter = figcounter + 1;
+            figcounter = figcounter + 3;
         end
     end
 end
+
+%% Show full trajectories of simple reward histories to capture full dynamics (ie RR999,R0999)
+
+sec2idx = round(2000/tbin_ms);
+sec1idx = round(1000/tbin_ms);
+
+for sIdx = 3:3 % replace this when doing multiple sessions
+    figcounter = 1;
+    
+    session = sessions{sIdx}(1:end-4);
+    data = load(fullfile(paths.data,session));
+    session = erase(sessions{sIdx}(1:end-4),'_'); % latex thing
+    
+    % reinitialize ms vectors
+    patchstop_ms = data.patchCSL(:,2);
+    patchleave_ms = data.patchCSL(:,3);
+    rew_ms = data.rew_ts;
+
+    % Trial level features
+    patches = data.patches;
+    patchCSL = data.patchCSL;
+    prts = patchCSL(:,3) - patchCSL(:,2);
+    floor_prts = floor(prts);
+    patchType = patches(:,2);
+    rewsize = mod(patchType,10);
+    
+    % make barcode matrices
+    nTimesteps = 15;
+    rew_barcode = zeros(length(patchCSL) , nTimesteps);
+    for iTrial = 1:length(patchCSL)
+        rew_indices = round(rew_ms(rew_ms >= patchstop_ms(iTrial) & rew_ms < patchleave_ms(iTrial)) - patchstop_ms(iTrial)) + 1;
+        last_rew_ix = max(rew_indices); 
+        rew_barcode(iTrial , (last_rew_ix + 1):end) = -1; % set part of patch after last rew_ix = -1
+        rew_barcode(iTrial , (floor_prts(iTrial) + 1):end) = -2; % set part of patch after leave = -2
+        rew_barcode(iTrial , rew_indices) = rewsize(iTrial);
+    end
+    
+    % iterate over reward sizes
+    for iRewsize = [1,2,4] 
+        trialsR0999 = find(rew_barcode(:,1) == rew_barcode(:,2) == -1);
+        trialsRR999 = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) == -1);
+        trial2secIdVec = zeros(15,1); 
+        trial2secIdVec(trialsR0999) = 1;
+        trial2secIdVec(trialsRR999) = 2;
+        
+        display(length(trialsR0999));
+        display(length(trialsRR999));
+        
+        figure()
+        colormap(cool)
+        
+        for j = 1:numel(trialsRR999)
+            iTrial = trialsRR999(j);
+            t = 1:size(trial_pc_traj{sIdx}{iTrial},1);
+            patch([trial_pc_traj{sIdx}{iTrial}(:,1)' nan],[trial_pc_traj{sIdx}{iTrial}(:,3)' nan],[t nan],'FaceColor','none','EdgeColor','interp','LineWidth',.5) % color by PRT
+            hold on
+            scatter(trial_pc_traj{sIdx}{iTrial}(end,1),trial_pc_traj{sIdx}{iTrial}(end,3),'rx') % traj end pt
+            scatter(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,3),'bo') % traj start pt
+            scatter(trial_pc_traj{sIdx}{iTrial}(sec1idx,1),trial_pc_traj{sIdx}{iTrial}(sec1idx,3),'k*')
+            xlabel("PC1")
+            ylabel("PC3")
+            title(sprintf('Session %s %i%i999 Trajectories through 2 PC Space',session,iRewsize,iRewsize));
+        end
+        
+%         % just a demo to compare to jPCA
+%         figure()
+%         colormap(cool)
+%         iTrial = trialsRR999(1);
+%         plot(trial_pc_traj{sIdx}{iTrial}(:,1));
+%         hold on
+%         plot(trial_pc_traj{sIdx}{iTrial}(:,3));
+%         legend("PC1","PC3")
+%         title(sprintf('Session %s %i%i999 PC1,PC3 over time',session,iRewsize,iRewsize));
+%         ylabel("PC Magnitude")
+%         xlabel("Time")
+    end
+end
+
+
 
 %% Experimenting with color gradients over time 
 % Early mid late w/ gradient 
@@ -653,7 +748,7 @@ end
 
 
 
-%% Code that is not interesting %%
+%% Old code: %%
 
 
 %% Plot averaged trajectories colored by time of leaving, separated by
@@ -974,3 +1069,57 @@ title("PRT vs cell index length / PRT")
 %     off_ms = cumsum(off_ms);
 %     patchstop_ms = patchstop_ms - off_ms; 
 %     patchleave_ms = patchleave_ms - off_ms;
+
+        % now plot pc trajectories for 2 seconds of performance, colored by
+        % whether reward was received at the 2nd second every trial
+% individual traces
+%         for j = 1:numel(iSizeTrials) 
+%             iTrial = iSizeTrials(j);
+%             if prts(iTrial) > 2.5 % not sure why needs to be > 2.5- this is a real problem
+%                 figure(figcounter)
+%                 subplot(2,1,1)
+%                 scatter(trial_pc_traj{sIdx}{iTrial}(sec2idx,1),trial_pc_traj{sIdx}{iTrial}(sec2idx,2),'rx') % traj end pt
+%                 hold on
+%                 scatter(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),'bo') % traj start pt
+%                 plot(trial_pc_traj{sIdx}{iTrial}(1:sec2idx,1),trial_pc_traj{sIdx}{iTrial}(1:sec2idx,2),'Color',barcode_colorgrad2(trial2secIdVec(j),:)) % color by PRT
+%                 xlabel('PC 1')
+%                 ylabel('PC 2')
+%                 title(sprintf('Session %s %i uL Rew Trial Trajectories through 2 PC Space',session,iRewsize));
+%                 
+%                 subplot(2,1,2)
+%                 scatter3(trial_pc_traj{sIdx}{iTrial}(sec2idx),trial_pc_traj{sIdx}{iTrial}(sec2idx,2),trial_pc_traj{sIdx}{iTrial}(sec2idx,3),'rx') % traj end pt
+%                 hold on
+%                 scatter3(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),trial_pc_traj{sIdx}{iTrial}(1,3),'bo') % traj start pt
+%                 plot3(trial_pc_traj{sIdx}{iTrial}(1:sec2idx,1),trial_pc_traj{sIdx}{iTrial}(1:sec2idx,2),trial_pc_traj{sIdx}{iTrial}(1:sec2idx,3),'Color',barcode_colorgrad2(trial2secIdVec(j),:)) % color by PRT
+%                 xlabel('PC 1')
+%                 ylabel('PC 2')
+%                 zlabel('PC 3')
+%                 title(sprintf('Session %s %i uL Rew Trial Trajectories through 3 PC Space',session,iRewsize));
+%             end
+%             
+%             if prts(iTrial) > 3.5
+%                 figure(figcounter+1)
+%                 subplot(2,1,1)
+%                 scatter(trial_pc_traj{sIdx}{iTrial}(sec3idx,1),trial_pc_traj{sIdx}{iTrial}(sec3idx,2),'rx') % traj end pt
+%                 hold on
+%                 scatter(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),'bo') % traj start pt
+%                 plot(trial_pc_traj{sIdx}{iTrial}(1:sec3idx,1),trial_pc_traj{sIdx}{iTrial}(1:sec3idx,2),'Color',barcode_colorgrad4(trial3secIdVec(j),:)) % color by PRT
+%                 xlabel('PC 1')
+%                 ylabel('PC 2')
+%                 title(sprintf('Session %s %i uL Rew Trial Trajectories through 2 PC Space',session,iRewsize));
+%                 
+%                 subplot(2,1,2)
+%                 scatter3(trial_pc_traj{sIdx}{iTrial}(sec3idx),trial_pc_traj{sIdx}{iTrial}(sec3idx,2),trial_pc_traj{sIdx}{iTrial}(sec3idx,3),'rx') % traj end pt
+%                 hold on
+%                 scatter3(trial_pc_traj{sIdx}{iTrial}(1,1),trial_pc_traj{sIdx}{iTrial}(1,2),trial_pc_traj{sIdx}{iTrial}(1,3),'bo') % traj start pt
+%                 plot3(trial_pc_traj{sIdx}{iTrial}(1:sec3idx,1),trial_pc_traj{sIdx}{iTrial}(1:sec3idx,2),trial_pc_traj{sIdx}{iTrial}(1:sec3idx,3),'Color',barcode_colorgrad4(trial3secIdVec(j),:)) % color by PRT
+%                 xlabel('PC 1')
+%                 ylabel('PC 2')
+%                 zlabel('PC 3')
+%                 title(sprintf('Session %s %i uL Rew Trial Trajectories through 3 PC Space',session,iRewsize));
+%             end
+%         end
+        
+        % last, plot barcode-pooled mean traces
+%         cat2sec = cellfun(@(x) x(1:sec2idx,:),trial_pc_traj{sIdx}(prts > 2.55),'un',0);
+%         cat3sec = cellfun(@(x) x(1:sec3idx,:),trial_pc_traj{sIdx}(prts > 3.55),'un',0);
