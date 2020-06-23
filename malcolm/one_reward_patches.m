@@ -1,3 +1,8 @@
+%% script to plot neural activity (PC1 and example neuron)
+% for large reward patches with just one reward at t=0
+% to see if there's a correlation with leave times
+% MGC 6/23/2020
+
 paths = struct;
 paths.data = 'C:\Users\malcg\Dropbox (Personal)\UchidaLab\processed_neuropix_data';
 paths.figs = 'C:\figs\patch_foraging_neuropix\one_reward_patches'; % where to save figs
@@ -8,9 +13,9 @@ addpath(genpath('C:\code\patch_foraging_neuropix\malcolm\functions'));
 % analysis options
 opt = struct;
 opt.session = '80_20200317'; % session to analyze
+opt.cellid = 368; % example cell to plot
 opt.tbin = 0.02; % time bin for whole session rate matrix (in sec)
 opt.smoothSigma_time = 0.1; % gauss smoothing sigma for rate matrix (in sec)
-opt.cellid = 368; % example cell to look at
 
 %% load data
 dat = load(fullfile(paths.data,opt.session));
@@ -42,7 +47,7 @@ fr_mat_zscore = my_zscore(fr_mat_in_patch);
 % pca on firing rate matrix
 [coeffs,score,~,~,expl] = pca(fr_mat_zscore');
 
-%% look at patches with only one reward (the first one): PC1
+%% look at patches with only one reward (the first one)
 
 % get patch num for each patch
 patch_num = nan(size(tbincent));
@@ -100,7 +105,7 @@ end
 
 save_figs(paths.figs,hfig,'png');
 
-%% look at patches with only one reward (the first one): Example cell
+%% plot example cell for these patches
 
 % get firing rate trace for this cell for these patches
 T = ceil(max(prt));
