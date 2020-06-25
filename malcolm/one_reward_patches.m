@@ -58,12 +58,26 @@ end
 one_rew_patches = find(dat.patches(:,3)==1 & mod(dat.patches(:,2),10)==4);
 prt = dat.patches(one_rew_patches,5);
 
-%% regress out time in session and time^2 to remove slowly varying changes
+%% regress out time in session and time in session^2 to remove slowly varying changes
 
-X = [ones(size(tbincent)); tbincent; tbincent.^2]'; % include time
+X = [ones(size(tbincent)); tbincent; tbincent.^2]'; % regressor matrix
 beta = X\score;
 score_resid = score-X*beta;
 beta2 = X\score_resid;
+
+% % to include time on patch terms:
+% t_on_patch = tbincent - dat.patchCSL(patch_num,2)';
+% keep = ismember(patch_num,one_rew_patches);
+% score2 = score(keep,:);
+% tbincent2 = tbincent(keep);
+% t_on_patch2 = t_on_patch(keep);
+% patch_num2 = patch_num(keep);
+% X = [ones(size(tbincent2)); tbincent2; tbincent2.^2; tbincent2.^3;...
+%     t_on_patch2; t_on_patch2.^2; t_on_patch2.^3;...
+%     t_on_patch2.*tbincent2; t_on_patch2.*(tbincent2.^2); (t_on_patch2.^2).*tbincent2; (t_on_patch2.^2).*(tbincent2.^2)]';
+% beta = X\score2;
+% score_resid2 = score2-X*beta;
+% beta2 = X\score_resid2;
 
 hfig = figure('Position',[200 200 600 1000]);
 hfig.Name = sprintf('one_rew_patches_%s_PCs1-6 original and residual after removing time and time squared',opt.session);
