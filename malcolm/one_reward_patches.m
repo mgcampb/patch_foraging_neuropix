@@ -12,8 +12,9 @@ addpath(genpath('C:\code\patch_foraging_neuropix\malcolm\functions'));
 
 % analysis options
 opt = struct;
-opt.session = '80_20200315'; % session to analyze
-% opt.cellid = 368; % example cell to plot
+opt.session = '80_20200317'; % session to analyze
+paths.figs = fullfile(paths.figs,opt.session);
+% opt.cellid = 426; % example cell to plot
 opt.tbin = 0.02; % time bin for whole session rate matrix (in sec)
 opt.smoothSigma_time = 0.1; % gauss smoothing sigma for rate matrix (in sec)
 
