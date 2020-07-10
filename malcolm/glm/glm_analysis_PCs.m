@@ -1,4 +1,4 @@
-% script to fit GLM to all cells in an example session
+% script to fit GLM to the PCs of the firing rate matrix
 % using MATLAB's lassoglm
 % MGC 7/1/2020
 
@@ -21,9 +21,13 @@ addpath(genpath(paths.spikes_repo));
 % analysis opts
 opt = struct;
 opt.session = '80_20200317'; % session to analyze
-paths.figs = fullfile(paths.figs,opt.session);
+paths.figs = fullfile(paths.figs,opt.session,'PCs');
 opt.tbin = 0.02; % in seconds
 opt.smooth_sigma_lickrate = 0.1; % in seconds (for smoothing lickrate trace)
+opt.smoothSigma_time = 0.1;
+
+% num PCs to fit GLM to
+opt.num_pcs = 10;
 
 % basis functions for rewards
 opt.nbasis = 5; % number of raised cosine basis functions to use
@@ -34,8 +38,8 @@ opt.zscore_predictors = true;
 
 % regularization
 % *** NOTE: figure out how to get lambda for each session *** 
-opt.lambda = 0.0206; % regularization parameter; came from trying a bunch of values on an example cell (m80 0317 c368)
-opt.alpha = 0.5; % weighting of L1 and L2 penalties in elastic net regularization
+opt.alpha = 0.9; % weighting of L1 (LASSO) and L2 (Ridge) penalties in elastic net regularization. alpha=1 => 100% LASSO (L1), which emphasizes sparseness
+opt.cv_for_lambda = 10; % number of cv folds for estimating optimal lambda (regularization parameter)
 
 % cross validation over trials
 opt.numFolds = 5; % split up trials into (roughly) equally sized chunks
@@ -47,15 +51,7 @@ opt.pval_thresh = 0.01;
 %% load data
 dat = load(fullfile(paths.data,opt.session));
 good_cells = dat.sp.cids(dat.sp.cgs==2);
-
-% binned spikecounts for each cell
 t = dat.velt;
-spikecounts = nan(numel(t),numel(good_cells));
-for cIdx = 1:numel(good_cells)
-    % spikecounts
-    spike_t = dat.sp.st(dat.sp.clu==good_cells(cIdx));
-    spikecounts(:,cIdx) = histc(spike_t,t);
-end
 
 % get depth on probe for each cell
 depth = nan(numel(good_cells),1);
@@ -208,6 +204,27 @@ for i = 1:numel(A)
     end
 end
 
+%% compute PCA
+
+% time bins
+opt.tstart = 0;
+opt.tend = max(dat.sp.st);
+tbinedge = opt.tstart:opt.tbin:opt.tend;
+tbincent = tbinedge(1:end-1)+opt.tbin/2;
+
+% compute firing rate mat
+fr_mat = calcFRVsTime(good_cells,dat,opt);
+
+% only keep "in-patch" times
+fr_mat_in_patch = fr_mat(:,in_patch);
+tbincent = tbincent(in_patch);
+
+% take zscore
+fr_mat_zscore = my_zscore(fr_mat_in_patch);
+
+% pca on firing rate matrix
+[coeffs,score,~,~,expl] = pca(fr_mat_zscore');
+
 %% subselect data to fit GLM to
 
 % large reward patches only:
@@ -232,8 +249,8 @@ for i = 1:numel(X_dropout)
     end
 end
 
-% final spikecounts matrix
-spikecounts_final = spikecounts(keep,:);
+% final score matrix
+score_final = score(keep(in_patch),1:opt.num_pcs);
 
 %% Create fold indices (for cross validation)
 
@@ -257,137 +274,34 @@ for i = 1:opt.numFolds
     test_ind{i} = find(ismember(patch_num_final,trial_group{i}));
 end
 
-%% Fit GLM to each cell
-pb = ParforProgressbar(numel(good_cells));
-beta_all = nan(size(X,2)+1,numel(good_cells));
-FitInfo = cell(numel(good_cells),1);
-pval = nan(numel(good_cells),1);
-parfor cIdx = 1:numel(good_cells)
+%% Fit GLM for each PC
+pb = ParforProgressbar(opt.num_pcs);
+beta_all = nan(size(X,2)+1,opt.num_pcs);
+parfor pIdx = 1:opt.num_pcs
     
-    % iterate over cross-validation folds
-    log_llh_diff = nan(opt.numFolds,1);
-    for fIdx = 1:opt.numFolds
-        
-        X_train = X_final(train_ind{fIdx},:);
-        y_train = spikecounts_final(train_ind{fIdx},cIdx);
-        X_test = X_final(test_ind{fIdx},:);
-        y_test = spikecounts_final(test_ind{fIdx},cIdx);
-        
-        % fit params on train data
-        [B,stats] = lassoglm(X_test,y_test,'poisson','Lambda',opt.lambda,'Alpha',opt.alpha);       
-        beta = [stats.Intercept; B];
-        meanFR_train = nanmean(y_train);        
-        
-        % get log likelihoods on test data
-        r_test = exp([ones(size(X_test,1),1) X_test] * beta);
-        log_llh_model = nansum(r_test-y_test.*log(r_test)+log(factorial(y_test)))/sum(y_test);
-        log_llh_mean = nansum(meanFR_train-y_test.*log(meanFR_train)+log(factorial(y_test)))/sum(y_test);
-        
-        log_llh_diff(fIdx) = log_llh_model-log_llh_mean;
-    end
-    % statistical test to see if model does better than mean
-    [~,pval(cIdx)] = ttest(log_llh_diff);
-    
-    % fit parameters to full data
-    [B,stats] = lassoglm(X_final,spikecounts_final(:,cIdx),'poisson','Lambda',opt.lambda,'Alpha',opt.alpha);       
-    beta_all(:,cIdx) = [stats.Intercept; B];
-    
+    % use cross validation to find optimal lambda for this PC
+    [B_all,stats_all] = lassoglm(X_final,score_final(:,pIdx),'normal','Alpha',opt.alpha,'CV',opt.cv_for_lambda);   
+%    lambda = stats_all.Lambda1SE;         
+    beta_all(:,pIdx) = [stats_all.Intercept(stats_all.Index1SE); B_all(:,stats_all.Index1SE)];
+
     pb.increment();
 end
 
-%% plot: histogram of p values
+%% plot: regressor weights: all pcs
 
-hfig = figure;
-hfig.Name = sprintf('%s histogram of cross-validation pvalues',opt.session);
-histogram(pval);
-xlabel('cross-validation p-value: full model vs just mean');
-ylabel('num cells');
-title(opt.session,'Interpreter','none');
-save_figs(paths.figs,hfig,'png');
-
-%% plot: absolute regressor weights: all cells
-
-hfig = figure;
-hfig.Name = sprintf('%s boxplot of absolute regressor weights_all cells',opt.session);
-boxplot(abs(beta_all(2:end,:)'));
-xticklabels(var_name);
-xtickangle(90);
-ylabel('|beta|');
-title(sprintf('%s 4uL patches: All cells',opt.session),'Interpreter','none');
-save_figs(paths.figs,hfig,'png');
-
-%% plot: absolute regressor weights: significant cells only
-
-hfig = figure;
-hfig.Name = sprintf('%s boxplot of absolute regressor weights_significant only',opt.session);
-boxplot(abs(beta_all(2:end,pval<=opt.pval_thresh)'));
-xticklabels(var_name);
-xtickangle(90);
-ylabel('|beta|');
-title(sprintf('%s 4uL patches: Significant cells',opt.session),'Interpreter','none');
-save_figs(paths.figs,hfig,'png');
-
-%% plot: heatmap of absolute regressor weights, sorted by t_since_last_rew
-
-z = beta_all(:,pval<=opt.pval_thresh);
-absz = abs(z);
-[~,sort_idx] = sort(absz(find(strcmp(var_name,'TimeSinceLastRew'))+1,:)); % sort by time since last reward regressor weight
-
-hfig = figure('Position',[200 200 1000 500]);
-hfig.Name = sprintf('%s heatmap of beta weights sorted by time since last rew',opt.session);
-subplot(6,1,1:5);
-imagesc(absz(2:end,sort_idx))
-xticks([]);
-yticks(1:15)
-yticklabels(var_name)
-title(opt.session,'Interpreter','none')
-h = colorbar;
-ylabel(h,'|beta|');
-
-subplot(6,1,6);
-imagesc(absz(1,sort_idx));
-h = colorbar;
-ylabel(h,'|beta|');
-yticks(1);
-yticklabels({'Intercept'});
-xlabel('cells')
-
-save_figs(paths.figs,hfig,'png');
-
-%% plot: GLM pvalue and beta weights vs depth
-hfig = figure('Position',[200 200 1600 800]);
-hfig.Name = sprintf('%s beta weight vs depth (significant cells only)',opt.session);
-sig = pval<=opt.pval_thresh;
-counter = 0;
-
-counter = counter+1;
-subplot(3,6,counter); hold on;
-my_scatter(depth,-log10(pval),'k',0.2)
-plot(xlim,[-log10(opt.pval_thresh) -log10(opt.pval_thresh)],'r--','LineWidth',2);
-xlabel('depth (from tip of probe) (um)');
-ylabel('-log10(pvalue)');
-nsig = sum(pval<=opt.pval_thresh);
-ntot = numel(good_cells);
-title(sprintf('%d/%d significant (%0.1f%%)',nsig,ntot,100*nsig/ntot));
-
-counter = counter+1;
-subplot(3,6,counter); hold on;
-y = beta_all(1,pval<=opt.pval_thresh);
-my_scatter(depth(sig),y,'k',0.2);
-plot(xlim,[0 0],'k-');
-xlabel('depth (from tip of probe) (um)');
-ylabel('beta');
-title('Intercept');
-
-for i = 1:numel(var_name)
-    counter = counter+1;
-    subplot(3,6,counter); hold on;
-    y = beta_all(i+1,pval<=opt.pval_thresh);
-    my_scatter(depth(sig),y,'k',0.2);
-    plot(xlim,[0 0],'k-');
-    xlabel('depth (from tip of probe) (um)');
+hfig = figure('Position',[100 100 1200 1200]);
+hfig.Name = sprintf('%s regressor weights_top %d PCs_4 uL patches_alpha=%0.1f',opt.session,opt.num_pcs,opt.alpha);
+for i = 1:opt.num_pcs
+    subplot(ceil(opt.num_pcs/2),2,i); hold on;
+    my_scatter(1:numel(var_name),beta_all(2:end,i)','k',1);
+    title(sprintf('PC%d',i));
+    xticks(1:numel(var_name));
+    xticklabels(var_name);
+    xtickangle(90);
     ylabel('beta');
-    title(var_name{i});
+    plot(xlim,[0 0],'k-');
+    grid on;
 end
-
 save_figs(paths.figs,hfig,'png');
+
+
