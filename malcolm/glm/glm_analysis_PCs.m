@@ -20,7 +20,7 @@ addpath(genpath(paths.spikes_repo));
 
 % analysis opts
 opt = struct;
-opt.session = '80_20200317'; % session to analyze
+opt.session = '78_20200311'; % session to analyze
 paths.figs = fullfile(paths.figs,opt.session,'PCs');
 opt.tbin = 0.02; % in seconds
 opt.smooth_sigma_lickrate = 0.1; % in seconds (for smoothing lickrate trace)
@@ -171,12 +171,18 @@ for i = 2:numel(t)
         t_since_last_rew(i) = t_since_last_rew(i-1)+opt.tbin;
     end
 end
-% DV from model 3
-DV3 = t_on_patch-1.7172*tot_rew; % this the fit for m80 0317
-X_this = [t_on_patch' tot_rew' t_since_last_rew' DV3'];
+% % DV from model 3
+% DV3 = t_on_patch-1.7172*tot_rew; % this the fit for m80 0317
+% X_this = [t_on_patch' tot_rew' t_since_last_rew' DV3'];
+% A = [A, {X_this}];
+% grp_name = [grp_name,'DVs'];
+% var_name = [var_name,'TimeOnPatch','TotalRew','TimeSinceLastRew','DV3'];
+
+
+X_this = [t_on_patch' tot_rew' t_since_last_rew'];
 A = [A, {X_this}];
 grp_name = [grp_name,'DVs'];
-var_name = [var_name,'TimeOnPatch','TotalRew','TimeSinceLastRew','DV3'];
+var_name = [var_name,'TimeOnPatch','TotalRew','TimeSinceLastRew'];
 
 % previous patch reward size
 rew_size = mod(dat.patches(:,2),10);
@@ -249,8 +255,8 @@ for i = 1:numel(X_dropout)
     end
 end
 
-% final score matrix
-score_final = score(keep(in_patch),1:opt.num_pcs);
+% final score matrix (zscore each PC)
+score_final = zscore(score(keep(in_patch),1:opt.num_pcs));
 
 %% Create fold indices (for cross validation)
 
@@ -277,12 +283,25 @@ end
 %% Fit GLM for each PC
 pb = ParforProgressbar(opt.num_pcs);
 beta_all = nan(size(X,2)+1,opt.num_pcs);
+se_all = nan(size(beta_all));
+R2 = nan(opt.num_pcs,1);
 parfor pIdx = 1:opt.num_pcs
     
     % use cross validation to find optimal lambda for this PC
     [B_all,stats_all] = lassoglm(X_final,score_final(:,pIdx),'normal','Alpha',opt.alpha,'CV',opt.cv_for_lambda);   
-%    lambda = stats_all.Lambda1SE;         
-    beta_all(:,pIdx) = [stats_all.Intercept(stats_all.Index1SE); B_all(:,stats_all.Index1SE)];
+%    lambda = stats_all.Lambda1SE;  
+    beta_this = [stats_all.Intercept(stats_all.Index1SE); B_all(:,stats_all.Index1SE)];
+    beta_all(:,pIdx) = beta_this;
+    
+    % get standard errors
+    X_this = [ones(size(X_final,1),1) X_final];    
+    mu = X_this*beta_this;    
+    y_this = score_final(:,pIdx);
+    sigma2 = mean((y_this-mu).^2);
+    W = diag(mu.^2/sigma2);   
+    V = inv(X_this'*W*X_this);
+    se_all(:,pIdx) = sqrt(diag(V));
+    R2(pIdx) = 1-sigma2/mean((y_this-mean(y_this)).^2);
 
     pb.increment();
 end
@@ -293,7 +312,7 @@ hfig = figure('Position',[100 100 1200 1200]);
 hfig.Name = sprintf('%s regressor weights_top %d PCs_4 uL patches_alpha=%0.1f',opt.session,opt.num_pcs,opt.alpha);
 for i = 1:opt.num_pcs
     subplot(ceil(opt.num_pcs/2),2,i); hold on;
-    my_scatter(1:numel(var_name),beta_all(2:end,i)','k',1);
+    errorbar(1:numel(var_name),beta_all(2:end,i)',se_all(2:end,i)','k.');
     title(sprintf('PC%d',i));
     xticks(1:numel(var_name));
     xticklabels(var_name);
@@ -304,4 +323,13 @@ for i = 1:opt.num_pcs
 end
 save_figs(paths.figs,hfig,'png');
 
+%% plot: R2
 
+hfig = figure('Position',[500 500 400 300]);
+hfig.Name = sprintf('%s R2 for top %d PCs_4 uL patches_alpha=%0.1f',opt.session,opt.num_pcs,opt.alpha);
+bar(1:opt.num_pcs,R2);
+ylim([0 1]);
+xlabel('PC');
+ylabel('R^2');
+title(opt.session,'Interpreter','none');
+save_figs(paths.figs,hfig,'png');
