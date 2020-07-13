@@ -20,8 +20,8 @@ addpath(genpath(paths.spikes_repo));
 
 % analysis opts
 opt = struct;
-opt.session = '78_20200311'; % session to analyze
-paths.figs = fullfile(paths.figs,opt.session,'PCs');
+opt.session = '80_20200317'; % session to analyze
+paths.figs = fullfile(paths.figs,opt.session,'PCs','sig_cells_only');
 opt.tbin = 0.02; % in seconds
 opt.smooth_sigma_lickrate = 0.1; % in seconds (for smoothing lickrate trace)
 opt.smoothSigma_time = 0.1;
