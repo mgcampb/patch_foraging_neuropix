@@ -133,7 +133,7 @@ if size(analyzeIndices,1) == 1
     analyzeIndices = analyzeIndices';  % orientation matters for the repmat below
 end
 analyzeMask = repmat(analyzeIndices,numConds,1);  % used to mask bigA
-if diff( Data(1).times(analyzeIndices) ) <= 5
+if diff(Data(1).times(analyzeIndices)) <= 5
     disp('mild warning!!!!: you are using a short time base which might make the computation of the derivative a bit less reliable');
 end
 
@@ -150,6 +150,7 @@ end
 %% make a version of A that has all the data from all the conditions.
 % in doing so, mean subtract and normalize
 
+% (for concatenated PCA)
 bigA = vertcat(Data.A);  % append conditions vertically
 
 % note that normalization is done based on ALL the supplied data, not just what will be analyzed
@@ -176,8 +177,10 @@ end
 
 %% now do traditional PCA
 
+% now just looking at the times we asked to analyze
 smallA = bigA(analyzeMask,:);
-[PCvectors,rawScores] = princomp(smallA,'econ');  % apply PCA to the analyzed times
+% [PCvectors,rawScores] = princomp(smallA,'econ');  % apply PCA to the analyzed times
+[PCvectors,rawScores] = pca(smallA);
 meanFReachNeuron = mean(smallA);  % this will be kept for use by future attempts to project onto the PCs
 
 % these are the directions in the high-D space (the PCs themselves)
@@ -230,6 +233,7 @@ Mskew = skewSymRegress(dState,preState)';  % this is the best Mskew for the same
 
 % get the eigenvalues and eigenvectors
 [V,D] = eig(Mskew); % V are the eigenvectors, D contains the eigenvalues
+% [V,D] = eig(M); % $ to see mBest
 evals = diag(D); % eigenvalues
 
 % the eigenvalues are usually in order, but not always.  We want the biggest
@@ -340,7 +344,7 @@ varCaptEachPlane = sum(varCaptEachPlane);
 
 %% Analysis of whether things really look like rotations (makes plots)
 
-for jPCplane = 1:2
+for jPCplane = 1:2 % change to 1:1 to see Mbest $$$
     phaseData = getPhase(Projection, jPCplane);  % does the key analysis
     
     if exist('params', 'var')
@@ -397,6 +401,7 @@ function Vr = getRealVs(V,evals)
 
     % now get axes aligned so that plan is spread mostly along the horizontal axis
     testProj = (Vr'*Ared(1:numAnalyzedTimes:end,:)')'; % just picks out the plan times
+%     display(testProj)
     rotV = princomp(testProj);
     crossProd = cross([rotV(:,1);0], [rotV(:,2);0]);
     if crossProd(3) < 0, rotV(:,2) = -rotV(:,2); end   % make sure the second vector is 90 degrees clockwise from the first
@@ -514,7 +519,7 @@ function circStatsSummary = plotPhaseDiff(phaseData, params, jPCplane)
     % with pi/2.  Will be one for perfect rotations, and zero for random data or expansions /
     % contractions.
     avgDP = averageDotProduct([phaseData.phaseDiff]', pi/2);
-    %fprintf('the average dot product with pi/2 is %1.4f  <<---------------\n', avgDP);
+    fprintf('the average dot product with pi/2 is %1.4f  <<---------------\n', avgDP);
     
     circStatsSummary.circMn = circMn;
     circStatsSummary.resultantVect = resultantVect;

@@ -172,7 +172,9 @@ for ti = 2:length(times2plot)
     
 end
 
-close (v)
+if exist('movieParams', 'var') && isfield(movieParams,'fname')
+    close (v)
+end
 %% end pad
 
 if nargout > 0  && usePads == 1
