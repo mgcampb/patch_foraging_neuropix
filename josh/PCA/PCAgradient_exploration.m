@@ -260,7 +260,7 @@ for sIdx = 3:3 % replace this when doing multiple sessions
     rewsizes = [1,2,4];
     overall_max_len = max(cellfun(@(x)  size(x,1),trial_pc_traj{sIdx}));
     
-    k = 4; % number of trial samples to take
+    k = 10; % number of trial samples to take
     
     figure(figcounter + 2);
     colormap(cool)
@@ -285,7 +285,7 @@ for sIdx = 3:3 % replace this when doing multiple sessions
             last_rew_ix = last_rew_sec(iTrial) * 1000 / tbin_ms;
             t_len = size(trial_pc_traj{sIdx}{iTrial}(last_rew_ix:end,:),1);
             t = (1:t_len) ./ (t_len / max_len);
-            patch([trial_pc_traj{sIdx}{iTrial}(last_rew_ix:end,1)' nan],[trial_pc_traj{sIdx}{iTrial}(last_rew_ix:end,3)' nan],[t nan],'FaceColor','none','EdgeColor','interp','LineWidth',1.5);
+            patch([trial_pc_traj{sIdx}{iTrial}(last_rew_ix:end,1)' nan],[trial_pc_traj{sIdx}{iTrial}(last_rew_ix:end,3)' nan],[t nan],'FaceColor','none','EdgeColor','interp','LineWidth',1);
             hold on
             scatter(trial_pc_traj{sIdx}{iTrial}(last_rew_ix,1),trial_pc_traj{sIdx}{iTrial}(last_rew_ix,3),'bo') % start
             scatter(trial_pc_traj{sIdx}{iTrial}(last_rew_ix:1000/tbin_ms:end,1),trial_pc_traj{sIdx}{iTrial}(last_rew_ix:1000/tbin_ms:end,3),'kx') % second marker
@@ -313,6 +313,7 @@ for sIdx = 3:3 % replace this when doing multiple sessions
         zlabel("Time on patch after last rew (sec)")
         subplotcounter = subplotcounter + 1;
     end
+    
     
     % compare this vs null models in which this relationship is solely due
     % to random noise
@@ -484,3 +485,81 @@ for sIdx = 3:3 % replace this when doing multiple sessions
     
     
 end
+
+%% Now just try PC1 to see if we can get predictability here with just start point and slope
+
+% start w/ just dividing by reward size
+for sIdx = 3:3
+    session = sessions{sIdx}(1:end-4);
+    data = load(fullfile(paths.data,session));
+    session = erase(sessions{sIdx}(1:end-4),'_'); % latex thing
+    
+    % reinitialize ms vectors
+    patchstop_ms = data.patchCSL(:,2);
+    patchleave_ms = data.patchCSL(:,3);
+    prts = patchleave_ms - patchstop_ms;
+    rew_ms = data.rew_ts;
+    
+    % Trial level features
+    patches = data.patches;
+    patchCSL = data.patchCSL;
+    prts = patchCSL(:,3) - patchCSL(:,2);
+    floor_prts = floor(prts);
+    patchType = patches(:,2);
+    rewsize = mod(patchType,10);
+    
+    
+    % make barcode matrices
+    nTimesteps = 15;
+    rew_barcode = zeros(length(patchCSL) , nTimesteps);
+    last_rew_ix = zeros(length(patchCSL),1);
+    for iTrial = 1:length(patchCSL)
+        rew_indices = round(rew_ms(rew_ms >= patchstop_ms(iTrial) & rew_ms < patchleave_ms(iTrial)) - patchstop_ms(iTrial)) + 1;
+        last_rew_sec = max(rew_indices);
+        last_rew_ix(iTrial) = round(last_rew_sec * 1000 / tbin_ms);
+        rew_barcode(iTrial , (last_rew_sec + 1):end) = -1; % set part of patch after last rew_ix = -1
+        rew_barcode(iTrial , (floor_prts(iTrial) + 1):end) = -2; % set part of patch after leave = -2
+        rew_barcode(iTrial , rew_indices) = rewsize(iTrial);
+    end
+    
+    time_after = prts - last_rew_sec; 
+    figure()
+    boxplot(time_after,rewsize);
+    xlabel("Reward size (uL)")
+    ylabel("Time stayed after reward")
+    title("Distribution of Time stay after reward divided by rewsize")
+
+    rew_burnin_sec = .5;
+    post_rew_PC1 = {{}};
+    
+
+    for iRewsize = [2,4]
+        rewsize_trials = find(rewsize == iRewsize);
+        figure()
+        colormap(cool)
+        hold on
+        
+        for j = 1:numel(rewsize_trials)
+            iTrial = rewsize_trials(j);
+            [~,max_ix] = max(trial_pc_traj{sIdx}{iTrial}(last_rew_ix(iTrial):end,1));
+            pc1 = trial_pc_traj{sIdx}{iTrial}(last_rew_ix(iTrial):max_ix,1);
+            post_rew_PC1{iRewsize}{j} = [linspace(last_rew_ix(iTrial)/tbin_ms,prts(iTrial),length(pc1))' pc1];
+            plot(post_rew_PC1{iRewsize}{j}(:,1),post_rew_PC1{iRewsize}{j}(:,2))
+        end
+        xlim([0,15])
+        title(sprintf("%i uL Trial",iRewsize));
+        
+    end
+    
+    for iRewsize = [2,4]
+        max_len = max(cellfun(@(x)  size(x,1),post_rew_PC1{iRewsize}));
+        padded_trajectories = cellfun(@(x) [x ; nan(max_len-size(x,1),2)],post_rew_PC1{iRewsize},'un',0); %,'un',0);
+        mean_trajectory = mean(cat(2,padded_trajectories{:}),2,"omitnan");
+        figure(4)
+        hold on
+        plot(mean_trajectory)
+        legend("2 uL","4 uL")
+    end
+    
+end
+

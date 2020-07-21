@@ -106,7 +106,7 @@ for sIdx = 3:3 % numel(sessions)
 %     [u,s,v] = svd(fr_mat_zscore);
     toc
 %     s = diag(s);
-    plot(expl(1:10).*2 / sum(expl.*2))
+    plot(expl(1:10) / sum(expl))
     title("Variance Explained Principle Components")
     xlabel("Principle Component")
     ylabel("Normalized Variance Explained")
@@ -315,7 +315,9 @@ for sIdx = 3:3 % replace this when doing multiple sessions
         % define trial groups based on reward events
         % two seconds
         trials10x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == 0 & prts > 2.55);
+        display(trials10x)
         trials11x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & prts > 2.55);
+        
         trial2secIdVec = zeros(15,1); 
         trial2secIdVec(trials10x) = 1;
         trial2secIdVec(trials11x) = 2;

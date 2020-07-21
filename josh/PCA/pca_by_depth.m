@@ -51,6 +51,7 @@ end
 reset_figs
 tic
 trial_pc_traj = {{}};
+pc_reductions = {{}};
 
 for sIdx = 3:3 % numel(sessions)
     session = sessions{sIdx}(1:end-4);
@@ -85,9 +86,9 @@ for sIdx = 3:3 % numel(sessions)
     trials.length = trials.end - trials.start; % new 6/9/2020
     trials.length = (floor(trials.length .* 10))/10; % new 6/9/2020
     trials.end = trials.start + trials.length; % new 6/9/2020
-    
-    p.patchstop_ms = patchstop_ms(keep);
-    p.patchleave_ms = patchleave_ms(keep);
+%     
+%     p.patchstop_ms = patchstop_ms(keep);
+%     p.patchleave_ms = patchleave_ms(keep);
 
     
     for q = 2:5
@@ -95,18 +96,18 @@ for sIdx = 3:3 % numel(sessions)
         quartile_cells = good_cells(spike_depths > depth_quartiles(q-1) & spike_depths < depth_quartiles(q));
         
         tic
-        [fr_mat, p_out, tbincent] = calc_onPatch_FRVsTimeNew6_9_2020(quartile_cells, dat, trials, p, opt); %MB includes only activity within patches
+        [fr_mat, tbincent] = calcFRVsTime(quartile_cells, dat, opt); %MB includes only activity within patches
         toc
 
         fr_mat_zscore = my_zscore(fr_mat); % z-score our psth matrix
 
-        % update timestamp vectors according to p_out, including .55 ms bias
-        % according to linear regression results
-        patchstop_ms = p_out.patchstop_ms + 9;
-        patchleave_ms = p_out.patchleave_ms + 9;
-        % create index vectors from our update timestamp vectors
-        patchstop_ix = round(patchstop_ms / tbin_ms) + 1;
-        patchleave_ix = min(round(patchleave_ms / tbin_ms) + 1,size(fr_mat_zscore,2)); % might not be good
+%         % update timestamp vectors according to p_out, including .55 ms bias
+%         % according to linear regression results
+%         patchstop_ms = p_out.patchstop_ms + 9;
+%         patchleave_ms = p_out.patchleave_ms + 9;
+%         % create index vectors from our update timestamp vectors
+%         patchstop_ix = round(patchstop_ms / tbin_ms) + 1;
+%         patchleave_ix = min(round(patchleave_ms / tbin_ms) + 1,size(fr_mat_zscore,2)); % might not be good
 
         % now perform PCA on concatenated matrix
         tic
@@ -126,11 +127,11 @@ for sIdx = 3:3 % numel(sessions)
         hist(mean(fr_mat,2))
         title(sprintf("Dist of avg FR for Depth Quartile %i",q-1))
 
-        pc_reductions{sIdx}{q} = score(:,1:6);
+        pc_reductions{sIdx}{q-1} = score(:,1:6);
     end
 end
 
-%% Visualize reduced PSTH Matrices, align to task events
+%% Visualize reduced PSTH Matrices, align to stop and leave, sep by quartile
 
 global gP
 gP.cmap{1} = [0 0 0];
@@ -142,7 +143,32 @@ for sIdx = 3:3
     dat = load(fullfile(paths.data,session));
     patches = dat.patches;
     patchType = patches(:,2);
-    rewsize = mod(patchType,10);
+
+    rew_size = mod(dat.patches(:,2),10);
+    N0 = mod(round(dat.patches(:,2)/10),10);
+    patchcue_ms = dat.patchCSL(:,1)*1000;
+    patchstop_ms = dat.patchCSL(:,2)*1000;
+    patchleave_ms = dat.patchCSL(:,3)*1000;
+    rew_ms = dat.rew_ts*1000;
+    
+    % exclude patchstop rewards and rewards that preceded patchleave by <1s
+    keep = true(size(rew_ms));
+    for rIdx = 1:numel(rew_ms)
+        if sum(patchstop_ms<rew_ms(rIdx) & patchleave_ms>rew_ms(rIdx))==0 % only keep rewards in patches
+            keep(rIdx) = false;
+        end
+        if min(abs(rew_ms(rIdx)-patchstop_ms))<500 || min(abs(rew_ms(rIdx)-patchleave_ms))<1000
+            keep(rIdx) = false;
+        end
+    end
+    rew_ms = rew_ms(keep);
+    
+    % get size of each reward
+    rew_size_indiv = nan(size(rew_ms));
+    for rIdx = 1:numel(rew_ms)
+        patch_id = find(patchstop_ms<rew_ms(rIdx) & patchleave_ms>rew_ms(rIdx));
+        rew_size_indiv(rIdx) = rew_size(patch_id);
+    end
     
     psth_label = {'cue','stop','leave','rew'};
     t_align = cell(4,1);
@@ -177,19 +203,21 @@ for sIdx = 3:3
     grp{2} = rew_size;
     grp{3} = rew_size;
     grp{4} = rew_size_indiv;
-      
-    % visualize PCs
-    for aIdx = 2:3 % currently just look at stop and leave alignments
-        fig_counter = fig_counter+1;
-        hfig(fig_counter) = figure('Position',[100 100 2300 700]);
-        hfig(fig_counter).Name = sprintf('%s - pca whole session - task aligned - %s',session,psth_label{aIdx});
-        for pIdx = 1:6 % plot for first 3 PCs
-            subplot(2,6,pIdx);
-            plot_timecourse('stream',pc_reductions{sIdx}(:,pIdx),t_align{aIdx}/tbin_ms,t_start{aIdx}/tbin_ms,t_end{aIdx}/tbin_ms,[],'resample_bin',1);
-            atitle(sprintf('PC%d/%s/ALL TRIALS/',pIdx,psth_label{aIdx}));
-            subplot(2,6,pIdx+6);
-            plot_timecourse('stream',pc_reductions{sIdx}(:,pIdx),t_align{aIdx}/tbin_ms,t_start{aIdx}/tbin_ms,t_end{aIdx}/tbin_ms,grp{aIdx},'resample_bin',1);
-            atitle(sprintf('PC%d/%s/SPLIT BY REW SIZE/',pIdx,psth_label{aIdx}));
+    
+    for q = [1 4] %1:4
+        % visualize PCs
+        for aIdx = [2 4] % 1:4 % currently just look at stop and leave alignments
+            fig_counter = fig_counter+1;
+            hfig(fig_counter) = figure('Position',[100 100 2300 700]);
+            hfig(fig_counter).Name = sprintf('%s - pca whole session - task aligned - %s',session,psth_label{aIdx});
+            for pIdx = 1:6 % plot for first 3 PCs
+                subplot(2,6,pIdx);
+                plot_timecourse('stream',pc_reductions{sIdx}{q}(:,pIdx),t_align{aIdx}/tbin_ms,t_start{aIdx}/tbin_ms,t_end{aIdx}/tbin_ms,[],'resample_bin',1);
+                atitle(sprintf('PC%d %s-aligned Quartile %i',pIdx,psth_label{aIdx},q));
+                subplot(2,6,pIdx+6);
+                plot_timecourse('stream',pc_reductions{sIdx}{q}(:,pIdx),t_align{aIdx}/tbin_ms,t_start{aIdx}/tbin_ms,t_end{aIdx}/tbin_ms,grp{aIdx},'resample_bin',1);
+                atitle(sprintf('PC%d %s-aligned Quartile %i',pIdx,psth_label{aIdx},q));
+            end
         end
     end
 end

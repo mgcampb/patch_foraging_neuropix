@@ -33,9 +33,11 @@ jPCA_params.suppressHistograms = true;  % these are useful sanity plots, but let
 % plotting the first jPCA plane for 200 ms of data, using 6 PCs (the default)
 times = -50:10:150;  % 50 ms before 'neural movement onset' until 150 ms after
 jPCA_params.numPCs = 6;  % default anyway, but best to be specific
+jPCA_params.meanSubtract = true;
+jPCA_params.substRawPCs = false;
 [Projection, Summary] = jPCA(Data, times, jPCA_params);
 
-phaseSpace(Projection, Summary);  % makes the plot
+phaseSpace(Projection, Summary,jPCA_params);  % makes the plot
 
 printFigs(gcf, '.', '-dpdf', 'Basic jPCA plot');  % prints in the current directory as a PDF
 
@@ -68,14 +70,15 @@ phaseSpace(Projection, Summary, plotParams);  % makes all three plots
 
 %% EX5: SIMPLE MOVIE FOR VIEWING
 
-times = -50:10:300;  % This is just what we did for examples 3 & 4 above
+times = -50:10:150;  % This is just what we did for examples 3 & 4 above
 jPCA_params.numPCs = 12;
+jPCA_params.meanSubtract = true;
+movParams.substRawPCs = false;
 [Projection, Summary] = jPCA(Data, times, jPCA_params);
 
-phaseMovie(Projection, Summary);
-
 % for a greater range of times
-movParams.times = -50:10:550;  % a range of times that is broader than that used to find the jPCA projection
+movParams.fname = 'jPCA_churchland';
+movParams.times = times;  % a range of times that is broader than that used to find the jPCA projection
 phaseMovie(Projection, Summary, movParams);
 
 
