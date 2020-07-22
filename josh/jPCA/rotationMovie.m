@@ -21,7 +21,8 @@ for step = 1:numSteps2show
     
     if ~isempty(fname)
 %         MV(step) = getframe(gca, pixelsToGet);
-        frame = getframe(gca);
+        frame = getframe(gca,pixelsToGet);
+%         frame = getframe(gca);
         writeVideo (v, frame);
     end
     
