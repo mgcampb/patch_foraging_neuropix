@@ -668,6 +668,7 @@ for sIdx = 3:3
                 avgFR_10x(:,dIdx) = mean(fr_mat10x(:,decVar10x > decVar_bins(dIdx-1) & decVar10x < decVar_bins(dIdx)),2);
             end
         end
+        
         avgFR_10x = zscore(avgFR_10x,[],2);
 %         avgFR_10x = avgFR_10x ./ max(avgFR_10x,[],2);
         [~,index] = max(avgFR_10x');

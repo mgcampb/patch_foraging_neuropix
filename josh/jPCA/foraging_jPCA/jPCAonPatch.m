@@ -74,7 +74,6 @@ for sIdx = 3:3 % numel(sessions)
 %     patchstop_ms = p_out.patchstop_ms + 9;
 %     patchleave_ms = p_out.patchleave_ms + 9;
 
-%     leave_buffer = 500;
     leave_buffer = 500;
     % create index vectors from our update timestamp vectors
     patchstop_ix = round(patchstop_ms/ tbin_ms) + 1;
@@ -202,10 +201,10 @@ for sIdx = 3:3
     movParams.colors = {[.5 1 1],[.75 .75 1],[1 .5 1],[0 1 1],[.5 .5 1],[1 0 1]};
     movParams.times = times;
     movParams.substRawPCs = false;
-    movParams.conds2plot = 3:6;
+    movParams.conds2plot = 'all';
     % change this to allow for path change
     movParams.fname = sprintf('m%s_%s_RRjPCA',mouse,date);
-%     phaseMovie(Projection,Summary,movParams);
+    phaseMovie(Projection,Summary,movParams);
 
 %     % show rotation
     fname = sprintf('m%s_%s_rotation_2sec',mouse,date);
