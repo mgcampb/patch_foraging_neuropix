@@ -216,7 +216,7 @@ opt_glmnet.alpha = opt.alpha;
 llh_all = nan(Ncells,numel(X_mdl),opt.numFolds); % mean MSE (mean squared error) over test folds
 parfor cIdx = 1:Ncells
 
-    % EVENTUALLY: NESTED CROSS VALIDATION
+    % NESTED CROSS VALIDATION
     y = spikecounts_final(:,cIdx);
     llh_this = nan(numel(X_mdl),opt.numFolds);
     for mdl_idx = 1:numel(X_mdl)
