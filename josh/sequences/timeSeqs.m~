@@ -3,7 +3,7 @@
 %  - Maybe use some seqNMF here
 clear
 paths = struct;
-paths.data = '/Users/joshstern/Documents/UchidaLab_matlab/neuroPixelsData/79';
+paths.data = '/Users/joshstern/Documents/UchidaLab_matlab/neuroPixelsData/80';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_matlab/neural_data_figs'; % where to save figs
 
 addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab/HGK_analysis_tools'));
@@ -32,7 +32,7 @@ sessions = {sessions.name};
 
 FR_decVar = struct;
 
-for sIdx = 1:2 % 1:numel(sessions)
+for sIdx = 3:3 % 1:numel(sessions)
     session = sessions{sIdx}(1:end-4);
     fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
     % load data
@@ -119,11 +119,11 @@ end
 %% First just make ridge plots w/ cheating on sorting
 close all
 index_sort_all = {sIdx};
-for sIdx = 1:2
+for sIdx = 3:3
     decVar_bins = linspace(0,2,41);
     opt.norm = "zscore";
     opt.trials = 'all';
-    dvar = "time";
+    dvar = "timesince";
     [sorted_peth,neuron_order,unsorted_peth] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,opt);
     index_sort_all{sIdx} = neuron_order;
 end
@@ -131,18 +131,18 @@ end
 index_sort_all = {sIdx};
 mid_responsive_neurons = {sIdx};
 nMid = 100;
-mid_responsive_neurons{1} = nan(nMid,2);
 nBins = 40;
 mid_responsive_peth = nan(2,nMid,nBins-1);
 
 %% Use function to perform mid-responsive quantifications
 
 close all
-for sIdx = 1:1
+for sIdx = 3:3
     nTrials = length(FR_decVar(sIdx).fr_mat);
+    mid_responsive_neurons{sIdx} = nan(nMid,2);
 
     % set decision variable
-    dvar = "time";
+    dvar = "timesince";
     if dvar == "time"
         label = "Time";
         varIdx = 1;
@@ -175,7 +175,7 @@ for sIdx = 1:1
     all_opt.suppressVis = true;
     all_opt.norm = "zscore";
     all_opt.trials = 1:2:nTrials;
-    [sorted_peth,index_sort_all{sIdx},~] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,all_opt);
+    [sorted_peth,index_sort_all,~] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,all_opt);
 
     % regress out linear, then nonlinear components to find neurons more defined by nonlinear
     % responsivity
@@ -221,7 +221,7 @@ for sIdx = 1:1
     threePaneFitPlot(sorted_peth,avgFR_decVar_sortedGaussResidual,avgFR_decVar_sortedGauss,decVar_bins,label,"Gaussian")
     % figure out who is mid-responsive
     subtr = gauss_r2 - linear_r2;
-    starts = 1:100;
+    starts = 1:200;
     mean_diff = nan(length(starts),1);
     for j = 1:numel(starts)
         neuron1 = starts(j);
@@ -246,7 +246,7 @@ end
 
 %% Quantify ridge to background ratio for mid-responsive neurons vs shuffle
 close all
-for sIdx = 1:1
+for sIdx = 3:3
     decVar_cells = {};
     decVar_cells{1} = FR_decVar(sIdx).decVarTime;
     decVar_cells{2} = FR_decVar(sIdx).decVarTimeSinceRew;
@@ -256,7 +256,7 @@ for sIdx = 1:1
     labels{3} = "Time Since Last Reward";
 
     r2b_ratio_unshuffled = nan(nMid,length(decVar_cells));
-    ridge_width = 4; % .1 second window on either side of ridge
+    ridge_width = 2; % .1 second window on either side of ridge
 
     figure()
     for vIdx = 1:length(decVar_cells)
@@ -274,7 +274,7 @@ for sIdx = 1:1
         for neuron = 1:nMid
             backgroundUnshuffled(neuron) =  mean(mid_fr_mat(neuron,[1:max(1,max_unshuffled_ix(neuron)-ridge_width),min(nBins-1,(max_unshuffled_ix(neuron)+ridge_width)):nBins-1]));
             ridgeUnshuffled(neuron) = mean(mid_fr_mat(neuron,max(1,max_unshuffled_ix(neuron)-ridge_width):min(nBins-1,max_unshuffled_ix(neuron)+ridge_width)));
-            r2b_ratio_unshuffled(neuron,vIdx) = (ridgeUnshuffled(neuron)+3) / (backgroundUnshuffled(neuron)+3); % rough step
+            r2b_ratio_unshuffled(neuron,vIdx) = (ridgeUnshuffled(neuron) + 3) / (backgroundUnshuffled(neuron) + 3); % rough step
         end
     end
     
@@ -285,52 +285,60 @@ for sIdx = 1:1
 
     % collect FR matrices
     fr_mat = cat(2,FR_decVar(sIdx).fr_mat{:});
-    fr_mat = fr_mat(index_sort_all{sIdx}(mid_responsive_neurons{sIdx}(:,1)),:);
+    fr_mat = fr_mat(index_sort_all{sIdx}(mid_responsive_neurons{sIdx}(:,1),:));
     newShuffleControl = true;
 
     if newShuffleControl == true
         r2b_ratio_shuffled = zeros(nMid,shuffRepeats);
         for shuffIdx = 1:shuffRepeats
+            
             if mod(shuffIdx,100) == 0
                 display(shuffIdx)
             end
 
-            % Now find ridge-to-background ratio for shuffled data
-            shuffle_opt.shuffle = true;
-            shuffle_opt.suppressVis = true;
-            [shuffled_peth,~,~] = peakSortPETH(FR_decVar(sIdx),"time",decVar_bins,shuffle_opt);
-            [~,max_shuffled_ix] = max(shuffled_peth,[],2);
+            % Now find ridge-to-background ratio for shuffled, unshuffled data
+            ridgeBaselineRatioShuffled = zeros(nMid,1);
+            [~,max_shuffled_ix] = max(avgFR_shuffle_decVar_sorted,[],2);
             
             backgroundShuffled = zeros(nMid,1);
             ridgeShuffled = zeros(nMid,1);
             
             for neuron = 1:nMid
-                backgroundShuffled(neuron) =  mean(shuffled_peth(neuron,[1:max(1,max_shuffled_ix(neuron)-ridge_width), min(nBins-1,max_shuffled_ix(neuron)+ridge_width):nBins-1]));
-                ridgeShuffled(neuron) = mean(shuffled_peth(neuron,max(1,max_shuffled_ix(neuron)-ridge_width):min(nBins-1,max_shuffled_ix(neuron)+ridge_width)));
-                r2b_ratio_shuffled(neuron,shuffIdx) = (ridgeShuffled(neuron)+3) / (backgroundShuffled(neuron)+3);
+                backgroundShuffled(neuron) =  mean(avgFR_shuffle_decVar_sorted(neuron,[1:max(1,max_shuffled_ix(neuron)-ridge_width), min(nBins-1,max_shuffled_ix(neuron)+ridge_width):nBins-1]));
+                ridgeShuffled(neuron) = mean(avgFR_shuffle_decVar_sorted(neuron,max(1,max_shuffled_ix(neuron)-ridge_width):min(nBins-1,max_shuffled_ix(neuron)+ridge_width)));
+                ridgeBaselineRatioShuffled(neuron) = ridgeShuffled(neuron) / backgroundShuffled(neuron);
+%                 if ridgeBaselineRatioShuffled(neuron) > 15
+%                     bad_neurons = [bad_neurons neuron]; % outlier neurons... low fr cells?
+%                 end
             end
+            
+            rrbl_shuffled(:,shuffIdx) = ridgeBaselineRatioShuffled;
         end
+        
+        rrbl_shuffled(isinf(rrbl_shuffled)) = 1;
+        rrbl_shuffled(rrbl_shuffled > 15) = 15; % figure out how to deal w/ outliers better... 
     end
 %     
-    figure()
-    bar(1:(length(decVar_cells)+1),[mean(mean(r2b_ratio_shuffled,'omitnan')) mean(r2b_ratio_unshuffled,1)])
-    hold on
-    errorbar(1,mean(mean(r2b_ratio_shuffled,'omitnan')),1.96 * std(mean(r2b_ratio_shuffled,1,'omitnan')),'k')
-    title("Ridge to background ratio across alignments")
-    xticks(1:(length(decVar_cells)+1))
-    xticklabels(labels)
+%     figure()
+%     bar(1:(length(decVar_cells)+1),[mean(mean(rrbl_shuffled,'omitnan')) mean(rrbl_unshuffled,1)])
+%     hold on
+%     errorbar(1,mean(mean(rrbl_shuffled,'omitnan')),1.96 * std(mean(rrbl_shuffled,1,'omitnan')),'k')
+%     title("Ridge to background ratio across alignments")
+%     xticks(1:(length(decVar_cells)+1))
+%     xticklabels(labels)
 %     
-    % return p value
-    mean_r2b_shuffled = mean(r2b_ratio_shuffled,1);
-    mean_r2b_unshuffled = mean(r2b_ratio_unshuffled,1);
-    for vIdx = 1:length(mean_r2b_unshuffled) 
-        p = length(find(mean_r2b_unshuffled(vIdx) < mean_r2b_shuffled)) / length(mean_r2b_shuffled);
-        fprintf("\n p-value for %s: %f \n",labels{vIdx + 1},p);        
-    end
+%     % return p value
+%     mean_rrbl_shuffled = mean(rrbl_shuffled,1);
+%     mean_rrbl_unshuffled = mean(rrbl_unshuffled,1);
+%     for vIdx = 1:length(mean_rrbl_unshuffled) 
+%         p = length(find(mean_rrbl_unshuffled < mean_rrbl_shuffled(vIdx))) / length(mean_rrbl_shuffled);
+%         fprintf("\n p-value for %s: %f \n",labels{vIdx + 1},p);        
+%     end
 end
 %% Ramping unit rew response heterogeneity analysis (temporary home)
 close all;
 for sIdx = 3:3
+    
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
     session = erase(sessions{sIdx}(1:end-4),'_'); % latex thing
@@ -834,7 +842,7 @@ pooled_rampSlopes = [];
 pooled_seqSlopes = [];
 dayVec = [];
 
-for sIdx = 2:2
+for sIdx = 3:3
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
     session = erase(sessions{sIdx}(1:end-4),'_'); % latex thing
@@ -873,7 +881,7 @@ for sIdx = 2:2
     
     % outer loop to test over different population windows
     groupSize = 100;
-    groupStarts = 1; % 40; % linspace(1,100,25);
+    groupStarts = 40; % linspace(1,100,25);
     % datastructures for group testing 
     seqPRTpValue = nan(4,numel(groupStarts));
     seqPRTpearsonr = nan(4,numel(groupStarts));
@@ -886,11 +894,11 @@ for sIdx = 2:2
         % select population for analysis
         first = groupStarts(gIdx);
         last = first + groupSize;
-        early_resp = index_sort_all{sIdx}(first:last); % fliplr(mid_responsive_neurons); %  
+        early_resp = index_sort_odd{sIdx}(first:last); % fliplr(mid_responsive_neurons); %  
         if shuffle == true
             early_resp = early_resp(randperm(length(early_resp)));
         end
-        ramps = index_sort_all{sIdx}(151:end);
+        ramps = index_sort_odd{sIdx}(151:end);
 
         % data structures
         prog_slopes = nan(nTrials,1);
@@ -900,7 +908,7 @@ for sIdx = 2:2
         slopes_seq = nan(nTrials,1);
         overall_mean_seq = nan(nTrials,1);
 
-        for j = 10:25 % 1:numel(one_rew_trials)
+        for j = 1:numel(one_rew_trials)
             iTrial = one_rew_trials(j);
             norm_fr_mat_iTrial = zscore(FR_decVar(sIdx).fr_mat{iTrial}(early_resp,:),[],2);
             [times,neurons] = find(norm_fr_mat_iTrial(:,1:50) > 0);
@@ -960,43 +968,40 @@ for sIdx = 2:2
 %             xlabel("Time on patch (ms)")
             
     %         visualize sequence
-            figure();
-            subplot(1,2,1)
-            colormap('jet')
-            [~,index] = max(zscore(FR_decVar(sIdx).fr_mat{iTrial},[],2),[],2);
-            [~,trial_sort] = sort(index);
-%             imagesc(flipud(zscore(FR_decVar(sIdx).fr_mat{iTrial}(index_sort_all{sIdx},:),[],2)))
-            imagesc(flipud(zscore(FR_decVar(sIdx).fr_mat{iTrial}(trial_sort,:),[],2)))
-            hold on
-            plot([50 50]',[305 - first 305 - last]','w-','linewidth',2)
-            plot([1 50]',[305 - first 305 - first]','w-','linewidth',2)
-            plot([1 50]',[305 - last 305 - last]','w-','linewidth',2)
-            title(sprintf("%i uL Trial %i",rewsize(iTrial),iTrial))
-            xlabel("Time on Patch (ms)")
-            if size(norm_fr_mat_iTrial,2) < 100
-                xticks([0 25 50 75])
-                xticklabels([0 500 1000 1500])
-            else
-                xticks([0 25 50 75 100])
-                xticklabels([0 500 1000 1500 2000])
-            end
-%             subplot(1,2,2)
+%             figure();
+%             subplot(1,2,1)
 %             colormap('jet')
-%             imagesc(flipud(norm_fr_mat_iTrial(:,1:50)))
-%             colorbar()
-%             title(sprintf('Trial %i',iTrial))
-%             xlabel('Time')
-%             title("Area of interest")
-%             draw lines to indicate reward delivery
-            subplot(1,2,2); hold on
-            title("Data for Weighted Linear Regression")
-            scatter(neurons,times,activity,'kx')
-            xlabel("Time on Patch (ms)")
-            xticks([0 25 50])
-            xticklabels([0 500 1000])
-            plot(neurons,mdl.Fitted,'linewidth',2)
-% 
-        end
+%             imagesc(flipud(zscore(FR_decVar(sIdx).fr_mat{iTrial}(index_sort_odd{sIdx},:),[],2)))
+%             hold on
+%             plot([50 50]',[305 - first 305 - last]','w-','linewidth',2)
+%             plot([1 50]',[305 - first 305 - first]','w-','linewidth',2)
+%             plot([1 50]',[305 - last 305 - last]','w-','linewidth',2)
+%             title(sprintf("%i uL Trial %i",rewsize(iTrial),iTrial))
+%             xlabel("Time on Patch (ms)")
+%             if size(norm_fr_mat_iTrial,2) < 100
+%                 xticks([0 25 50 75])
+%                 xticklabels([0 500 1000 1500])
+%             else
+%                 xticks([0 25 50 75 100])
+%                 xticklabels([0 500 1000 1500 2000])
+%             end
+% %             subplot(1,2,2)
+% %             colormap('jet')
+% %             imagesc(flipud(norm_fr_mat_iTrial(:,1:50)))
+% %             colorbar()
+% %             title(sprintf('Trial %i',iTrial))
+% %             xlabel('Time')
+% %             title("Area of interest")
+% %             draw lines to indicate reward delivery
+%             subplot(1,2,2); hold on
+%             title("Data for Weighted Linear Regression")
+%             scatter(neurons,times,activity,'kx')
+%             xlabel("Time on Patch (ms)")
+%             xticks([0 25 50])
+%             xticklabels([0 500 1000])
+%             plot(neurons,mdl.Fitted,'linewidth',2)
+% % 
+%         end
         end
 
 %         colors = [0 0 0; 0 1 1;0 0 1;0 0 1];
@@ -1011,45 +1016,45 @@ for sIdx = 2:2
         seqPRTpValue(2,gIdx) = p1(2);seqPRTpearsonr(2,gIdx) = r1(2);
         seqPRTpValue(3,gIdx) = p2(2);seqPRTpearsonr(3,gIdx) = r2(2);
         seqPRTpValue(4,gIdx) = p3(2);seqPRTpearsonr(4,gIdx) = r3(2);
-%         figure();hold on
-%         gscatter(prog_slopes(one_rew_trials),prts(one_rew_trials),rewsize(one_rew_trials),colors,'o')
-%         xlabel("Slope of sequence progression")
-%         ylabel("PRT")
-%         title(sprintf("Slope of sequence progression vs PRT (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
-%         legend("1 uL","2 uL","4 uL")
+        figure();hold on
+        gscatter(prog_slopes(one_rew_trials),prts(one_rew_trials),rewsize(one_rew_trials),colors,'o')
+        xlabel("Slope of sequence progression")
+        ylabel("PRT")
+        title(sprintf("Slope of sequence progression vs PRT (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
+        legend("1 uL","2 uL","4 uL")
 
         % Ramp-PRT correlation
         [r0,p0] = corrcoef(slopes(one_rew_trials),prts(one_rew_trials));
         [r1,p1] = corrcoef(slopes(sm1rew),prts(sm1rew));
         [r2,p2] = corrcoef(slopes(md1rew),prts(md1rew));
         [r3,p3] = corrcoef(slopes(lg1rew),prts(lg1rew));
-%         figure();hold on
-%         gscatter(slopes(one_rew_trials),prts(one_rew_trials),rewsize(one_rew_trials),colors,'o')
-%         title(sprintf("Slope of mean ramp vs PRT (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
-%         ylabel("PRT")
-%         xlabel("Mean ramp slopes")
+        figure();hold on
+        gscatter(slopes(one_rew_trials),prts(one_rew_trials),rewsize(one_rew_trials),colors,'o')
+        title(sprintf("Slope of mean ramp vs PRT (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
+        ylabel("PRT")
+        xlabel("Mean ramp slopes")
         
         % Slope of mean sequence
         [r0,p0] = corrcoef(slopes_seq(one_rew_trials),prts(one_rew_trials));
         [r1,p1] = corrcoef(slopes_seq(sm1rew),prts(sm1rew));
         [r2,p2] = corrcoef(slopes_seq(md1rew),prts(md1rew));
         [r3,p3] = corrcoef(slopes_seq(lg1rew),prts(lg1rew));
-%         figure();hold on
-%         gscatter(slopes_seq(one_rew_trials),prts(one_rew_trials),rewsize(one_rew_trials),colors,'o')
-%         title(sprintf("Slope of mean sequence vs PRT (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
-%         ylabel("PRT")
-%         xlabel("Mean sequence slopes")
+        figure();hold on
+        gscatter(slopes_seq(one_rew_trials),prts(one_rew_trials),rewsize(one_rew_trials),colors,'o')
+        title(sprintf("Slope of mean sequence vs PRT (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
+        ylabel("PRT")
+        xlabel("Mean sequence slopes")
         
         % Mean value of sequence-PRT correlation
         [r0,p0] = corrcoef(overall_mean_seq(one_rew_trials),prts(one_rew_trials));
         [r1,p1] = corrcoef(overall_mean_seq(sm1rew),prts(sm1rew));
         [r2,p2] = corrcoef(overall_mean_seq(md1rew),prts(md1rew));
         [r3,p3] = corrcoef(overall_mean_seq(lg1rew),prts(lg1rew));
-%         figure();hold on
-%         gscatter(overall_mean_seq(one_rew_trials),prts(one_rew_trials),rewsize(one_rew_trials),colors,'o')
-%         title(sprintf("Mean Sequence Activity vs PRT (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
-%         ylabel("PRT")
-%         xlabel("Mean Sequence Activity")
+        figure();hold on
+        gscatter(overall_mean_seq(one_rew_trials),prts(one_rew_trials),rewsize(one_rew_trials),colors,'o')
+        title(sprintf("Mean Sequence Activity vs PRT (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
+        ylabel("PRT")
+        xlabel("Mean Sequence Activity")
 
         % Sequence-ramp correlation
         [r0,p0] = corrcoef(prog_slopes(one_rew_trials),slopes(one_rew_trials));
@@ -1060,13 +1065,13 @@ for sIdx = 2:2
         seqRamppValue(2,gIdx) = p1(2);seqRamppearsonr(2,gIdx) = r1(2);
         seqRamppValue(3,gIdx) = p2(2);seqRamppearsonr(3,gIdx) = r2(2);
         seqRamppValue(4,gIdx) = p3(2);seqRamppearsonr(4,gIdx) = r3(2);
-%         figure();hold on
-%         gscatter(prog_slopes(one_rew_trials),slopes(one_rew_trials),rewsize(one_rew_trials),colors,'o')
-%         title(sprintf("Slope of sequence progression vs slope of mean ramp (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
-%         ylabel("Slope of mean ramp")
-%         xlabel("Slope of sequence progression")
+        figure();hold on
+        gscatter(prog_slopes(one_rew_trials),slopes(one_rew_trials),rewsize(one_rew_trials),colors,'o')
+        title(sprintf("Slope of sequence progression vs slope of mean ramp (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
+        ylabel("Slope of mean ramp")
+        xlabel("Slope of sequence progression")
 
-%     end
+    end
     
         % update pooled datastructures
 %         lgProgSlopes = [lgProgSlopes; prog_slopes(lg1rew)];

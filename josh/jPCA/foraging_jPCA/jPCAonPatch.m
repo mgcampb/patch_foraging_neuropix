@@ -153,7 +153,7 @@ end
 
 %% quick code to visualize jPCA_data PETHs
 
-for sIdx = 3:3
+for sIdx = 1:2
     avg40 = zscore(jPCA_data{sIdx}(3).A',[],2);
     [~,idx] = max(avg40,[],2);
     [~,idx_sort40] = sort(idx);
@@ -192,7 +192,7 @@ for sIdx = 3:3
     jPCA_params.suppressBWrosettes = false;
     jPCA_params.suppressText = false;
     [Projection, Summary] = jPCA(jPCA_data{sIdx}, times, jPCA_params);
-    plot_params.substRawPCs = true;
+    plot_params.substRawPCs = false;
     plot_params.colors = {[.5 1 1],[.75 .75 1],[1 .5 1],[0 1 1],[.5 .5 1],[1 0 1]};
     [colorStruct, haxP, vaxP] = phaseSpace(Projection, Summary,plot_params);  % makes the plot
     
@@ -203,7 +203,7 @@ for sIdx = 3:3
     movParams.substRawPCs = false;
     movParams.conds2plot = 'all';
     % change this to allow for path change
-    movParams.fname = sprintf('m%s_%s_RRjPCA',mouse,date);
+%     movParams.fname = sprintf('m%s_%s_RRjPCA',mouse,date);
     phaseMovie(Projection,Summary,movParams);
 
 %     % show rotation
@@ -359,9 +359,9 @@ for sIdx = 3:3
     jPCA_params.numPCs = 6;  % default anyway, but best to be specific
     jPCA_params.meanSubtract = false; % looks better w/o mean subtraction
     jPCA_params.suppressBWrosettes = false;
-    [Projection, Summary] = jPCA(jPCA_data{sIdx}([trials10x(1:10); trials11x(1:10)]), times, jPCA_params);
+    [Projection, Summary] = jPCA(jPCA_data{sIdx}([trials10x(1:15); trials11x(1:10)]), times, jPCA_params);
     plot_params.substRawPCs = false;
-    plot_params.colors = singleTrialColors([trials10x(1:10); trials11x(1:10)]);
+    plot_params.colors = singleTrialColors([trials10x(1:15); trials11x(1:10)]);
 %     plot_params.colors = {[.5 .5 .5],[.5 1 1],[.5 .5 1],[0 0 0],[0 1 1],[0 0 1]};
     phaseSpace(Projection, Summary,plot_params);  % makes the plot
     
@@ -369,7 +369,7 @@ for sIdx = 3:3
 %     movParams.colors = {[.5 .5 .5],[.5 1 1],[.5 .5 1],[0 0 0],[0 1 1],[0 0 1]};
     movParams.times = times;
     movParams.substRawPCs = false;
-    movParams.colors = singleTrialColors([trials10x(1:10); trials11x(1:10)]);
+    movParams.colors = singleTrialColors([trials10x(1:15); trials11x(1:10)]);
     % change this to allow for path change
 %     movParams.fname = sprintf('m%s_%s_2secjPCA',mouse,date);
     phaseMovie(Projection,Summary,movParams);
@@ -384,7 +384,7 @@ end
 %% Now turn FRandTimes into jPCA format for 3 second conditions
 
 jPCA_data = {};
-for sIdx = 2:2
+for sIdx = 1:1
     jPCA_data{sIdx} = struct;
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
@@ -476,7 +476,7 @@ end
 %% Now perform jPCA for 3 second conditions
 close all;
 
-for sIdx = 2:2
+for sIdx = 1:1
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
     session = erase(sessions{sIdx}(1:end-4),'_'); % latex thing
@@ -492,16 +492,17 @@ for sIdx = 2:2
     [Projection, Summary] = jPCA(jPCA_data{sIdx}, times, jPCA_params);
     
     plot_params.substRawPCs = false;
-    plot_params.colors = {[0 0 0],rgb('hotpink'),[1 0 0],rgb('indigo')};
+    plot_params.colors = {[1 0 1],[.75 .25 .75],[.25 .5 1],[0 1 1]};
+%     plot_params.colors = {[0 0 0],rgb('hotpink'),[1 0 0],rgb('indigo')};
     phaseSpace(Projection, Summary,plot_params);  % makes the plot
  
 %     % make a movie!
-%     movParams.colors = {[1 0 1],[.75 .25 .75],[.25 .5 1],[0 1 1]};
-    movParams.colors = {[0 0 0],rgb('hotpink'),[1 0 0],rgb('indigo')};
+    movParams.colors = {[1 0 1],[.75 .25 .75],[.25 .5 1],[0 1 1]};
+%     movParams.colors = {[0 0 0],rgb('hotpink'),[1 0 0],rgb('indigo')};
     movParams.times = times;
-    movParams.substRawPCs = true;
+    movParams.substRawPCs = false;
     % change this to allow for path change
-    movParams.fname = sprintf('m%s_%s_3secPCA',mouse,date);
+%     movParams.fname = sprintf('m%s_%s_3secPCA',mouse,date);
     phaseMovie(Projection,Summary,movParams);
 
 %     % show rotation

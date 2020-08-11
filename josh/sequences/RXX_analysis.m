@@ -117,7 +117,7 @@ for sIdx = 3:3 % 1:numel(sessions)
     session = erase(sessions{sIdx}(1:end-4),'_'); % latex thing
     session = session([1:2,end-2:end]);
     
-    dvar = "timeSince";
+    dvar = "timesince";
     
     if dvar == "time"
         decVar_cell = FR_decVar(sIdx).decVarTime;
@@ -190,6 +190,7 @@ for sIdx = 3:3
     decVar_bins = linspace(0,2,41);
     opt.norm = "zscore";
     opt.trials = 'all';
+    opt.suppressVis = false;
     dvar = "timesince";
     [sorted_peth,neuron_order,unsorted_peth] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,opt);
     index_sort_all{sIdx} = neuron_order;
@@ -354,7 +355,7 @@ for sIdx = 3:3
     end
 end
 
-%% Now same over 4XX conditions 
+%% Now same over RXX conditions 
 
 RXX_data = {};
 for sIdx = 3:3
@@ -373,7 +374,7 @@ for sIdx = 3:3
     % Trial level features
     patches = data.patches;
     patchCSL = data.patchCSL;
-    prts = patchCSL(:,3) - patchCSL(:,2) - .55;
+    prts = patchCSL(:,3) - patchCSL(:,2);
     floor_prts = floor(prts);
     patchType = patches(:,2);
     rewsize = mod(patchType,10);

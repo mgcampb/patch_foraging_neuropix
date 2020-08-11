@@ -1,4 +1,4 @@
-function [sorted_peth,neuron_order,unsorted_peth] = peakSortPETH(FR_decVar,dvar,decVar_bins,opt)
+function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,dvar,decVar_bins,opt)
 % Sort neurons by peak firing rate bin according to time or time since last
 % reward
     
@@ -72,6 +72,7 @@ function [sorted_peth,neuron_order,unsorted_peth] = peakSortPETH(FR_decVar,dvar,
         unsorted_peth_norm = zscore(unsorted_peth,[],2);
     elseif norm == "peak"
         unsorted_peth_norm = unsorted_peth ./ max(unsorted_peth,[],2);
+        unsorted_peth_norm(isnan(unsorted_peth_norm)) = 0;
     end
     
     [~,index] = max(unsorted_peth');
