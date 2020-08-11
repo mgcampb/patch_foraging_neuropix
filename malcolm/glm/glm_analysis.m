@@ -17,10 +17,12 @@ paths.malcolm_functions = 'C:\code\patch_foraging_neuropix\malcolm\functions';
 addpath(genpath(paths.malcolm_functions));
 paths.spikes_repo = 'C:\code\spikes';
 addpath(genpath(paths.spikes_repo));
+paths.glmnet = 'C:\code\glmnet_matlab';
+addpath(genpath(paths.glmnet));
 
 % analysis opts
 opt = struct;
-opt.session = '78_20200311'; % session to analyze
+opt.session = '80_20200317'; % session to analyze
 paths.figs = fullfile(paths.figs,opt.session);
 opt.tbin = 0.02; % in seconds
 opt.smooth_sigma_lickrate = 0.1; % in seconds (for smoothing lickrate trace)
@@ -32,10 +34,13 @@ opt.basis_length = 1; % in seconds
 % whether or not to zscore predictors
 opt.zscore_predictors = true;
 
+% minimum firing rate to keep neurons
+opt.min_fr = 1;
+
 % regularization
 % *** NOTE: figure out how to get lambda for each session *** 
-opt.lambda = 0.0206; % regularization parameter; came from trying a bunch of values on an example cell (m80 0317 c368)
-opt.alpha = 0.5; % weighting of L1 and L2 penalties in elastic net regularization
+% opt.lambda = 0.0206; % regularization parameter; came from trying a bunch of values on an example cell (m80 0317 c368)
+opt.alpha = 0.9; % weighting of L1 and L2 penalties in elastic net regularization
 
 % cross validation over trials
 opt.numFolds = 5; % split up trials into (roughly) equally sized chunks
@@ -122,28 +127,6 @@ for i = 1:opt.nbasis
     var_name = [var_name,sprintf('Rewards%d',i)];
 end
 
-% % PATCH CUE 1: patch cue to (patch stop or patch leave)
-% patch_cue1 = zeros(numel(t),1);
-% trigs = [dat.patchCL; dat.patchCSL(:,1:2)];
-% for i = 1:size(trigs,1)
-%     patch_cue1(t-trigs(i,1)>=0 & t<trigs(i,2)) = 1;
-% end
-% X_this = patch_cue1;
-% A = [A, {X_this}];
-% grp_name = [grp_name,'PatchCue1'];
-% var_name = [var_name,'PatchCue1'];
-% 
-% % PATCH CUE 2: patch stop to patch leave
-% patch_cue2 = zeros(numel(t),1);
-% trigs = dat.patchCSL(:,2:3);
-% for i = 1:size(trigs,1)
-%     patch_cue2(t-trigs(i,1)>=0 & t<trigs(i,2)) = 1;
-% end
-% X_this = patch_cue2;
-% A = [A,{X_this}];
-% grp_name = [grp_name,'PatchCue2'];
-% var_name = [var_name,'PatchCue2'];
-
 % SESSION TIME
 X_this = [t' t.^2'];
 A = [A, {X_this}];
@@ -176,11 +159,11 @@ for i = 2:numel(t)
     end
 end
 % DV from model 3
-DV3 = t_on_patch-1.7172*tot_rew; % this the fit for m80 0317
-X_this = [t_on_patch' tot_rew' t_since_last_rew' DV3'];
+% DV3 = t_on_patch-1.7172*tot_rew; % this the fit for m80 0317
+X_this = [t_on_patch' tot_rew' t_since_last_rew'];
 A = [A, {X_this}];
 grp_name = [grp_name,'DVs'];
-var_name = [var_name,'TimeOnPatch','TotalRew','TimeSinceLastRew','DV3'];
+var_name = [var_name,'TimeOnPatch','TotalRew','TimeSinceLastRew'];
 
 % previous patch reward size
 rew_size = mod(dat.patches(:,2),10);
@@ -235,62 +218,66 @@ end
 % final spikecounts matrix
 spikecounts_final = spikecounts(keep,:);
 
+% filter out cells with low firing rate
+mean_fr = sum(spikecounts_final)/(size(spikecounts_final,1)*opt.tbin);
+spikecounts_final = spikecounts_final(:,mean_fr>=opt.min_fr);
+Ncells = size(spikecounts_final,2);
+depth = depth(mean_fr>=opt.min_fr);
+
 %% Create fold indices (for cross validation)
 
-% randomly split trials into groups (num groups = opt.numFolds)
-trial = unique(patch_num_final);
-trial_shuf = trial(randperm(numel(trial)));
-trial_group = cell(opt.numFolds,1);
-group_boundaries = round(1:(numel(trial)/opt.numFolds):numel(trial));
-if numel(group_boundaries)==opt.numFolds
-    group_boundaries = [group_boundaries numel(trial)+1];
-end
-for i = 1:opt.numFolds
-    trial_group{i} = sort(trial_shuf(group_boundaries(i):group_boundaries(i+1)-1));
-end
-
-% get train and test indices for each fold
-train_ind = cell(opt.numFolds,1);
-test_ind = cell(opt.numFolds,1);
-for i = 1:opt.numFolds
-    train_ind{i} = find(~ismember(patch_num_final,trial_group{i}));
-    test_ind{i} = find(ismember(patch_num_final,trial_group{i}));
-end
+% split trials into groups (num groups = opt.numFolds)
+[trial,~,IC] = unique(patch_num_final);
+trial_grp = repmat(1:opt.numFolds,1,ceil(numel(trial)/opt.numFolds)*opt.numFolds);
+trial_grp = trial_grp(1:numel(trial));
+foldid = trial_grp(IC);
 
 %% Fit GLM to each cell
-pb = ParforProgressbar(numel(good_cells));
-beta_all = nan(size(X,2)+1,numel(good_cells));
-FitInfo = cell(numel(good_cells),1);
-pval = nan(numel(good_cells),1);
-parfor cIdx = 1:numel(good_cells)
+pb = ParforProgressbar(Ncells);
+beta_all = nan(size(X,2)+1,Ncells);
+pval = nan(Ncells,1);
+
+% options for glmnet (taken from opt structure)
+opt_glmnet = struct;
+opt_glmnet.alpha = opt.alpha;
+parfor cIdx = 1:Ncells
     
-    % iterate over cross-validation folds
-    log_llh_diff = nan(opt.numFolds,1);
-    for fIdx = 1:opt.numFolds
-        
-        X_train = X_final(train_ind{fIdx},:);
-        y_train = spikecounts_final(train_ind{fIdx},cIdx);
-        X_test = X_final(test_ind{fIdx},:);
-        y_test = spikecounts_final(test_ind{fIdx},cIdx);
-        
-        % fit params on train data
-        [B,stats] = lassoglm(X_test,y_test,'poisson','Lambda',opt.lambda,'Alpha',opt.alpha);       
-        beta = [stats.Intercept; B];
-        meanFR_train = nanmean(y_train);        
-        
-        % get log likelihoods on test data
-        r_test = exp([ones(size(X_test,1),1) X_test] * beta);
-        log_llh_model = nansum(r_test-y_test.*log(r_test)+log(factorial(y_test)))/sum(y_test);
-        log_llh_mean = nansum(meanFR_train-y_test.*log(meanFR_train)+log(factorial(y_test)))/sum(y_test);
-        
-        log_llh_diff(fIdx) = log_llh_model-log_llh_mean;
+    X_this = X_final;
+    y = spikecounts_final(:,cIdx);
+    
+    try
+        % iterate over cross-validation folds
+        log_llh_diff = nan(opt.numFolds,1);
+        for fIdx = 1:opt.numFolds
+
+            X_train = X_this(foldid~=fIdx,:);
+            y_train = y(foldid~=fIdx);
+            X_test = X_this(foldid==fIdx,:);
+            y_test = y(foldid==fIdx);
+
+            % fit params on train data
+            fit = cvglmnet(X_train,y_train,'poisson',opt_glmnet,[],5);
+            lambda_idx = find(fit.lambda==fit.lambda_1se);
+            beta = [fit.glmnet_fit.a0(lambda_idx); fit.glmnet_fit.beta(:,lambda_idx)];       
+            meanFR_train = nanmean(y_train);        
+
+            % get log likelihoods on test data
+            r_test = exp([ones(size(X_test,1),1) X_test] * beta);
+            log_llh_model = nansum(r_test-y_test.*log(r_test)+log(factorial(y_test)))/sum(y_test);
+            log_llh_mean = nansum(meanFR_train-y_test.*log(meanFR_train)+log(factorial(y_test)))/sum(y_test);
+
+            log_llh_diff(fIdx) = log_llh_model-log_llh_mean;
+        end
+        % statistical test to see if model does better than mean
+        [~,pval(cIdx)] = ttest(log_llh_diff);
+
+        % fit parameters to full data  
+        fit = cvglmnet(X_this,y,'poisson',opt_glmnet,[],5);
+        lambda_idx = find(fit.lambda==fit.lambda_1se);
+        beta_all(:,cIdx) = [fit.glmnet_fit.a0(lambda_idx); fit.glmnet_fit.beta(:,lambda_idx)];     
+    catch
+        fprintf('error: cell %d',cIdx);
     end
-    % statistical test to see if model does better than mean
-    [~,pval(cIdx)] = ttest(log_llh_diff);
-    
-    % fit parameters to full data
-    [B,stats] = lassoglm(X_final,spikecounts_final(:,cIdx),'poisson','Lambda',opt.lambda,'Alpha',opt.alpha);       
-    beta_all(:,cIdx) = [stats.Intercept; B];
     
     pb.increment();
 end
@@ -367,8 +354,7 @@ plot(xlim,[-log10(opt.pval_thresh) -log10(opt.pval_thresh)],'r--','LineWidth',2)
 xlabel('depth (from tip of probe) (um)');
 ylabel('-log10(pvalue)');
 nsig = sum(pval<=opt.pval_thresh);
-ntot = numel(good_cells);
-title(sprintf('%d/%d significant (%0.1f%%)',nsig,ntot,100*nsig/ntot));
+title(sprintf('%d/%d significant (%0.1f%%)',nsig,Ncells,100*nsig/Ncells));
 
 counter = counter+1;
 subplot(3,6,counter); hold on;

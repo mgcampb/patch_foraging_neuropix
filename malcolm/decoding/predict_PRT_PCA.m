@@ -7,7 +7,7 @@
 
 paths = struct;
 paths.data = 'C:\Users\malcg\Dropbox (Personal)\UchidaLab\processed_neuropix_data';
-paths.figs = 'C:\figs\patch_foraging_neuropix\one_reward_patches'; % where to save figs
+paths.figs = 'C:\figs\patch_foraging_neuropix\decoding\pca'; % where to save figs
 
 addpath(genpath('C:\code\HGRK_analysis_tools'));
 addpath(genpath('C:\code\patch_foraging_neuropix\malcolm\functions'));
@@ -15,15 +15,13 @@ addpath(genpath('C:\code\patch_foraging_neuropix\malcolm\functions'));
 % analysis options
 opt = struct;
 opt.session = '80_20200317'; % session to analyze
-
-opt.cellid = 426; % example cell to plot
 opt.tbin = 0.02; % time bin for whole session rate matrix (in sec)
 opt.smoothSigma_time = 0.1; % gauss smoothing sigma for rate matrix (in sec)
 
 % for concatenating patches
-opt.patch_type = '4-nil'; % other option: '44-nil'
+opt.patch_type = 'R-nil'; % options: 'R-nil' or 'RR-nil'
 opt.patch_leave_buffer = 0.5; % in seconds; only takes within patch times up to this amount before patch leave
-opt.rew_size = 1;
+opt.rew_size = 4;
 
 % ADD: firing rate cutoff (opt.min_fr)
 
@@ -31,9 +29,6 @@ paths.figs = fullfile(paths.figs,opt.session,sprintf('%duL',opt.rew_size),opt.pa
 
 %% load data
 dat = load(fullfile(paths.data,opt.session));
-
-%% PCA on fat firing rate matrix: neurons (N) by time (T) where T is the length of the session
-
 good_cells = dat.sp.cids(dat.sp.cgs==2);
 
 % time bins
@@ -42,29 +37,13 @@ opt.tend = max(dat.sp.st);
 tbinedge = opt.tstart:opt.tbin:opt.tend;
 tbincent = tbinedge(1:end-1)+opt.tbin/2;
 
-% compute firing rate mat
-fr_mat = calcFRVsTime(good_cells,dat,opt);
-
-% only keep "in-patch" times
+%% extract in-patch times
 in_patch = false(size(tbincent));
 in_patch_buff = false(size(tbincent)); % add buffer for pca
 for i = 1:size(dat.patchCSL,1)
     in_patch(tbincent>=dat.patchCSL(i,2) & tbincent<=dat.patchCSL(i,3)) = true;
     in_patch_buff(tbincent>=dat.patchCSL(i,2) & tbincent<=dat.patchCSL(i,3)-opt.patch_leave_buffer) = true;
 end
-
-% take zscore
-fr_mat_zscore = my_zscore(fr_mat);
-
-% pca on firing rate matrix, only in patches with buffer before patch leave
-coeffs = pca(my_zscore(fr_mat(:,in_patch_buff))');
-
-% project full session onto these PCs
-score = coeffs'*fr_mat_zscore;
-
-% only take on-patch times
-fr_mat_in_patch = fr_mat(:,in_patch);
-score = score(:,in_patch)';
 tbincent = tbincent(in_patch);
 
 %% extract patches of the correct type
@@ -75,11 +54,40 @@ for i = 1:size(dat.patchCSL,1)
     patch_num(tbincent>=dat.patchCSL(i,2) & tbincent<=dat.patchCSL(i,3)) = i;
 end
 
-if strcmp(opt.patch_type,'4-nil')
-    patches_to_analyze = find(dat.patches(:,3)==1 & mod(dat.patches(:,2),10)==opt.rew_size);
-elseif strcmp(opt.patch_type,'44-nil')
+% reward sequence in each patch
+max_prt = ceil(max(dat.patches(:,5)))+1; % add 1 sec buffer
+rew_seq = nan(size(dat.patchCSL,1),max_prt+1); % add 1 for zero space
+rew_bin_edges = -0.5:1:max_prt+0.5;
+for i = 1:size(rew_seq,1)
+    rewt_this = dat.rew_ts(dat.rew_ts>dat.patchCSL(i,1) & dat.rew_ts<dat.patchCSL(i,3)+0.5);
+    rewt_this = rewt_this-dat.patchCSL(i,2);
+    rew_seq(i,:) = histcounts(rewt_this,rew_bin_edges);
+end
+
+if strcmp(opt.patch_type,'R-nil')
+    patches_to_analyze = find(sum(rew_seq,2)==1 & mod(dat.patches(:,2),10)==opt.rew_size);
+elseif strcmp(opt.patch_type,'RR-nil')
+    patches_to_analyze = find(sum(rew_seq,2)==2 & rew_seq(:,1)==1 & rew_seq(:,2)==1 & mod(dat.patches(:,2),10)==opt.rew_size);
 end
 prt = dat.patches(patches_to_analyze,5);
+
+%% PCA on fat firing rate matrix: neurons (N) by time (T) where T is the length of the session
+
+% compute firing rate mat
+fr_mat = calcFRVsTime(good_cells,dat,opt);
+
+% take zscore
+fr_mat_zscore = my_zscore(fr_mat); % z-score is across whole session including out-of-patch times - is this weird??
+
+% pca on firing rate matrix, only in patches with buffer before patch leave
+coeffs = pca(fr_mat_zscore(:,in_patch_buff)');
+
+% project full session onto these PCs
+score = coeffs'*fr_mat_zscore;
+
+% only take on-patch times
+score = score(:,in_patch)';
+
 
 %% regress out time in session and time in session^2 to remove slowly varying changes
 
@@ -89,7 +97,7 @@ score_resid = score-X*beta;
 beta2 = X\score_resid;
 
 hfig = figure('Position',[200 200 600 1000]);
-hfig.Name = sprintf('one_rew_patches_%s_rewsize%d_PCs1-6 original and residual after removing time and time squared',opt.session,opt.rew_size);
+hfig.Name = sprintf('%s_%duL_%s_PCs1-6 original and residual after removing time and time squared',opt.session,opt.rew_size,opt.patch_type);
 counter = 1;
 for i = 1:6
     subplot(6,2,counter); hold on;
@@ -118,15 +126,15 @@ t = 0:opt.tbin:T;
 N = numel(t);
 
 hfig = figure('Position',[100 300 2100 800]); hold on;
-hfig.Name = sprintf('one_rew_patches_%s_PCs1-6 - %d uL patches - only reward at t=0',opt.session,opt.rew_size);
+hfig.Name = sprintf('%s_PCs1-6 - %d uL patches - %s',opt.session,opt.rew_size,opt.patch_type);
 
 % plot PRTs vs patch number in session
 subplot(2,7,1); hold on;
 plot_col = winter(numel(patches_to_analyze));
 [prt_sorted,sort_idx] = sort(prt);
-one_rew_patches_sorted = patches_to_analyze(sort_idx);
+patches_to_analyze_sorted = patches_to_analyze(sort_idx);
 for i = 1:numel(patches_to_analyze)
-    my_scatter(one_rew_patches_sorted(i),prt_sorted(i),plot_col(i,:),0.5);
+    my_scatter(patches_to_analyze_sorted(i),prt_sorted(i),plot_col(i,:),0.5);
 end
 ylabel('PRT (sec)');
 xlabel('Patch Num');
@@ -134,21 +142,21 @@ axis square;
 
 % plot PCs
 for pc_num = 1:6
-    pca_one_rew_patches = nan(numel(patches_to_analyze),N);
+    pca_selected_patches = nan(numel(patches_to_analyze),N);
     for i = 1:numel(patches_to_analyze)
         pca_this = score(patch_num==patches_to_analyze(i),pc_num);
-        pca_one_rew_patches(i,1:numel(pca_this)) = pca_this;
+        pca_selected_patches(i,1:numel(pca_this)) = pca_this;
     end
 
     % sort by prt
     [~,sort_idx] = sort(prt);
-    pca_one_rew_patches_sort = pca_one_rew_patches(sort_idx,:);
+    pca_selected_patches_sort = pca_selected_patches(sort_idx,:);
 
     % plot
     subplot(2,7,pc_num+1); hold on;
     plot_col = winter(numel(patches_to_analyze));
     for i = 1:numel(patches_to_analyze)
-        y_this = pca_one_rew_patches_sort(i,:);
+        y_this = pca_selected_patches_sort(i,:);
         lh = plot(t,y_this);
         lh.Color = [plot_col(i,:) 0.8];
         max_idx = find(~isnan(y_this),1,'last');
@@ -161,9 +169,9 @@ for pc_num = 1:6
     axis square;
 
     % plot significance
-    for i = 1:size(pca_one_rew_patches,2)
-        keep = ~isnan(pca_one_rew_patches(:,i));
-        y_this = pca_one_rew_patches(keep,i);
+    for i = 1:size(pca_selected_patches,2)
+        keep = ~isnan(pca_selected_patches(:,i));
+        y_this = pca_selected_patches(keep,i);
         prt_this = prt(keep);
         if numel(y_this)>1
             [r,p] = corrcoef(y_this,prt_this);
@@ -171,6 +179,14 @@ for pc_num = 1:6
                 plot(t(i),max(ylim)-0.5,'k.');
             end
         end
+    end
+    
+    % plot rewards
+    if strcmp(opt.patch_type,'R-nil')
+        plot(0,max(ylim),'bv','MarkerFaceColor','b');
+    elseif strcmp(opt.patch_type,'RR-nil')
+        plot(0,max(ylim),'bv','MarkerFaceColor','b');
+        plot(1,max(ylim),'bv','MarkerFaceColor','b');
     end
        
 end
@@ -188,17 +204,17 @@ axis square;
 
 % plot PCs
 for pc_num = 1:6
-    pca_one_rew_patches = nan(numel(patches_to_analyze),N);
+    pca_selected_patches = nan(numel(patches_to_analyze),N);
     for i = 1:numel(patches_to_analyze)
         pca_this = score(patch_num==patches_to_analyze(i),pc_num);
-        pca_one_rew_patches(i,1:numel(pca_this)) = pca_this;
+        pca_selected_patches(i,1:numel(pca_this)) = pca_this;
     end
 
     % plot
     subplot(2,7,7+pc_num+1); hold on;
     plot_col = autumn(numel(patches_to_analyze));
     for i = 1:numel(patches_to_analyze)
-        y_this = pca_one_rew_patches(i,:);
+        y_this = pca_selected_patches(i,:);
         lh = plot(t,y_this);
         lh.Color = [plot_col(i,:) 0.8];
         max_idx = find(~isnan(y_this),1,'last');
@@ -211,9 +227,9 @@ for pc_num = 1:6
     axis square;
 
     % plot significance
-    for i = 1:size(pca_one_rew_patches,2)
-        keep = ~isnan(pca_one_rew_patches(:,i));
-        y_this = pca_one_rew_patches(keep,i);
+    for i = 1:size(pca_selected_patches,2)
+        keep = ~isnan(pca_selected_patches(:,i));
+        y_this = pca_selected_patches(keep,i);
         x_this = patches_to_analyze(keep);
         if numel(y_this)>1
             [r,p] = corrcoef(y_this,x_this);
@@ -221,6 +237,14 @@ for pc_num = 1:6
                 plot(t(i),max(ylim)-0.5,'k.');
             end
         end
+    end
+    
+    % plot rewards
+    if strcmp(opt.patch_type,'R-nil')
+        plot(0,max(ylim),'bv','MarkerFaceColor','b');
+    elseif strcmp(opt.patch_type,'RR-nil')
+        plot(0,max(ylim),'bv','MarkerFaceColor','b');
+        plot(1,max(ylim),'bv','MarkerFaceColor','b');
     end
        
 end
@@ -234,15 +258,15 @@ t = 0:opt.tbin:T;
 N = numel(t);
 
 hfig = figure('Position',[100 300 2100 800]); hold on;
-hfig.Name = sprintf('one_rew_patches_%s_PCs1-6 - %d uL patches - only reward at t=0 - regressed out time in session and time squared',opt.session,opt.rew_size);
+hfig.Name = sprintf('%s_PCs1-6 - %d uL patches - %s - regressed out time in session and time squared',opt.session,opt.rew_size,opt.patch_type);
 
 % plot PRTs vs patch number in session
 subplot(2,7,1); hold on;
 plot_col = winter(numel(patches_to_analyze));
 [prt_sorted,sort_idx] = sort(prt);
-one_rew_patches_sorted = patches_to_analyze(sort_idx);
+patches_to_analyze_sorted = patches_to_analyze(sort_idx);
 for i = 1:numel(patches_to_analyze)
-    my_scatter(one_rew_patches_sorted(i),prt_sorted(i),plot_col(i,:),0.5);
+    my_scatter(patches_to_analyze_sorted(i),prt_sorted(i),plot_col(i,:),0.5);
 end
 ylabel('PRT (sec)');
 xlabel('Patch Num');
@@ -250,21 +274,21 @@ axis square;
 
 % plot PCs
 for pc_num = 1:6
-    pca_one_rew_patches = nan(numel(patches_to_analyze),N);
+    pca_selected_patches = nan(numel(patches_to_analyze),N);
     for i = 1:numel(patches_to_analyze)
         pca_this = score_resid(patch_num==patches_to_analyze(i),pc_num);
-        pca_one_rew_patches(i,1:numel(pca_this)) = pca_this;
+        pca_selected_patches(i,1:numel(pca_this)) = pca_this;
     end
 
     % sort by prt
     [~,sort_idx] = sort(prt);
-    pca_one_rew_patches_sort = pca_one_rew_patches(sort_idx,:);
+    pca_selected_patches_sort = pca_selected_patches(sort_idx,:);
 
     % plot
     subplot(2,7,pc_num+1); hold on;
     plot_col = winter(numel(patches_to_analyze));
     for i = 1:numel(patches_to_analyze)
-        y_this = pca_one_rew_patches_sort(i,:);
+        y_this = pca_selected_patches_sort(i,:);
         lh = plot(t,y_this);
         lh.Color = [plot_col(i,:) 0.8];
         max_idx = find(~isnan(y_this),1,'last');
@@ -277,9 +301,9 @@ for pc_num = 1:6
     axis square;
 
     % plot significance
-    for i = 1:size(pca_one_rew_patches,2)
-        keep = ~isnan(pca_one_rew_patches(:,i));
-        y_this = pca_one_rew_patches(keep,i);
+    for i = 1:size(pca_selected_patches,2)
+        keep = ~isnan(pca_selected_patches(:,i));
+        y_this = pca_selected_patches(keep,i);
         prt_this = prt(keep);
         if numel(y_this)>1
             [r,p] = corrcoef(y_this,prt_this);
@@ -287,6 +311,14 @@ for pc_num = 1:6
                 plot(t(i),max(ylim)-0.5,'k.');
             end
         end
+    end
+    
+    % plot rewards
+    if strcmp(opt.patch_type,'R-nil')
+        plot(0,max(ylim),'bv','MarkerFaceColor','b');
+    elseif strcmp(opt.patch_type,'RR-nil')
+        plot(0,max(ylim),'bv','MarkerFaceColor','b');
+        plot(1,max(ylim),'bv','MarkerFaceColor','b');
     end
        
 end
@@ -304,17 +336,17 @@ axis square;
 
 % plot PCs
 for pc_num = 1:6
-    pca_one_rew_patches = nan(numel(patches_to_analyze),N);
+    pca_selected_patches = nan(numel(patches_to_analyze),N);
     for i = 1:numel(patches_to_analyze)
         pca_this = score_resid(patch_num==patches_to_analyze(i),pc_num);
-        pca_one_rew_patches(i,1:numel(pca_this)) = pca_this;
+        pca_selected_patches(i,1:numel(pca_this)) = pca_this;
     end
 
     % plot
     subplot(2,7,7+pc_num+1); hold on;
     plot_col = autumn(numel(patches_to_analyze));
     for i = 1:numel(patches_to_analyze)
-        y_this = pca_one_rew_patches(i,:);
+        y_this = pca_selected_patches(i,:);
         lh = plot(t,y_this);
         lh.Color = [plot_col(i,:) 0.8];
         max_idx = find(~isnan(y_this),1,'last');
@@ -327,9 +359,9 @@ for pc_num = 1:6
     axis square;
 
     % plot significance
-    for i = 1:size(pca_one_rew_patches,2)
-        keep = ~isnan(pca_one_rew_patches(:,i));
-        y_this = pca_one_rew_patches(keep,i);
+    for i = 1:size(pca_selected_patches,2)
+        keep = ~isnan(pca_selected_patches(:,i));
+        y_this = pca_selected_patches(keep,i);
         x_this = patches_to_analyze(keep);
         if numel(y_this)>1
             [r,p] = corrcoef(y_this,x_this);
@@ -337,6 +369,14 @@ for pc_num = 1:6
                 plot(t(i),max(ylim)-0.5,'k.');
             end
         end
+    end
+    
+    % plot rewards
+    if strcmp(opt.patch_type,'R-nil')
+        plot(0,max(ylim),'bv','MarkerFaceColor','b');
+    elseif strcmp(opt.patch_type,'RR-nil')
+        plot(0,max(ylim),'bv','MarkerFaceColor','b');
+        plot(1,max(ylim),'bv','MarkerFaceColor','b');
     end
        
 end
@@ -346,20 +386,20 @@ save_figs(paths.figs,hfig,'png');
 %% show time window of significance for all pc's stacked on each other
 
 hfig = figure('Position',[300 300 700 300]); 
-hfig.Name = sprintf('one_rew_patches_%s_PCs1-6 - significance overlay - %d uL patches - only reward at t=0',opt.session,opt.rew_size);
+hfig.Name = sprintf('%s_PCs1-6 - significance overlay - %d uL patches - %s',opt.session,opt.rew_size,opt.patch_type);
 
 subplot(1,2,1); hold on;
 for pc_num = 1:6
-    pca_one_rew_patches = nan(numel(patches_to_analyze),N);
+    pca_selected_patches = nan(numel(patches_to_analyze),N);
     for i = 1:numel(patches_to_analyze)
         pca_this = score(patch_num==patches_to_analyze(i),pc_num);
-        pca_one_rew_patches(i,1:numel(pca_this)) = pca_this;
+        pca_selected_patches(i,1:numel(pca_this)) = pca_this;
     end
 
     % plot significance
-    for i = 1:size(pca_one_rew_patches,2)
-        keep = ~isnan(pca_one_rew_patches(:,i));
-        y_this = pca_one_rew_patches(keep,i);
+    for i = 1:size(pca_selected_patches,2)
+        keep = ~isnan(pca_selected_patches(:,i));
+        y_this = pca_selected_patches(keep,i);
         x_this = prt(keep);
         if numel(y_this)>1
             [r,p] = corrcoef(y_this,x_this);
@@ -368,25 +408,32 @@ for pc_num = 1:6
             end
         end
     end
-       
+   
+end
+ylim([0.5 6.5]);
+% plot rewards
+if strcmp(opt.patch_type,'R-nil')
+    plot(0,max(ylim),'bv','MarkerFaceColor','b');
+elseif strcmp(opt.patch_type,'RR-nil')
+    plot(0,max(ylim),'bv','MarkerFaceColor','b');
+    plot(1,max(ylim),'bv','MarkerFaceColor','b');
 end
 xlabel('time on patch (sec)');
 ylabel('PC');
-ylim([0.5 6.5]);
 title(sprintf('%s, %d uL patches:\noriginal PCs',opt.session,opt.rew_size),'Interpreter','none');
 
 subplot(1,2,2); hold on;
 for pc_num = 1:6
-    pca_one_rew_patches = nan(numel(patches_to_analyze),N);
+    pca_selected_patches = nan(numel(patches_to_analyze),N);
     for i = 1:numel(patches_to_analyze)
         pca_this = score_resid(patch_num==patches_to_analyze(i),pc_num);
-        pca_one_rew_patches(i,1:numel(pca_this)) = pca_this;
+        pca_selected_patches(i,1:numel(pca_this)) = pca_this;
     end
 
     % plot significance
-    for i = 1:size(pca_one_rew_patches,2)
-        keep = ~isnan(pca_one_rew_patches(:,i));
-        y_this = pca_one_rew_patches(keep,i);
+    for i = 1:size(pca_selected_patches,2)
+        keep = ~isnan(pca_selected_patches(:,i));
+        y_this = pca_selected_patches(keep,i);
         x_this = prt(keep);
         if numel(y_this)>1
             [r,p] = corrcoef(y_this,x_this);
@@ -397,56 +444,16 @@ for pc_num = 1:6
     end
        
 end
+ylim([0.5 6.5]);
+% plot rewards
+if strcmp(opt.patch_type,'R-nil')
+    plot(0,max(ylim),'bv','MarkerFaceColor','b');
+elseif strcmp(opt.patch_type,'RR-nil')
+    plot(0,max(ylim),'bv','MarkerFaceColor','b');
+    plot(1,max(ylim),'bv','MarkerFaceColor','b');
+end
 xlabel('time on patch (sec)');
 ylabel('PC');
-ylim([0.5 6.5]);
 title(sprintf('%s, %d uL patches:\nsession time regressed out',opt.session,opt.rew_size),'Interpreter','none');
-
-save_figs(paths.figs,hfig,'png');
-
-%% plot example cell for these patches
-
-% get firing rate trace for this cell for these patches
-T = ceil(max(prt));
-t = 0:opt.tbin:T;
-N = numel(t);
-fr_one_rew_patches = nan(numel(patches_to_analyze),N);
-for i = 1:numel(patches_to_analyze)
-    fr_this = fr_mat_in_patch(good_cells==opt.cellid,patch_num==patches_to_analyze(i));
-    fr_one_rew_patches(i,1:numel(fr_this)) = fr_this;
-end
-
-% sort by prt
-[~,sort_idx] = sort(prt);
-fr_one_rew_patches_sort = fr_one_rew_patches(sort_idx,:);
-
-% plot
-hfig = figure('Position',[300 300 600 500]); hold on;
-hfig.Name = sprintf('one_rew_patches_%s_rewsize%d_c%d',opt.session,opt.rew_size,opt.cellid);
-plot_col = winter(numel(patches_to_analyze));
-for i = 1:numel(patches_to_analyze)
-    y_this = fr_one_rew_patches_sort(i,:);
-    lh = plot(t,y_this);
-    lh.Color = [plot_col(i,:) 0.8];
-    max_idx = find(~isnan(y_this),1,'last');
-    my_scatter(t(max_idx),y_this(max_idx),plot_col(i,:),0.5);
-end
-xlabel('Time on patch (sec)');
-ylabel('Firing rate (Hz)')
-title(sprintf('%s\nCELL %d, %d uL patches, only reward at t=0',opt.session,opt.cellid,opt.rew_size),'Interpreter','none')
-plot([min(prt) min(prt)],ylim,'k--');
-
-% plot significance
-for i = 1:size(fr_one_rew_patches,2)
-    keep = ~isnan(fr_one_rew_patches(:,i));
-    y_this = fr_one_rew_patches(keep,i);
-    prt_this = prt(keep);
-    if numel(y_this)>1
-        [r,p] = corrcoef(y_this,prt_this);
-        if p(1,2)<0.05
-            my_scatter(t(i),max(ylim)-2,'k',1);
-        end
-    end
-end
 
 save_figs(paths.figs,hfig,'png');
