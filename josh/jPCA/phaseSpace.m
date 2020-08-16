@@ -332,14 +332,22 @@ for pindex = 1:length(planes2plot)
         axisParams.fontSize = 10.5;
 
         % horizontal axis
-        axisParams.axisOffset = farthestDown + extraSeparation;
-        axisParams.axisLabel = 'projection onto jPC_1 (a.u.)';
+        axisParams.axisOffset = farthestDown + extraSeparation; 
+        if substRawPCs == 0
+            axisParams.axisLabel = 'projection onto jPC_1 (a.u.)'; 
+        else 
+            axisParams.axisLabel = 'projection onto PC_1 (a.u.)'; 
+        end
         axisParams.axisOrientation = 'h';
         haxP = AxisMMC(-axisLength, axisLength, axisParams);
 
         % vertical axis
         axisParams.axisOffset = farthestLeft + extraSeparation;
-        axisParams.axisLabel = 'projection onto jPC_2 (a.u.)';
+        if substRawPCs == 0
+            axisParams.axisLabel = 'projection onto jPC_2 (a.u.)'; 
+        else 
+            axisParams.axisLabel = 'projection onto PC_2 (a.u.)'; 
+        end
         axisParams.axisOrientation = 'v';
         axisParams.axisLabelOffset = 1.9*haxP.axisLabelOffset;
         vaxP = AxisMMC(-axisLength, axisLength, axisParams);

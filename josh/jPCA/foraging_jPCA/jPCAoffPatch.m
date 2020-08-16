@@ -3,7 +3,7 @@
 %  BioInformatics Toolbox
 
 paths = struct;
-paths.data = '/Users/joshstern/Documents/UchidaLab_matlab/neuroPixelsData/80';
+paths.data = '/Users/joshstern/Documents/UchidaLab_matlab/neuroPixelsData/79';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_matlab/neural_data_figs'; % where to save figs
 
 addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab/HGK_analysis_tools'));
@@ -32,7 +32,7 @@ sessions = {sessions.name};
 
 FRandTimes = struct;
 
-for sIdx = 3:3 % numel(sessions)
+for sIdx = 1:1 % numel(sessions)
     session = sessions{sIdx}(1:end-4);
     fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
     % load data
@@ -56,7 +56,7 @@ end
 %  4 conditions: avg cue forall, avg leave sep by rewsize
 
 jPCA_data = {};
-for sIdx = 3:3
+for sIdx = 1:1
     jPCA_data{sIdx} = struct;
     session = sessions{sIdx}(1:end-4);
     dat = load(fullfile(paths.data,session));
@@ -116,7 +116,7 @@ end
 
 %% Now perform jPCA for leave conditions
 close all;
-for sIdx = 3:3
+for sIdx = 1:1
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
     session = erase(sessions{sIdx}(1:end-4),'_'); % latex thing
@@ -154,7 +154,7 @@ end
 %% Check out the PETH
 close all;
 times = -1000:tbin_ms:1000;
-for sIdx = 3:3
+for sIdx = 1:1
     % First, jPCA with all neurons
     jPCA_params.numPCs = 6;  % default anyway, but best to be specific
     jPCA_params.meanSubtract = false; % looks better w/o mean subtraction

@@ -30,7 +30,7 @@ sessions = {sessions.name};
 
 FR_decVar = struct;
 
-for sIdx = 3:3
+for sIdx = 1:3
     session = sessions{sIdx}(1:end-4);
     fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
     % load data
@@ -117,8 +117,9 @@ end
 %% Get order from avg PETH
 close all
 index_sort_all = {numel(sessions)};
-for sIdx = 3:3
-    decVar_bins = linspace(0,2,41);
+for sIdx = 3
+    decVar_bins = linspace(0,2,41); 
+    nTrials = length(FR_decVar(sIdx).fr_mat); 
     opt.norm = "zscore";
     opt.trials = 'all';
     dvar = "timesince";
@@ -126,8 +127,24 @@ for sIdx = 3:3
     index_sort_all{sIdx} = neuron_order;
 end
 
-%% Iterate over single trials 
-close all
+%% Sort by odd, visualize by even 
+close all 
+for sIdx = 1:3 
+    decVar_bins = linspace(0,2,41); 
+    nTrials = length(FR_decVar(sIdx).fr_mat); 
+    dvar = "timesince";
+    odd_opt.norm = "zscore";
+    odd_opt.trials = 1:2:nTrials; 
+    odd_opt.suppressVis = true;
+    [~,odd_sort,~] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,odd_opt);
+    even_opt.norm = "zscore";
+    even_opt.trials = 2:2:nTrials; 
+    odd_opt.suppressVis = true;
+    [~,~,even_peth] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,evopt);
+end
+
+%% Iterate over single trials, find max for all rewards
+% close all
 for sIdx = 3:3
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
@@ -149,7 +166,7 @@ for sIdx = 3:3
     % parameters for response finding
     search_begin = round(250 / tbin_ms);
     search_end = round(750 / tbin_ms); % deprecated
-    threshold = 2;
+    threshold = 0;
 
     % make barcode matrices
     nTimesteps = 15;
@@ -184,6 +201,7 @@ for sIdx = 3:3
             activations = diag(norm_fr_mat_iTrial(:,extrema_ix(:,j)));
             extrema_ix(activations < threshold,j) = nan(1,length(find(activations < threshold))); % threshold by mag of activation
             extrema_ix(extrema_ix(:,j) == trivial_ix,j) = nan(length(extrema_ix(extrema_ix(:,j) == trivial_ix,j)),1);
+            extrema_ix(extrema_ix(:,j) == (next_rIdx+1),j) = nan(length(extrema_ix(extrema_ix(:,j) == (next_rIdx+1),j)),1); % get rid of artifact
             after_rew_ix(:,total_rew_counter) = extrema_ix(:,j) - rIdx;
             total_rew_counter = total_rew_counter + 1;
         end
@@ -203,23 +221,212 @@ for sIdx = 3:3
 %         caxis([-3 3])
 %         colorbar()
     end
+end 
+
+%% Now visualize distributions of receptivity for all rewards
+bins = (search_begin+1):2:(3500 / tbin_ms);
+% build probability density matrix
+activity_density = nan(size(after_rew_ix,1),length(bins));
+for neuron = 1:nNeurons
+    activity_density(neuron,:) = hist(after_rew_ix(neuron,:),bins) / sum(hist(after_rew_ix(neuron,:),bins));
+end
+%     % line plot
+%     figure();hold on
+%     set(0,'DefaultAxesColorOrder',cool(10))
+%     for neuron = 1:30:300
+%         plot(activity_density(neuron,:),'linewidth',1.5)
+%     end
+%     xlabel("Time (msec)")
+%     xticks(bins)
+%     xticklabels(bins * 1000 / tbin_ms)
+% heatmap
+figure()
+imagesc(flipud(activity_density(:,1:(end-1))))
+xlabel("Time after reward reception (msec)")
+xticks(1:10:numel(bins))
+xticklabels(bins(1:10:end) * tbin_ms)
+colorbar() 
+session_name = ['m' session(1:2) ' ' session(end-2:end)];
+title(sprintf("%s Distn of post-rew activation latency",session_name))
+colormap('hot')
+
+%% Iterate over single trials, find max ix for just t = 0:1000 ms
+% close all
+for sIdx = 1:1
+    session = sessions{sIdx}(1:end-4);
+    data = load(fullfile(paths.data,session));
+    session = erase(sessions{sIdx}(1:end-4),'_'); % latex thing
+    
+    % reinitialize ms vectors to make barcode matrix
+    rew_ms = data.rew_ts;
+    patchCSL = data.patchCSL;
+    patches = data.patches;
+    prts = patchCSL(:,3) - patchCSL(:,2);
+    patchstop_ms = patchCSL(:,2);
+    patchleave_ms = patchCSL(:,3);
+    floor_prts = floor(prts);
+    patchType = patches(:,2);
+    rewsize = mod(patchType,10);
+    nTrials = length(patchType);
+    nNeurons = length(index_sort_all{sIdx});
+    
+    % parameters for response finding
+    search_begin = round(0 / tbin_ms) + 1;
+    search_end = round(1000 / tbin_ms); % deprecated
+    threshold = 0; % no threshold!
+    
+    after_rew_ix = nan(nNeurons,nTrials);
+    total_rew_counter = 1;
+    for iTrial = 1:nTrials
+        norm_fr_mat_iTrial = zscore(FR_decVar(sIdx).fr_mat{iTrial}(index_sort_all{sIdx},:),[],2);
+        
+        [~,i_extrema_ix] = max(norm_fr_mat_iTrial(:,search_begin:search_end) - norm_fr_mat_iTrial(:,search_begin),[],2); % look for max
+        extrema_ix = min(t_len,i_extrema_ix + search_begin);
+        %         activations = diag(norm_fr_mat_iTrial(:,extrema_ix(:,j)));
+        %         extrema_ix(activations < threshold,j) = nan(1,length(find(activations < threshold))); % threshold by mag of activation
+        extrema_ix(extrema_ix == (search_begin+1)) = nan(length(extrema_ix(extrema_ix == (search_begin+1))),1);
+        extrema_ix(extrema_ix == (search_end+1)) = nan(length(extrema_ix(extrema_ix == (search_end+1))),1); % get rid of artifact
+        after_rew_ix(:,iTrial) = extrema_ix;
+        
+        % visualize process
+%         figure();colormap('jet')
+%         imagesc(flipud(norm_fr_mat_iTrial));
+%         hold on
+% %         plot([rew_ix_cell{iTrial} rew_ix_cell{iTrial}]',[ones(1,length(rew_ix_cell{iTrial})) ; ones(1,length(rew_ix_cell{iTrial})) * nNeurons],'w--','linewidth',2)
+%         extrema_ix = flipud(extrema_ix);
+%         neurons = repmat((1:nNeurons)',[1 size(flipud(extrema_ix),2)]);
+%         scatter(extrema_ix(:),neurons(:),2,'k*') % just a technicality
+%         xticks(0:1000/tbin_ms:t_len)
+%         xticklabels((0:1000/tbin_ms:t_len) * tbin_ms)
+%         xlabel("Time (msec)")
+%         title(sprintf("%i uL Trial %i",rewsize(iTrial),iTrial))
+%         caxis([-3 3])
+%         colorbar()
+    end
+end 
+
+%% Now visualize distributions of receptivity for just first rew
+bins = (search_begin+1):2:(1000 / tbin_ms);
+% build probability density matrix
+activity_density = nan(size(after_rew_ix,1),length(bins));
+for neuron = 1:nNeurons
+    activity_density(neuron,:) = hist(after_rew_ix(neuron,:),bins) / sum(hist(after_rew_ix(neuron,:),bins));
+end
+%     % line plot
+%     figure();hold on
+%     set(0,'DefaultAxesColorOrder',cool(10))
+%     for neuron = 1:30:300
+%         plot(activity_density(neuron,:),'linewidth',1.5)
+%     end
+%     xlabel("Time (msec)")
+%     xticks(bins)
+%     xticklabels(bins * 1000 / tbin_ms)
+% heatmap
+figure()
+imagesc(flipud(activity_density(:,1:(end-1))))
+xlabel("Time after reward reception (msec)")
+xticks([1,6,12,18,24])
+xticklabels([0,250,500,750,1000])
+colorbar()
+session_name = ['m' session(1:2) ' ' session(end-2:end)];
+title(sprintf("%s Distn of post-rew activation latency",session_name))
+colormap('hot') 
+
+%% Iterate over single trials, find max ix for just t = 0:2000 ms on R0 trials
+% close all
+for sIdx = 1:3
+    session = sessions{sIdx}(1:end-4);
+    data = load(fullfile(paths.data,session));
+    session = erase(sessions{sIdx}(1:end-4),'_'); % latex thing
+    
+    % reinitialize ms vectors to make barcode matrix
+    rew_ms = data.rew_ts;
+    patchCSL = data.patchCSL;
+    patches = data.patches;
+    prts = patchCSL(:,3) - patchCSL(:,2);
+    patchstop_ms = patchCSL(:,2);
+    patchleave_ms = patchCSL(:,3);
+    floor_prts = floor(prts);
+    patchType = patches(:,2);
+    rewsize = mod(patchType,10);
+    nTrials = length(patchType);
+    nNeurons = length(index_sort_all{sIdx}); 
+
+    % make barcode matrices
+    nTimesteps = 15;
+    rew_barcode = zeros(length(patchCSL) , nTimesteps);
+    rew_ix_cell = {length(patchCSL)};
+    last_rew_ix = nan(length(patchCSL),1);
+    for iTrial = 1:length(patchCSL)
+        rew_indices = round(rew_ms(rew_ms >= patchstop_ms(iTrial) & rew_ms < patchleave_ms(iTrial)) - patchstop_ms(iTrial)) + 1;
+        last_rew_ix(iTrial) = max(rew_indices);
+        rew_barcode(iTrial , (last_rew_ix(iTrial) + 1):end) = -1; % set part of patch after last rew_ix = -1
+        rew_barcode(iTrial , (floor_prts(iTrial) + 1):end) = -2; % set part of patch after leave = -2
+        rew_barcode(iTrial , rew_indices) = rewsize(iTrial);
+    end 
+    
+    R0_trials = find(rew_barcode(:,1) > 0 & rew_barcode(:,2) == 0 & prts > 2.55);
+    
+    % parameters for response finding
+    search_begin = round(0 / tbin_ms) + 1;
+    search_end = round(2000 / tbin_ms); % deprecated
+    threshold = 0; % no threshold!
+    
+    after_rew_ix = nan(nNeurons,numel(R0_trials));
+    total_rew_counter = 1;
+    for j = 1:numel(R0_trials)
+        iTrial = R0_trials(j);
+        norm_fr_mat_iTrial = zscore(FR_decVar(sIdx).fr_mat{iTrial}(index_sort_all{sIdx},:),[],2);
+        
+        [~,i_extrema_ix] = max(norm_fr_mat_iTrial(:,search_begin:search_end) - norm_fr_mat_iTrial(:,search_begin),[],2); % look for max
+        extrema_ix = i_extrema_ix + search_begin; % min(t_len,i_extrema_ix + search_begin);
+        %         activations = diag(norm_fr_mat_iTrial(:,extrema_ix(:,j)));
+        %         extrema_ix(activations < threshold,j) = nan(1,length(find(activations < threshold))); % threshold by mag of activation
+        extrema_ix(extrema_ix == (search_begin+1)) = nan(length(extrema_ix(extrema_ix == (search_begin+1))),1);
+        extrema_ix(extrema_ix == (search_end+1)) = nan(length(extrema_ix(extrema_ix == (search_end+1))),1); % get rid of artifact
+        after_rew_ix(:,j) = extrema_ix;
+        
+%         % visualize process
+%         figure();colormap('jet')
+%         imagesc(flipud(norm_fr_mat_iTrial));
+%         hold on
+% %         plot([rew_ix_cell{iTrial} rew_ix_cell{iTrial}]',[ones(1,length(rew_ix_cell{iTrial})) ; ones(1,length(rew_ix_cell{iTrial})) * nNeurons],'w--','linewidth',2)
+%         extrema_ix = flipud(extrema_ix);
+%         neurons = repmat((1:nNeurons)',[1 size(flipud(extrema_ix),2)]);
+%         scatter(extrema_ix(:),neurons(:),2,'k*') % just a technicality
+%         xticks(0:1000/tbin_ms:t_len)
+%         xticklabels((0:1000/tbin_ms:t_len) * tbin_ms)
+%         xlabel("Time (msec)")
+%         title(sprintf("%i uL Trial %i",rewsize(iTrial),iTrial))
+%         caxis([-3 3])
+%         colorbar()
+    end
+    
+    % visualize
+    bins = (search_begin+1):4:(2000 / tbin_ms);
+    % build probability density matrix
+    activity_density = nan(size(after_rew_ix,1),length(bins));
+    for neuron = 1:nNeurons
+        activity_density(neuron,:) = hist(after_rew_ix(neuron,:),bins) / sum(hist(after_rew_ix(neuron,:),bins));
+    end
+    %     % line plot
+    %     figure();hold on
+    %     set(0,'DefaultAxesColorOrder',cool(10))
+    %     for neuron = 1:30:300
+    %         plot(activity_density(neuron,:),'linewidth',1.5)
+    %     end
+    %     xlabel("Time (msec)")
+    %     xticks(bins)
+    %     xticklabels(bins * 1000 / tbin_ms)
+    % heatmap
+    figure()
+    imagesc(flipud(activity_density(:,1:(end-1))))
+    xlabel("Time after reward reception (msec)")
+    xticks([1,3,6,9,12,15,18,21,24])
+    xticklabels([0,250,500,750,1000,1250,1500,1750,2000])
+    colorbar()
+    session_name = ['m' session(1:2) ' ' session(end-2:end)];
+    title(sprintf("%s Distribution of first reward response latency across R0 Trials",session_name))
+    colormap('hot')
 end
 
-%% Now visualize distributions of receptivity
-for sIdx = 3:3
-    bins = 0:5:200;
-    activity_density = nan(size(after_rew_ix));
-    for neuron = 1:nNeurons
-        activity_density(neuron,:) = hist(after_rew_ix(neuron,:),bins) / sum(hist(after_rew_ix(neuron,:),bins);
-    end
-    % line plot
-    figure();hold on
-    set(0,'DefaultAxesColorOrder',cool(10))
-    for neuron = 1:30:300
-        plot(hist(after_rew_ix(neuron,:),bins) / sum(hist(after_rew_ix(neuron,:),bins)),'linewidth',1.5)
-    end
-    xlabel("Time (msec)")
-    xticks(bins)
-    xticklabels(bins * 1000 / tbin_ms)
-    % heatmap
-end

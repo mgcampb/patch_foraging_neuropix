@@ -104,7 +104,6 @@ for sIdx = 3:3 % 1:numel(sessions)
 end
 
 %% Sort by all trials to get ordering
-
 index_sort_all = {sIdx};
 for sIdx = 3:3
     decVar_bins = linspace(0,2,50);
@@ -129,7 +128,10 @@ for sIdx = 3:3
     prts = patchCSL(:,3) - patchCSL(:,2);
     patches = dat.patches;
     patchType = patches(:,2);
-    rewsize = mod(patchType,10);
+    rewsize = mod(patchType,10); 
+    
+    colors3rew = [.5 1 1 ; .75 .75 1 ; 1 .5 1 ; 0 1 1 ;.5 .5 1;1 0 1];
+    colors2rew = [.75 .75 1 ; 1 .5 1 ;.5 .5 1;1 0 1];
     
     % make barcode matrices
     nTimesteps = 15;
@@ -143,23 +145,40 @@ for sIdx = 3:3
         rew_barcode(iTrial , rew_indices) = rewsize(iTrial);
     end  
     
-    trials10x = find(rew_barcode(:,2) <= 0 & prts > 2.55);
-    trials11x = find(rew_barcode(:,2) > 0 & prts > 2.55); 
-    rew2 = nan(nTrials,1); 
+    % make rew2 vector that just says whether there was a reward at t = 1
+    % in ones place, size of reward in 10ths place
+    trials10x = find(rew_barcode(:,1) > 1 & rew_barcode(:,2) <= 0 & prts > 2.55);
+    trials11x = find(rew_barcode(:,1) > 1 & rew_barcode(:,2) > 1 & prts > 2.55); 
+    rew2 = nan(nTrials,1); % second reward?
     rew2(trials10x) = 1; 
-    rew2(trials11x) = 2;
-    
-    % make some sorts for the array
+    rew2(trials11x) = 2; 
+    rew2 = rew2 + .1 * rewsize;
+
+        % make some sorts for the array
     [~,prt_sort] = sort(prts);
-    [~,rewsize_sort] = sort(rewsize); 
-    [~,rew2_sort] = sort(rew2); 
+    [~,rewsize_sort] = sort(rewsize);
+    [~,rew2_sort] = sort(rew2);
+
+% sort by PRT within 10,11,20,22,40,44, order [10,20,40,11,22,44]
+    prt_R0_sort = []; 
+    prt_RR_sort = []; 
+    for iRewsize = [2,4] 
+        trialsr0x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) <= 0 & prts > 2.55);
+        trialsrrx = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & prts > 2.55); 
+
+        % sort by PRTs within reward history condition
+        [~,prtsr0_sort] = sort(prts(trialsr0x));
+        prtsr0_sort = trialsr0x(prtsr0_sort);
+        [~,prtsrr_sort] = sort(prts(trialsrrx)); 
+        prtsrr_sort = trialsrrx(prtsrr_sort);
+        prt_rew2_sort = [prtsr0_sort ; prtsrr_sort]; 
+        
+        prt_R0_sort = [prt_R0_sort;prtsr0_sort];
+        prt_RR_sort = [prt_RR_sort;prtsrr_sort];
+    end 
     
-    % sort by PRTs within reward history condition
-    [prtsR0,prtsR0_sort] = sort(prts(trials10x));
-    prtsR0_sort = trials10x(prtsR0_sort);
-    [prtsRR,prtsRR_sort] = sort(prts(trials11x)); 
-    prtsRR_sort = trials11x(prtsRR_sort);
-    prt_rew2_sort = [prtsR0_sort ; prtsRR_sort];
+    t0_prt_size_sort = [prt_R0_sort ; prt_RR_sort];
+    rew_2_sort = rew2(t0_prt_size_sort);
     
     max_round = floor(max(decVar_bins));
     secs = 0:max_round;
@@ -168,54 +187,54 @@ for sIdx = 3:3
         x_idx = [x_idx find(decVar_bins > i,1)];
     end
     
-    for iNeuron = 70:80
+    for iNeuron = 60:90
         neuron = index_sort_all{sIdx}(iNeuron);
         start = (0 / tbin_ms) + 1; % beginning of trial
         stop = (2000 / tbin_ms) + 1;
         cellPETH = zeros(nTrials,(stop-start+1)); % might want option to not include all trials?
-
-        for j = 1:numel(prt_rew2_sort) %  numel(trials10x)
-            iTrial = prt_rew2_sort(j); % prt_rew2_sort(j);
-            cellPETH(j,:) = zscore(FR_decVar(sIdx).fr_mat{iTrial}(neuron,start:stop),[],2);
-%                 cellPETH(j,:) = FR_decVar(sIdx).fr_mat{iTrial}(neuron,start:stop);
-        end 
+        
+        for j = 1:numel(t0_prt_size_sort) % numel(prt_rew2_sort) %  numel(trials10x)
+%             iTrial = prt_rew2_sort(j); % prt_rew2_sort(j);
+            iTrial = t0_prt_size_sort(j);
+%             cellPETH(j,:) = zscore(FR_decVar(sIdx).fr_mat{iTrial}(neuron,start:stop),[],2);
+            cellPETH(j,:) = FR_decVar(sIdx).fr_mat{iTrial}(neuron,start:stop);
+        end
         
         active_trials = find(any(cellPETH,2));
         cellPETH = cellPETH(active_trials,:);
         figure()
-        subplot(2,2,1)
+        subplot(2,1,1)
         imagesc(cellPETH); colormap('jet')
         title(sprintf("Cell %i",iNeuron))
         hold on; 
-        rew_2_sort = rew2(prt_rew2_sort);
-        gscatter(zeros(length(active_trials),1),1:size(cellPETH,1),rew_2_sort(active_trials))% [prtsR0;prtsRR])
-%         gscatter(zeros(length(cellPETH),1),1:size(cellPETH,1),rew_2_sort)% [prtsR0;prtsRR])
+%         gscatter(zeros(length(active_trials),1),1:size(cellPETH,1),rew_2_sort(active_trials))
+        gscatter(zeros(length(active_trials),1),1:size(cellPETH,1),rew_2_sort(active_trials),colors2rew)
         xlabel("Time (msec)")
         ylabel("PRT-sorted Trials")
         xticks((start:50:stop))
         xticklabels((start-1:50:stop-1) * tbin_ms)
         xlim([start-1,stop]) 
-        subplot(2,2,2) 
-        D = squareform(pdist(cellPETH,'cosine')); 
-        imagesc(D) 
-        title(sprintf("Cell %i Cosine distance between trial activities",iNeuron)) 
-        colorbar() 
-%         caxis([0,1])
-        xlabel("PRT-sorted Trials")
-        ylabel("PRT-sorted Trials")
-        subplot(2,2,3)
-        plot(unsorted_peth(neuron,:),'linewidth',2)
-        title(sprintf("Cell %i Mean Response",iNeuron))
-        xlabel("Time (msec)")
-        xticks(x_idx)
-        xticklabels(secs * 1000)  
-        subplot(2,2,4) 
-        trials10xPETH = cellPETH(1:length(find(rew_2_sort(active_trials) == 1)),:);
+%         subplot(2,2,2) 
+%         D = squareform(pdist(cellPETH,'cosine')); 
+%         imagesc(D) 
+%         title(sprintf("Cell %i Cosine distance between trial activity",iNeuron)) 
+%         colorbar() 
+%         xlabel("PRT-sorted Trials")
+%         ylabel("PRT-sorted Trials")
+%         subplot(2,2,3)
+%         plot(unsorted_peth(neuron,:),'linewidth',2)
+%         title(sprintf("Cell %i Mean Response",iNeuron))
+%         xlabel("Time (msec)")
+%         xticks(x_idx)
+%         xticklabels(secs * 1000)  
+        subplot(2,1,2)   
+        active_rew_2_sort = rew_2_sort(active_trials);
+        trials10xPETH = cellPETH(1:length(find(active_rew_2_sort < 2)),:);
         [~,ix] = max(trials10xPETH,[],2);
-%         [~,ix] = max(cellPETH(
-        active_prts = prts(active_trials);
-%         scatter(ix(active_prts < 10),active_prts(active_prts < 10),'.') 
-        scatter(ix,1:numel(ix),'.')
+%         active_prts = prts(active_trials);
+%         scatter(ix(active_prts < 10),active_prts(active_prts < 10),'.')  
+        active_rewsizes = mod(active_rew_2_sort(1:numel(ix)) * 10,10);
+        gscatter(ix,1:numel(ix),active_rewsizes,colors2rew(1:2,:),'.')
         xticks((start:50:stop))
         xticklabels((start-1:50:stop-1) * tbin_ms)
 %         [r,p] = corrcoef(ix(active_prts < 10),active_prts(active_prts < 10)); 
@@ -231,32 +250,51 @@ for sIdx = 3:3
 end
 
 %% Quantify cosine distance across trials, across neurons to investigate differences in consistency
-% close all
+close all
 for sIdx = 3:3 
     nNeurons = numel(index_sort_all{sIdx});
-    med_dists = nan(nNeurons,1);
-    for iNeuron = 1:nNeurons
+    med_dists = nan(nNeurons,1); 
+    prtRewsize_corr = nan(100,1); 
+    prtRewsize_p = zeros(100,1);
+    
+    for iNeuron = 40:140
         neuron = index_sort_all{sIdx}(iNeuron);
         start = (0 / tbin_ms) + 1; % beginning of trial
         stop = (2000 / tbin_ms) + 1;
         cellPETH = zeros(nTrials,(stop-start+1)); % might want option to not include all trials?
         
-        for j = 1:numel(trials10x)
-            iTrial = prt_rew2_sort(j); % prt_rew2_sort(j);
+        for j = 1:numel(trials10x) %  numel(t0_prt_size_sort)
+            iTrial = t0_prt_size_sort(j); % prt_rew2_sort(j);
             if size(FR_decVar(sIdx).fr_mat{iTrial},2) >= (stop - start + 1)
-                cellPETH(j,:) = zscore(FR_decVar(sIdx).fr_mat{iTrial}(neuron,start:stop),[],2);
-%                 cellPETH(j,:) = FR_decVar(sIdx).fr_mat{iTrial}(neuron,start:stop);
+%                 cellPETH(j,:) = zscore(FR_decVar(sIdx).fr_mat{iTrial}(neuron,start:stop),[],2);
+                cellPETH(j,:) = FR_decVar(sIdx).fr_mat{iTrial}(neuron,start:stop);
             end 
         end 
         active_trials = find(any(cellPETH,2));
         cellPETH = cellPETH(active_trials,:);
         D = pdist(cellPETH,'cosine');  
-        med_dists(iNeuron) = median(D(:));
+        med_dists(iNeuron) = median(D(:)); 
+        
+        trials10xPETH = cellPETH(1:length(find(rew_2_sort(active_trials) < 2)),:); 
+        [~,ix] = max(trials10xPETH,[],2); 
+        if numel(ix) > 2
+            [r,p] = corrcoef(ix,1:numel(ix));  
+            prtRewsize_corr(iNeuron) = r(2); 
+            prtRewsize_p(iNeuron) = p(2) < .05;
+        end
     end 
+    
     figure()
     scatter(1:numel(med_dists),med_dists) 
     title("Median cosine distance ordered by peak responsivity") 
     xlabel("Peak-response sorted neurons")
-    ylabel("Median cosine distance between trials")
+    ylabel("Median cosine distance between trials") 
+    figure()
+    gscatter(1:numel(prtRewsize_corr),prtRewsize_corr,prtRewsize_p,[],'.')  
+    xlim([40,140])
+    title("Pearson Correlation between peak firing location and PRT ordering within Rewsize") 
+    xlabel("Peak-response sorted neurons")
+    ylabel("Pearson Correlation") 
+    legend("Non-significant","Significant")
 end
 

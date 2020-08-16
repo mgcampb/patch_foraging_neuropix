@@ -402,7 +402,7 @@ function Vr = getRealVs(V,evals)
     % now get axes aligned so that plan is spread mostly along the horizontal axis
     testProj = (Vr'*Ared(1:numAnalyzedTimes:end,:)')'; % just picks out the plan times
 %     display(testProj)
-    rotV = princomp(testProj);
+    rotV = pca(testProj); % changed 8/15/2020
     crossProd = cross([rotV(:,1);0], [rotV(:,2);0]);
     if crossProd(3) < 0, rotV(:,2) = -rotV(:,2); end   % make sure the second vector is 90 degrees clockwise from the first
     Vr = Vr*rotV; 

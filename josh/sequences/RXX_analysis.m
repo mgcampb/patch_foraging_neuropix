@@ -26,12 +26,27 @@ sessions = {sessions.name};
 FR_decVar = struct;
 FRandTimes = struct;
 
-for sIdx = 3:3 % 1:numel(sessions)
+for sIdx = 2:2 % 1:numel(sessions)
     session = sessions{sIdx}(1:end-4);
     fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
     % load data
     dat = load(fullfile(paths.data,session));
-    good_cells = dat.sp.cids(dat.sp.cgs==2);
+    good_cells = dat.sp.cids(dat.sp.cgs==2); 
+    
+%     [~, spike_depths_all] = templatePositionsAmplitudes(dat.sp.temps, dat.sp.winv, dat.sp.ycoords, dat.sp.spikeTemplates, dat.sp.tempScalingAmps);
+% 
+%     % take median spike depth for each cell
+%     spike_depths = nan(size(good_cells));
+% 
+%     parfor cIdx = 1:numel(good_cells)
+%         spike_depths(cIdx) = median(spike_depths_all(dat.sp.clu==good_cells(cIdx)));
+%     end  
+%     
+%     mm1_units = find(spike_depths > (max(spike_depths) - 1000));
+%     
+%     figure()
+%     hist(spike_depths);
+%     title("Distribution of spike depths")
     
     % time bins
     opt.tstart = 0;
@@ -52,7 +67,10 @@ for sIdx = 3:3 % 1:numel(sessions)
         tic
         [fr_mat, tbincent] = calcFRVsTime(good_cells,dat,opt); % calc from full matrix
         toc
-    end
+    end 
+    
+%     fr_mat = fr_mat(mm1_units,:); 
+%     display("Using units from top 1 mm of probe")
 
     buffer = 500; % buffer before leave in ms
     
@@ -96,7 +114,7 @@ for sIdx = 3:3 % 1:numel(sessions)
         end
     end
     
-    close all; figure();hold on;
+    figure();hold on;
     plot(FR_decVar(sIdx).decVarTime{39})
     hold on
     plot(FR_decVar(sIdx).decVarTimeSinceRew{39})
@@ -186,19 +204,19 @@ end
 %% Sort by all trials to get ordering
 
 index_sort_all = {sIdx};
-for sIdx = 3:3
+for sIdx = 2:2
     decVar_bins = linspace(0,2,41);
     opt.norm = "zscore";
     opt.trials = 'all';
     opt.suppressVis = false;
-    dvar = "timesince";
+    dvar = "time";
     [sorted_peth,neuron_order,unsorted_peth] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,opt);
     index_sort_all{sIdx} = neuron_order;
 end
 
 %% Now average over RX conditions 
 RX_data = {};
-for sIdx = 3:3
+for sIdx = 2:2
     RX_data{sIdx} = struct;
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
@@ -261,7 +279,7 @@ end
 %% Now visualize RX PETHs, sort by peak responsivity
 close all
 conditions = {"10","20","40","11","22","44"};
-for sIdx = 3:3
+for sIdx = 2:2
     figure();colormap('jet')
     for cIdx = 1:6
         subplot(2,3,cIdx)
@@ -304,7 +322,7 @@ end
 %% Now visualize RX ramp PETHs w/ various sorts
 close all
 conditions = {"10","20","40","11","22","44"};
-for sIdx = 3:3
+for sIdx = 1:1
     ramp_idx = 150:300;
     % iterate over ramp-like neurons and take slope of ramp linreg
     slopes = nan(numel(ramp_idx),1);
@@ -358,7 +376,7 @@ end
 %% Now same over RXX conditions 
 
 RXX_data = {};
-for sIdx = 3:3
+for sIdx = 1:1
     RXX_data{sIdx} = struct;
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
@@ -465,7 +483,7 @@ end
 close all
 conditions = {"200","220","202","222","400","440","404","444"};
 sorts = {"10","20","40"};
-for sIdx = 3:3
+for sIdx = 1:1
     figure();colormap('jet')
     for cIdx = 1:8
         subplot(2,4,cIdx)
@@ -474,7 +492,8 @@ for sIdx = 3:3
             cl1 = caxis;
         end
         caxis(cl1)
-        title(sprintf("%s Sort by Session",conditions{cIdx}))
+%         title(sprintf("%s Sort Excluding %s",conditions{cIdx},conditions{cIdx}))
+        title(sprintf("%s Sort by Session avg",conditions{cIdx}))
         xticks([0 50 100 150])
         xticklabels([0 1000 2000 3000])
         xlabel("Time (msec)")
