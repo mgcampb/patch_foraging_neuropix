@@ -17,7 +17,7 @@ good_cells = dat.sp.cids(dat.sp.cgs==2)';
 %%  get spike depths for all spikes individually
 % this function comes from the spikes repository
 % depth indicates distance from tip of probe in microns
-[~, spike_depths_all] = templatePositionsAmplitudes(dat.sp.temps, dat.sp.winv, dat.sp.ycoords, dat.sp.spikeTemplates, dat.sp.tempScalingAmps);
+[~, spike_depths_all,templateDepths,~,~,~,waveforms] = templatePositionsAmplitudes(dat.sp.temps, dat.sp.winv, dat.sp.ycoords, dat.sp.spikeTemplates, dat.sp.tempScalingAmps);
 
 %% take median spike depth for each cell
 spike_depths = nan(size(good_cells));
