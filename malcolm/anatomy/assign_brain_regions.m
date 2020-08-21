@@ -2,11 +2,11 @@
 % output by Display_Probe_Track in SHARP-Track code
 % MGC 8/19/2020
 
-data_dir = 'C:\Users\malcg\Dropbox (Personal)\UchidaLab\processed_neuropix_data\';
-data_set = '80_20200315';
+data_dir = 'H:\My Drive\processed_neuropix_data\';
+data_set = '80_20200317';
 
 opt = struct;
-opt.scale_depth = true; % whether or not to scale the probe so that insertion depth matches probe tip detected in histology
+opt.scale_depth = false; % whether or not to scale the probe so that insertion depth matches probe tip detected in histology
 % otherwise we measure distance from probe tip directly
 
 
@@ -25,10 +25,11 @@ end
 
 % compute distance from the surface of the brain (either scaled so that
 % probe tip matches insertion depth or not)
+probe_tip_final = max(dat.anatomy.probe_tip, dat.anatomy.insertion_depth); % if probe_tip < insertion_depth, take insertion_depth instead
 if opt.scale_depth
-    depth_from_surface = dat.anatomy.probe_tip - depth_from_tip * dat.anatomy.scale_factor;
+    depth_from_surface = probe_tip_final - depth_from_tip * dat.anatomy.scale_factor;
 else
-    depth_from_surface = dat.anatomy.probe_tip - depth_from_tip;
+    depth_from_surface = probe_tip_final - depth_from_tip;
 end
 
 % assign brain region to each unit
