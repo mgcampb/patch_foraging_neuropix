@@ -26,7 +26,7 @@ sessions = {sessions.name};
 FR_decVar = struct;
 FRandTimes = struct;
 
-for sIdx = 2:2 % 1:numel(sessions)
+for sIdx = 3:3 % 1:numel(sessions)
     session = sessions{sIdx}(1:end-4);
     fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
     % load data
@@ -126,97 +126,22 @@ for sIdx = 2:2 % 1:numel(sessions)
     FRandTimes(sIdx).stop_leave_ix = [patchstop_ix patchleave_ix];
 end
 
-%% Just make ridge plots w/ all neurons, get ordering
-close all
-index_sort_all = {sIdx};
-for sIdx = 3:3 % 1:numel(sessions)
-    session = sessions{sIdx}(1:end-4);
-    data = load(fullfile(paths.data,session));
-    session = erase(sessions{sIdx}(1:end-4),'_'); % latex thing
-    session = session([1:2,end-2:end]);
-    
-    dvar = "timesince";
-    
-    if dvar == "time"
-        decVar_cell = FR_decVar(sIdx).decVarTime;
-        label = "Time on Patch";
-    else
-        decVar_cell = FR_decVar(sIdx).decVarTimeSinceRew;
-        label = "Time Since Last Reward";
-    end
-    
-    %%%% prep decision variable bins w/ all trials %%%%
-    decVar_bins = linspace(0,2,41);
-    fr_mat = cat(2,FR_decVar(sIdx).fr_mat{:});
-    decVar = cat(2,decVar_cell{:});
-    
-    shifts = randi(size(FR_decVar(sIdx).fr_mat{1},2),size(FR_decVar(sIdx).fr_mat{1},1),1);
-    shuffle = false;
-    if shuffle == true
-        parfor neuron = 1:size(fr_mat,1)
-            fr_mat(neuron,:) = circshift(fr_mat(neuron,:),shifts(neuron));
-        end
-    end
-    
-    avgFR_decVar = zeros(size(FR_decVar(sIdx).fr_mat{1},1), numel(decVar_bins)-1);
-    
-    for dIdx = 1:(numel(decVar_bins) - 1) % go up to 80th percentile
-        if length(find(fr_mat(:,decVar > decVar_bins(dIdx) & decVar < decVar_bins(dIdx+1)))) > 0
-            avgFR_decVar(:,dIdx) = mean(fr_mat(:,decVar > decVar_bins(dIdx) & decVar < decVar_bins(dIdx+1)),2);
-        elseif dIdx > 1
-            avgFR_decVar(:,dIdx) = mean(fr_mat(:,decVar > decVar_bins(dIdx-1) & decVar < decVar_bins(dIdx)),2);
-        else
-            avgFR_decVar(:,dIdx) = 0;
-        end
-    end
-    
-    avgFR_decVar_norm = zscore(avgFR_decVar,[],2);
-    [~,index] = max(avgFR_decVar');
-    [~,index_sort_all{sIdx}] = sort(index);
-    avgFR_decVar_sorted = avgFR_decVar_norm(index_sort_all{sIdx},:);
-    
-    % now making xticks at even seconds
-    max_round = floor(max(decVar_bins));
-    secs = 0:max_round;
-    x_idx = [];
-    for i = secs
-        x_idx = [x_idx find(decVar_bins > i,1)];
-    end
-    
-    figure()
-    colormap('jet')
-    imagesc(flipud(avgFR_decVar_sorted));
-    colorbar()
-    colormap('jet')
-    xlim([1,40])
-    if shuffle == false
-        xlabel([label; " (ms)"])
-        title(sprintf("PETH Sorted to %s",label))
-    else
-        xlabel([label; " Shuffled  (ms)"])
-        title(sprintf("PETH Sorted to Shuffled %s",label)) 
-    end
-    xticks(x_idx)
-    xticklabels(secs * 1000)
-    ylabel("Neurons")
-end
-
 %% Sort by all trials to get ordering
 
 index_sort_all = {sIdx};
-for sIdx = 2:2
+for sIdx = 3:3
     decVar_bins = linspace(0,2,41);
     opt.norm = "zscore";
     opt.trials = 'all';
     opt.suppressVis = false;
-    dvar = "time";
+    dvar = "timesince";
     [sorted_peth,neuron_order,unsorted_peth] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,opt);
     index_sort_all{sIdx} = neuron_order;
 end
 
 %% Now average over RX conditions 
 RX_data = {};
-for sIdx = 2:2
+for sIdx = 3:3
     RX_data{sIdx} = struct;
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
@@ -279,7 +204,7 @@ end
 %% Now visualize RX PETHs, sort by peak responsivity
 close all
 conditions = {"10","20","40","11","22","44"};
-for sIdx = 2:2
+for sIdx = 3:3
     figure();colormap('jet')
     for cIdx = 1:6
         subplot(2,3,cIdx)
@@ -322,7 +247,7 @@ end
 %% Now visualize RX ramp PETHs w/ various sorts
 close all
 conditions = {"10","20","40","11","22","44"};
-for sIdx = 1:1
+for sIdx = 3:3
     ramp_idx = 150:300;
     % iterate over ramp-like neurons and take slope of ramp linreg
     slopes = nan(numel(ramp_idx),1);
@@ -376,7 +301,7 @@ end
 %% Now same over RXX conditions 
 
 RXX_data = {};
-for sIdx = 1:1
+for sIdx = 3:3
     RXX_data{sIdx} = struct;
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
@@ -387,7 +312,7 @@ for sIdx = 1:1
     patchleave_ms = data.patchCSL(:,3);
     rew_ms = data.rew_ts;
 
-    sec3ix = 3000/tbin_ms;
+    sec3ix = 2000/tbin_ms;
     
     % Trial level features
     patches = data.patches;
@@ -483,7 +408,7 @@ end
 close all
 conditions = {"200","220","202","222","400","440","404","444"};
 sorts = {"10","20","40"};
-for sIdx = 1:1
+for sIdx = 3:3
     figure();colormap('jet')
     for cIdx = 1:8
         subplot(2,4,cIdx)
@@ -493,10 +418,11 @@ for sIdx = 1:1
         end
         caxis(cl1)
 %         title(sprintf("%s Sort Excluding %s",conditions{cIdx},conditions{cIdx}))
-        title(sprintf("%s Sort by Session avg",conditions{cIdx}))
-        xticks([0 50 100 150])
-        xticklabels([0 1000 2000 3000])
-        xlabel("Time (msec)")
+        title(sprintf("%s Sort by Avg PETH",conditions{cIdx}))
+%         xticks([0 50 100 150])
+%         xticklabels([0 1 2 3]) 
+%         yticks([0,100,200,300])
+        xlabel("Time on Patch (sec)")
     end
     
     figure();colormap('jet')
@@ -514,9 +440,27 @@ for sIdx = 1:1
         caxis(cl1)
         title(sprintf("%s Sort by %s",conditions{cIdx},sorts{sort_idx}))
         xticks([0 50 100 150])
-        xticklabels([0 1000 2000 3000])
-        xlabel("Time (msec)")
+        xticklabels([0 1 2 3])
+        yticks([0,100,200,300])
+        xlabel("Time on Patch (sec)")
     end
+    
+    figure();colormap('jet')
+    for cIdx = 5:8
+        subplot(2,2,cIdx-4)
+        imagesc(flipud(RXX_data{sIdx}(cIdx).fr_mat(150:end,:)))
+        if cIdx == 1
+            cl1 = caxis;
+        end
+        caxis(cl1)
+%         title(sprintf("%s Sort Excluding %s",conditions{cIdx},conditions{cIdx}))
+        title(sprintf("%s Sort by Avg PETH",conditions{cIdx}))
+%         xticks([0 50 100 150])
+%         xticklabels([0 1 2 3]) 
+%         yticks([0,100,200,300])
+        xlabel("Time on Patch (sec)")
+    end
+
 end
 
 %% Now visualize RXX ramp PETHs, sort by ramp characteristics

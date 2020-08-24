@@ -147,7 +147,7 @@ for sIdx = 3:3
     
     % make rew2 vector that just says whether there was a reward at t = 1
     % in ones place, size of reward in 10ths place
-    trials10x = find(rew_barcode(:,1) > 1 & rew_barcode(:,2) <= 0 & prts > 2.55);
+    trials10x = find(rew_barcode(:,1) > 1 & rew_barcode(:,2) < 0 & prts > 2.55);
     trials11x = find(rew_barcode(:,1) > 1 & rew_barcode(:,2) > 1 & prts > 2.55); 
     rew2 = nan(nTrials,1); % second reward?
     rew2(trials10x) = 1; 
@@ -157,13 +157,12 @@ for sIdx = 3:3
         % make some sorts for the array
     [~,prt_sort] = sort(prts);
     [~,rewsize_sort] = sort(rewsize);
-    [~,rew2_sort] = sort(rew2);
 
 % sort by PRT within 10,11,20,22,40,44, order [10,20,40,11,22,44]
     prt_R0_sort = []; 
     prt_RR_sort = []; 
     for iRewsize = [2,4] 
-        trialsr0x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) <= 0 & prts > 2.55);
+        trialsr0x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) < 0 & prts > 2.55);
         trialsrrx = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & prts > 2.55); 
 
         % sort by PRTs within reward history condition
@@ -178,7 +177,8 @@ for sIdx = 3:3
     end 
     
     t0_prt_size_sort = [prt_R0_sort ; prt_RR_sort];
-    rew_2_sort = rew2(t0_prt_size_sort);
+    rew_2_sort = rew2(t0_prt_size_sort); 
+    prt_2_sort = prts(t0_prt_size_sort); 
     
     max_round = floor(max(decVar_bins));
     secs = 0:max_round;
@@ -187,7 +187,7 @@ for sIdx = 3:3
         x_idx = [x_idx find(decVar_bins > i,1)];
     end
     
-    for iNeuron = 60:90
+    for iNeuron = 75:85
         neuron = index_sort_all{sIdx}(iNeuron);
         start = (0 / tbin_ms) + 1; % beginning of trial
         stop = (2000 / tbin_ms) + 1;
@@ -214,6 +214,41 @@ for sIdx = 3:3
         xticks((start:50:stop))
         xticklabels((start-1:50:stop-1) * tbin_ms)
         xlim([start-1,stop]) 
+        
+        subplot(2,1,2)   
+        active_rew_2_sort = rew_2_sort(active_trials); 
+        active_prt_2_sort = prt_2_sort(active_trials); 
+        trials20xPETH = cellPETH(1:length(find(active_rew_2_sort < 2)),:);
+        [~,ix] = max(trials20xPETH,[],2);
+%         active_prts = prts(active_trials);
+%         scatter(ix(active_prts < 10),active_prts(active_prts < 10),'.')  
+        active_rewsizes = mod(active_rew_2_sort(1:numel(ix)) * 10,10);
+        gscatter(ix,active_prt_2_sort(1:numel(ix)),active_rewsizes,colors2rew(1:2,:),'.')
+        xticks((start:50:stop))
+        xticklabels((start-1:50:stop-1) * tbin_ms)
+%         [r,p] = corrcoef(ix(active_prts < 10),active_prts(active_prts < 10)); 
+        [~,p] = corrcoef(ix,active_prt_2_sort(1:numel(ix)));
+        title(sprintf("R0 Peak Response Time vs PRT (p = %f )",p(2)))
+        xlabel("Maximal response time")
+        ylabel("PRT-sorted Trials")
+        
+%         subplot(2,1,2)   
+%         active_rew_2_sort = rew_2_sort(active_trials); 
+%         active_prt_2_sort = prt_2_sort(active_trials); 
+%         trials20xPETH = cellPETH(1:length(find(active_rew_2_sort < 2)),:);
+%         [~,ix] = max(trials20xPETH,[],2);
+% %         active_prts = prts(active_trials);
+% %         scatter(ix(active_prts < 10),active_prts(active_prts < 10),'.')  
+%         active_rewsizes = mod(active_rew_2_sort(1:numel(ix)) * 10,10);
+%         gscatter(ix,1:numel(ix),active_rewsizes,colors2rew(1:2,:),'.')
+%         xticks((start:50:stop))
+%         xticklabels((start-1:50:stop-1) * tbin_ms)
+% %         [r,p] = corrcoef(ix(active_prts < 10),active_prts(active_prts < 10)); 
+%         [~,p] = corrcoef(ix,1:numel(ix));
+%         title(sprintf("R0 Peak Response Time vs PRT (p = %f )",p(2)))
+%         xlabel("Maximal response time")
+%         ylabel("PRT")        
+        
 %         subplot(2,2,2) 
 %         D = squareform(pdist(cellPETH,'cosine')); 
 %         imagesc(D) 
@@ -227,21 +262,39 @@ for sIdx = 3:3
 %         xlabel("Time (msec)")
 %         xticks(x_idx)
 %         xticklabels(secs * 1000)  
-        subplot(2,1,2)   
-        active_rew_2_sort = rew_2_sort(active_trials);
-        trials10xPETH = cellPETH(1:length(find(active_rew_2_sort < 2)),:);
-        [~,ix] = max(trials10xPETH,[],2);
-%         active_prts = prts(active_trials);
-%         scatter(ix(active_prts < 10),active_prts(active_prts < 10),'.')  
-        active_rewsizes = mod(active_rew_2_sort(1:numel(ix)) * 10,10);
-        gscatter(ix,1:numel(ix),active_rewsizes,colors2rew(1:2,:),'.')
-        xticks((start:50:stop))
-        xticklabels((start-1:50:stop-1) * tbin_ms)
-%         [r,p] = corrcoef(ix(active_prts < 10),active_prts(active_prts < 10)); 
-        [r,p] = corrcoef(ix,1:numel(ix)); 
-        title(sprintf("R0 Peak response time ordered by PRT (p = %f )",p(2)))
-        xlabel("Maximal response time")
-        ylabel("PRT-sorted Trials")
+
+%         % To get reward sizes in separate panes
+%         subplot(2,2,3)   
+%         active_rew_2_sort = rew_2_sort(active_trials);
+%         trials20xPETH = cellPETH(1:length(find(active_rew_2_sort == 1.2)),:);
+%         [~,ix] = max(trials20xPETH,[],2);
+% %         active_prts = prts(active_trials);
+% %         scatter(ix(active_prts < 10),active_prts(active_prts < 10),'.')  
+%         active_rewsizes = mod(active_rew_2_sort(1:numel(ix)) * 10,10);
+%         gscatter(ix,1:numel(ix),active_rewsizes,colors2rew(1,:),'.')
+%         xticks((start:50:stop))
+%         xticklabels((start-1:50:stop-1) * tbin_ms)
+% %         [r,p] = corrcoef(ix(active_prts < 10),active_prts(active_prts < 10)); 
+%         [~,p] = corrcoef(ix,1:numel(ix)); 
+%         title(sprintf("20 Peak response time ordered by PRT (p = %f )",p(2)))
+%         xlabel("Maximal response time")
+%         ylabel("PRT-sorted Trials")
+%         subplot(2,2,4)   
+%         active_rew_2_sort = rew_2_sort(active_trials);
+%         trials40xPETH = cellPETH(1:length(find(active_rew_2_sort == 1.4)),:);
+%         [~,ix] = max(trials40xPETH,[],2);
+% %         active_prts = prts(active_trials);
+% %         scatter(ix(active_prts < 10),active_prts(active_prts < 10),'.')  
+%         active_rewsizes = mod(active_rew_2_sort(1:numel(ix)) * 10,10);
+%         gscatter(ix,1:numel(ix),active_rewsizes,colors2rew(2,:),'.')
+%         xticks((start:50:stop))
+%         xticklabels((start-1:50:stop-1) * tbin_ms)
+% %         [r,p] = corrcoef(ix(active_prts < 10),active_prts(active_prts < 10)); 
+%         [~,p] = corrcoef(ix,1:numel(ix)); 
+%         title(sprintf("40 Peak response time ordered by PRT (p = %f )",p(2)))
+%         xlabel("Maximal response time")
+%         ylabel("PRT-sorted Trials")
+        
         
         hFig=findall(0,'type','figure');
         hLeg=findobj(hFig(1,1),'type','legend');
@@ -276,9 +329,11 @@ for sIdx = 3:3
         med_dists(iNeuron) = median(D(:)); 
         
         trials10xPETH = cellPETH(1:length(find(rew_2_sort(active_trials) < 2)),:); 
-        [~,ix] = max(trials10xPETH,[],2); 
+        [~,ix] = max(trials10xPETH,[],2);  
+        
+        active_prt_2_sort = prt_2_sort(active_trials); 
         if numel(ix) > 2
-            [r,p] = corrcoef(ix,1:numel(ix));  
+            [r,p] = corrcoef(ix,active_prt_2_sort(1:numel(ix)));  
             prtRewsize_corr(iNeuron) = r(2); 
             prtRewsize_p(iNeuron) = p(2) < .05;
         end
@@ -289,8 +344,8 @@ for sIdx = 3:3
     title("Median cosine distance ordered by peak responsivity") 
     xlabel("Peak-response sorted neurons")
     ylabel("Median cosine distance between trials") 
-    figure()
-    gscatter(1:numel(prtRewsize_corr),prtRewsize_corr,prtRewsize_p,[],'.')  
+    figure() 
+    gscatter(1:numel(prtRewsize_corr),prtRewsize_corr,prtRewsize_p,[.4 .4 .4;1 0 0],'.')  
     xlim([40,140])
     title("Pearson Correlation between peak firing location and PRT ordering within Rewsize") 
     xlabel("Peak-response sorted neurons")

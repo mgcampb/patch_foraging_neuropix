@@ -1,9 +1,9 @@
 paths = struct;
-paths.data = 'C:\Users\malcg\Dropbox (Personal)\UchidaLab\processed_neuropix_data';
-paths.figs = 'C:\figs\patch_foraging_neuropix'; % where to save figs
+paths.data = '/Users/joshstern/Documents/UchidaLab_matlab/neuroPixelsData/80';
+paths.figs = '/Users/joshstern/Documents/UchidaLab_matlab/neural_data_figs'; % where to save figs
 
-addpath(genpath('C:\code\HGRK_analysis_tools'));
-addpath(genpath('C:\code\patch_foraging_neuropix\malcolm\functions'));
+addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab/HGK_analysis_tools'));
+addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab'));
 
 % analysis options
 opt = struct;
@@ -193,6 +193,7 @@ parfor sIdx = 1:numel(sessions)
         [~,~,z,t]=plot_timecourse('timestamp',spiket_ms,t_align,t_start,t_end);
         atitle('CUE/ALL TRIALS');
         psth_this.psth_cue = [psth_this.psth_cue; z.mean];
+        display(psth_this.psth_cue)
         psth_this.t_window_cue = t;
         subplot(2,4,5);
         plot_timecourse('timestamp',spiket_ms,t_align,t_start,t_end,rew_size);
@@ -206,6 +207,7 @@ parfor sIdx = 1:numel(sessions)
         [~,~,z,t]=plot_timecourse('timestamp',spiket_ms,t_align,t_start,t_end);
         atitle('STOP/ALL TRIALS');
         psth_this.psth_stop = [psth_this.psth_stop; z.mean];
+        display(psth_this.psth_stop)
         psth_this.t_window_stop = t;
         subplot(2,4,6);
         plot_timecourse('timestamp',spiket_ms,t_align,t_start,t_end,rew_size);
@@ -237,7 +239,8 @@ parfor sIdx = 1:numel(sessions)
         plot_timecourse('timestamp',spiket_ms,t_align,t_start,t_end,rew_size_indiv);
         atitle('REW/SPLIT BY REW SIZE');
         
-        save_figs(fullfile(paths.figs,'psth_indiv_cells',session),h,'png');
+%         save_figs(fullfile(paths.figs,'psth_indiv_cells',session),h,'png');
+%         comment out to save time
         close(h);
     end
     psth{sIdx} = psth_this;

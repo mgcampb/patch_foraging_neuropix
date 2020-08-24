@@ -30,7 +30,7 @@ sessions = {sessions.name};
 FR_decVar = struct;
 FRandTimes = struct;
 
-for sIdx = 1:3 % 1:numel(sessions)
+for sIdx = 3:3 % 1:numel(sessions)
     session = sessions{sIdx}(1:end-4);
     fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
     % load data
@@ -58,6 +58,9 @@ for sIdx = 1:3 % 1:numel(sessions)
         toc
     end
 
+    % zscore entire firing rate matrix!
+    fr_mat = zscore(fr_mat,[],2);
+    
     buffer = 500; % buffer before leave in ms
     
     % create index vectors from our update timestamp vectors
@@ -115,7 +118,7 @@ end
 %% Sort by all trials to get ordering
 
 index_sort_all = {sIdx};
-for sIdx = 1:3
+for sIdx = 3:3
     decVar_bins = linspace(0,2,41);
     opt.norm = "zscore";
     opt.trials = 'all';
@@ -161,7 +164,7 @@ for sIdx = 3:3
     clc
     nTrials = length(FR_decVar(sIdx).fr_mat);
     nNeurons = size(FR_decVar(sIdx).fr_mat{1},1); 
-    maxlag = round(500 / tbin_ms); % look maximally 1 second away 
+    maxlag = round(1000 / tbin_ms); % look maximally 1 second away 
     max_time = 1000 / tbin_ms; % so rewards don't mess things up
     
     % make datastructure
@@ -170,9 +173,9 @@ for sIdx = 3:3
     % iterate over trials
     for iTrial = 1:nTrials % figure out broadcast variable to use parfor 
         t_len = size(FR_decVar(sIdx).fr_mat{iTrial},2);
-        sorted_fr_mat = zscore(FR_decVar(sIdx).fr_mat{iTrial}(index_sort_all{sIdx},1:min(max_time,t_len)),[],2);
-        r = xcorr(sorted_fr_mat',maxlag,'coeff'); % normalized xcorr 
-        r(isnan(r)) = 0; % account for xcorr betw rows of 0s
+        sorted_fr_mat = FR_decVar(sIdx).fr_mat{iTrial}(index_sort_all{sIdx},1:min(max_time,t_len));
+        mean_subtr_fr_mat = sorted_fr_mat - mean(sorted_fr_mat,2); % mean subtract! 
+        r = xcorr(mean_subtr_fr_mat',maxlag,'coeff'); % normalized xcorr 
         r = reshape(r,2*maxlag+1,nNeurons,nNeurons);
         corr_tensor(:,:,:,iTrial) = r;
         
@@ -184,13 +187,22 @@ end
 
 %% visualize results   
 close all
-mean_corr_tensor = mean(corr_tensor,4); % avg over trials 
-[max_mean_corr,max_mean_latency] = max(squeeze(mean_corr_tensor),[],1); % max over latency
-mean_lagless = mean_corr_tensor(maxlag,:,:);  
+mean_corr_tensor = nanmean(corr_tensor,4); % avg over trials 
+[max_mean_corr,max_mean_latency] = max(squeeze(mean_corr_tensor),[],1); % max over latency 
+[absmax_mean_corr,absmax_mean_latency] = max(abs(squeeze(mean_corr_tensor)),[],1); % max over latency 
+% absmax_mean_corr = sign(mean_corr_tensor())
+mean_lagless = mean_corr_tensor(maxlag,:,:); 
+
+% clear mean_corr_tensor
+
+max_mean_latency = (max_mean_latency - (maxlag+1)) * tbin_ms; % *1000?
+absmax_mean_latency = (absmax_mean_latency - (maxlag+1)) * tbin_ms;
 
 % get rid of extra dimension
 max_mean_corr = squeeze(max_mean_corr); 
 max_mean_latency = squeeze(max_mean_latency); 
+absmax_mean_corr = squeeze(absmax_mean_corr); 
+absmax_mean_latency = squeeze(absmax_mean_latency);
 mean_lagless = squeeze(mean_lagless);
 
 % max_mean_corr = max_mean_corr - diag(diag(max_mean_corr));
@@ -198,16 +210,28 @@ mean_lagless = squeeze(mean_lagless);
 
 close all
 figure();colormap('jet')
-imagesc(max_mean_corr(60:160,60:160))
+imagesc(max_mean_corr)
 title("Mean max correlation")  
 colorbar()
-figure() ;colormap('jet')
-imagesc(mean_lagless(60:160,60:160))
-title("Mean lagless correlation") 
+figure();colormap('jet')
+imagesc(absmax_mean_corr)
+title("Mean max absolute correlation")  
 colorbar()
 figure() ;colormap('jet')
-imagesc(max_mean_latency(60:160,60:160))
+imagesc(max_mean_latency)
 title("Mean latency to max correlation")
+colorbar() 
+figure();colormap('jet') 
+imagesc(absmax_mean_latency)
+title("Mean latency to max absolute correlation")
+colorbar() 
+figure();colormap('jet') 
+imagesc(absmax_mean_latency)
+title("Mean latency to max absolute correlation")
+colorbar() 
+figure() ;colormap('jet')
+imagesc(mean_lagless)
+title("Mean lagless correlation") 
 colorbar()
 
 

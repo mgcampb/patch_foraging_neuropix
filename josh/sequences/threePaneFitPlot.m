@@ -9,7 +9,7 @@ function threePaneFitPlot(avgFR_decVar_sorted,avgFR_decVar_sortedFitResidual,avg
     xlim([0,40])
     xlabel(alignmentLabel)
     xticks([0 20 40])
-    xticklabels(decVar_bins([1 20 40]))
+    xticklabels([0 1000 2000])
     subplot(1,3,3)
     imagesc(flipud(avgFR_decVar_sortedFitResidual))
     colorbar()
@@ -18,7 +18,7 @@ function threePaneFitPlot(avgFR_decVar_sorted,avgFR_decVar_sortedFitResidual,avg
     xlim([0,40])
     xlabel(alignmentLabel)
     xticks([0 20 40])
-    xticklabels(decVar_bins([1 20 40]))
+    xticklabels([0 1000 2000])
     subplot(1,3,2)
     colormap('jet')
     imagesc(flipud(avgFR_decVar_sortedFit))
@@ -28,6 +28,6 @@ function threePaneFitPlot(avgFR_decVar_sorted,avgFR_decVar_sortedFitResidual,avg
     xlim([0,40])
     xlabel(alignmentLabel)
     xticks([1 20 40])
-    xticklabels(decVar_bins([1 20 40]))
+    xticklabels([0 1000 2000])
 end
 

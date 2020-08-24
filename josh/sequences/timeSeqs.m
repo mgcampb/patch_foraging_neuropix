@@ -152,28 +152,10 @@ for sIdx = 3:3
     end
     
     decVar_bins = linspace(0,2,nBins);
-    % sort by odd trials, visualize by even trials
-    %     odd_opt = struct;
-    %     odd_opt.suppressVis = true;
-    %     odd_opt.norm = "peak";
-    %     odd_opt.trials = 1:2:nTrials;
-    %     [~,neuron_order_odd,~] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,odd_opt);
-    %     even_opt = struct;
-    %     even_opt.norm = "peak";
-    %     even_opt.trials = 2:2:nTrials;
-    %     even_opt.suppressVis = true;
-    %     [~,neuron_order_even,even_peth] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,even_opt);
-    %     even_sort_odd = even_peth(neuron_order_even,:);
-    %     figure();colormap('jet')
-    %     imagesc(flipud(even_sort_odd))
-    %     xlabel(sprintf("%s (msec)",label))
-    %     xticks([0 20 40])
-    %     xticklabels([0 1000 2000])
-    %     title(sprintf("%s Aligned Even Trial PETH Sorted by Odd Trials",label))
     
     all_opt = struct;
     all_opt.suppressVis = true;
-    all_opt.norm = "peak";
+    all_opt.norm = "zscore";
     all_opt.trials = 'all'; % 1:2:nTrials;
     [sorted_peth,index_sort_all{sIdx},~] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,all_opt);
     
@@ -232,10 +214,11 @@ for sIdx = 3:3
     regLabels = ones(length(subtr),1);
     regLabels(mid_responsive_neurons{sIdx}(:,varIdx)) = 2;
     figure()
-    gscatter(subtr,1:length(subtr),regLabels,[],'o')
+    gscatter(subtr,1:length(subtr),regLabels,[.4 .4 .4;1 0 0],'o')
     title("Gaussian fit improvement in variance explained by neuron")
     xlabel("Gaussian R^2 - Linear R^2")
-    ylabel("Neuron")
+    ylabel("Neuron") 
+    legend(["Non Mid-responsive","Mid-responsive"]);
     
     figure();colormap('jet')
     %     [~,index] = max(sorted_peth(mid_responsive_neurons{sIdx}(:,varIdx),:),[],2);
@@ -268,13 +251,13 @@ for sIdx = 3:3
         
         figure(1);colormap('jet')
         subplot(1,2,vIdx)
-        imagesc(squeeze(mid_responsive_peth(vIdx,:,:)));hold on
-        scatter(max_unshuffled_ix - ridge_width, 1:numel(max_unshuffled_ix),'wx')
-        scatter(max_unshuffled_ix + ridge_width, 1:numel(max_unshuffled_ix),'wx')
+        imagesc(flipud(squeeze(mid_responsive_peth(vIdx,:,:))));hold on
+%         scatter(max_unshuffled_ix - ridge_width, 1:numel(max_unshuffled_ix),'w*')
+%         scatter(max_unshuffled_ix + ridge_width, 1:numel(max_unshuffled_ix),'w*')
         for neuron = 1:nMid
             backgroundUnshuffled(neuron) =  mean(mid_fr_mat(neuron,[1:max(1,max_unshuffled_ix(neuron)-ridge_width),min(nBins-1,(max_unshuffled_ix(neuron)+ridge_width)):nBins-1]));
             ridgeUnshuffled(neuron) = mean(mid_fr_mat(neuron,max(1,max_unshuffled_ix(neuron)-ridge_width):min(nBins-1,max_unshuffled_ix(neuron)+ridge_width)));
-            r2b_ratio_unshuffled(neuron,vIdx) = (ridgeUnshuffled(neuron)+3) / (backgroundUnshuffled(neuron)+3); % rough step
+            r2b_ratio_unshuffled(neuron,vIdx) = (ridgeUnshuffled(neuron)) / (backgroundUnshuffled(neuron)+3); % rough step
         end
     end
     
@@ -286,7 +269,7 @@ for sIdx = 3:3
     % collect FR matrices
     fr_mat = cat(2,FR_decVar(sIdx).fr_mat{:});
     fr_mat = fr_mat(index_sort_all{sIdx}(mid_responsive_neurons{sIdx}(:,1)),:);
-    newShuffleControl = true;
+    newShuffleControl = false;
     
     if newShuffleControl == true
         r2b_ratio_shuffled = zeros(nMid,shuffRepeats);
@@ -835,7 +818,7 @@ pooled_rampSlopes = [];
 pooled_seqSlopes = [];
 dayVec = [];
 
-for sIdx = 1:3
+for sIdx = 3:3
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
     session = erase(sessions{sIdx}(1:end-4),'_'); % latex thing
@@ -1023,28 +1006,28 @@ for sIdx = 1:3
     
     %         colors = [0 0 0; 0 1 1;0 0 1;0 0 1];
     % Seq-PRT
-%     [r0,p0] = corrcoef(prog_slopes(one_rew_trials),prts(one_rew_trials));
-%     [r1,p1] = corrcoef(prog_slopes(sm1rew),prts(sm1rew));
-%     [r2,p2] = corrcoef(prog_slopes(md1rew),prts(md1rew));
-%     [r3,p3] = corrcoef(prog_slopes(lg1rew),prts(lg1rew));
-%     colors = cool(3);
-%     figure();hold on
-%     gscatter(prog_slopes(one_rew_trials),prts(one_rew_trials),rewsize(one_rew_trials),colors,'o')
-%     xlabel("Slope of sequence progression")
-%     ylabel("PRT")
-%     title(sprintf("Slope of sequence progression vs PRT (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
-%     legend("1 uL","2 uL","4 uL") 
-%     
-%     % Sequence-ramp correlation
-%     [r0,p0] = corrcoef(prog_slopes(one_rew_trials),slopes(one_rew_trials));
-%     [r1,p1] = corrcoef(prog_slopes(sm1rew),slopes(sm1rew));
-%     [r2,p2] = corrcoef(prog_slopes(md1rew),slopes(md1rew));
-%     [r3,p3] = corrcoef(prog_slopes(lg1rew),slopes(lg1rew));
-%     figure();hold on
-%     gscatter(prog_slopes(one_rew_trials),slopes(one_rew_trials),rewsize(one_rew_trials),colors,'o')
-%     title(sprintf("Slope of sequence progression vs slope of mean ramp (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
-%     xlabel("Slope of sequence progression")
-%     ylabel("Slope of Mean Ramp")
+    [r0,p0] = corrcoef(prog_slopes(one_rew_trials),prts(one_rew_trials));
+    [r1,p1] = corrcoef(prog_slopes(sm1rew),prts(sm1rew));
+    [r2,p2] = corrcoef(prog_slopes(md1rew),prts(md1rew));
+    [r3,p3] = corrcoef(prog_slopes(lg1rew),prts(lg1rew));
+    colors = cool(3);
+    figure();hold on
+    gscatter(prog_slopes(one_rew_trials),prts(one_rew_trials),rewsize(one_rew_trials),colors,'.')
+    xlabel("Slope of sequence progression")
+    ylabel("PRT")
+    title(sprintf("Slope of sequence progression vs PRT (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
+    legend("1 uL","2 uL","4 uL") 
+    
+    % Sequence-ramp correlation
+    [r0,p0] = corrcoef(prog_slopes(one_rew_trials),slopes(one_rew_trials));
+    [r1,p1] = corrcoef(prog_slopes(sm1rew),slopes(sm1rew));
+    [r2,p2] = corrcoef(prog_slopes(md1rew),slopes(md1rew));
+    [r3,p3] = corrcoef(prog_slopes(lg1rew),slopes(lg1rew));
+    figure();hold on
+    gscatter(prog_slopes(one_rew_trials),slopes(one_rew_trials),rewsize(one_rew_trials),colors,'.')
+    title(sprintf("Slope of sequence progression vs slope of mean ramp (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
+    xlabel("Slope of sequence progression")
+    ylabel("Slope of Mean Ramp")
     
     % Slope of mean sequence
 %     [r0,p0] = corrcoef(slopes_seq(one_rew_trials),prts(one_rew_trials));
@@ -1058,21 +1041,21 @@ for sIdx = 1:3
 %     xlabel("Mean sequence slopes")
     
     % Mean value of sequence-PRT correlation
-%     [r0,p0] = corrcoef(overall_mean_seq(one_rew_trials),prts(one_rew_trials));
-%     [r1,p1] = corrcoef(overall_mean_seq(sm1rew),prts(sm1rew));
-%     [r2,p2] = corrcoef(overall_mean_seq(md1rew),prts(md1rew));
-%     [r3,p3] = corrcoef(overall_mean_seq(lg1rew),prts(lg1rew));
-    %         figure();hold on
-    %         gscatter(overall_mean_seq(one_rew_trials),prts(one_rew_trials),rewsize(one_rew_trials),colors,'o')
-    %         title(sprintf("Mean Sequence Activity vs PRT (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
-    %         ylabel("PRT")
-    %         xlabel("Mean Sequence Activity")
-    
-    %         figure();hold on
-    %         gscatter(prog_slopes(one_rew_trials),slopes(one_rew_trials),rewsize(one_rew_trials),colors,'o')
-    %         title(sprintf("Slope of sequence progression vs slope of mean ramp (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
-    %         ylabel("Slope of mean ramp")
-    %         xlabel("Slope of sequence progression")
+    [r0,p0] = corrcoef(overall_mean_seq(one_rew_trials),prts(one_rew_trials));
+    [r1,p1] = corrcoef(overall_mean_seq(sm1rew),prts(sm1rew));
+    [r2,p2] = corrcoef(overall_mean_seq(md1rew),prts(md1rew));
+    [r3,p3] = corrcoef(overall_mean_seq(lg1rew),prts(lg1rew));
+    figure();hold on
+    gscatter(overall_mean_seq(one_rew_trials),prts(one_rew_trials),rewsize(one_rew_trials),colors,'.')
+    title(sprintf("Mean Sequence Activity vs PRT (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
+    ylabel("PRT")
+    xlabel("Mean Sequence Activity")
+
+%     figure();hold on
+%     gscatter(prog_slopes(one_rew_trials),slopes(one_rew_trials),rewsize(one_rew_trials),colors,'o')
+%     title(sprintf("Slope of sequence progression vs slope of mean ramp (overall p = %f, 1uL p = %f, 2 uL p = %f, 4 uL p = %f)",p0(2),p1(2),p2(2),p3(2)))
+%     ylabel("Slope of mean ramp")
+%     xlabel("Slope of sequence progression")
     
     %     end
     
@@ -1101,21 +1084,21 @@ p3 = mdl3.Coefficients.pValue(2);
 %
 figure()
 % subplot(1,3,1)
-gscatter(smProgSlopes,smPRTs,smPRTs_dayVec,[.25 1 1; 0 1 1; 0 .75 .75],'o');
+gscatter(smProgSlopes,smPRTs,smPRTs_dayVec,[.25 1 1; 0 1 1; 0 .75 .75],'.');
 title(sprintf("Pooled 1uL Sequence Progression Slope vs PRT (p = %f)",p1));
 ylabel("PRT")
 xlabel("Slope of sequence progression")
 % subplot(1,3,2)
 legend("3/15","3/16","3/17")
 figure()
-gscatter(mdProgSlopes(mdPRTs < 5),mdPRTs(mdPRTs < 5),mdPRTs_dayVec(mdPRTs < 5),[.75 .75 1; .5 .5 1; .25 .25 .75],'o');
+gscatter(mdProgSlopes(mdPRTs < 5),mdPRTs(mdPRTs < 5),mdPRTs_dayVec(mdPRTs < 5),[.75 .75 1; .5 .5 1; .25 .25 .75],'.');
 title(sprintf("Pooled 2uL Sequence Progression Slope vs PRT (p = %f)",p2));
 ylabel("PRT")
 xlabel("Slope of sequence progression")
 % subplot(1,3,3)
 legend("3/15","3/16","3/17")
 figure()
-gscatter(lgProgSlopes,lgPRTs,lgPRTs_dayVec,[1 .25 1; 1 0 1; .75 0 .75],'o');
+gscatter(lgProgSlopes,lgPRTs,lgPRTs_dayVec,[1 .25 1; 1 0 1; .75 0 .75],'.');
 title(sprintf("Pooled 4 uL Sequence Progression Slope vs PRT (p = %f)",p3));
 ylabel("PRT")
 xlabel("Slope of sequence progression")
@@ -1125,7 +1108,7 @@ legend("3/15","3/16","3/17")
 mdl = fitlm(pooled_seqSlopes,pooled_rampSlopes);
 p = mdl.Coefficients.pValue(2);
 figure()
-gscatter(pooled_seqSlopes,pooled_rampSlopes,dayVec,[],'o')
+gscatter(pooled_seqSlopes,pooled_rampSlopes,dayVec,[],'.')
 title(sprintf("Pooled sequence progression slope vs mean ramp slope (p = %f)",p))
 xlabel("Pooled sequence progression slope")
 ylabel("Pooled mean ramp slope")

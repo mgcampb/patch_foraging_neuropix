@@ -129,7 +129,7 @@ end
 
 %% Sort by odd, visualize by even 
 close all 
-for sIdx = 1:3 
+for sIdx = 3:3 
     decVar_bins = linspace(0,2,41); 
     nTrials = length(FR_decVar(sIdx).fr_mat); 
     session = sessions{sIdx}(1:end-4);
