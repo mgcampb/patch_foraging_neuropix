@@ -11,7 +11,7 @@ addpath(genpath('/Users/joshstern/Documents/UchidaLab_neuralData'));
 opt = struct;
 opt.tbin = 0.02; % time bin for whole session rate matrix (in sec)
 tbin_ms = opt.tbin*1000; % for making index vectors
-opt.smoothSigma_time = 0.05 ; % 0.1; % gauss smoothing sigma for rate matrix (in sec)
+opt.smoothSigma_time = 0.1 ; % 0.1; % gauss smoothing sigma for rate matrix (in sec)
 
 sessions = dir(fullfile(paths.data,'*.mat'));
 sessions = {sessions.name};
@@ -156,49 +156,69 @@ for sIdx = 3:3
     floor_prts = floor(prts);
     patchType = patches(:,2);
     rewsize = mod(patchType,10);  
-    [~,rewsort] = sort(rewsize);
+    [~,rewsort] = sort(rewsize); 
+    
+    % sort by PRT within 10,11,20,22,40,44, order [10,20,40,11,22,44]
+    prt_R0_sort = []; 
+    prt_RR_sort = []; 
+    for iRewsize = [1,2,4] 
+        trialsr0x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) < 0 & prts > 2.55);
+        trialsrrx = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & prts > 2.55); 
+
+        % sort by PRTs within reward history condition
+        [~,prtsr0_sort] = sort(prts(trialsr0x));
+        prtsr0_sort = trialsr0x(prtsr0_sort);
+        [~,prtsrr_sort] = sort(prts(trialsrrx)); 
+        prtsrr_sort = trialsrrx(prtsrr_sort);
+        prt_rew2_sort = [prtsr0_sort ; prtsrr_sort]; 
+        
+        prt_R0_sort = [prt_R0_sort;prtsr0_sort];
+        prt_RR_sort = [prt_RR_sort;prtsrr_sort];
+    end 
+    
+    prt_withinRew_sort = [prt_R0_sort ; prt_RR_sort];
     
     nTrials = numel(prts);  
     
     good_cells_sorted = good_cells(index_sort_all{sIdx});
     
-    % first make trial_rasters as this will be easier to visualize  
-    trial_rasters = {nTrials};
-    for iTrial = 1:nTrials
-        trial_spikes = {nNeurons}; % make cell array, then concat all in one step for speed 
-        trial_sts = dat.sp.st(dat.sp.st > patchstop_sec(iTrial) & dat.sp.st < patchleave_sec(iTrial)) - patchstop_sec(iTrial); 
-        trial_clu = dat.sp.clu(dat.sp.st > patchstop_sec(iTrial) & dat.sp.st < patchleave_sec(iTrial)); 
-        for iNeuron = 1:nNeurons
-            good_cells_ix = good_cells_sorted(iNeuron); 
-            i_spike_ts = unique(trial_sts(trial_clu == good_cells_ix));  
-            trial_spikes{iNeuron} = [iNeuron + zeros(numel(i_spike_ts),1) i_spike_ts];
-        end  
-        % add to our data structure
-        trial_rasters{iTrial} = cat(1,trial_spikes{:}); 
-        if mod(iTrial,10) == 0
-            fprintf("Finished trial %i \n",iTrial) 
-        end
-    end 
+%     % first make trial_rasters as this will be easier to visualize  
+%     trial_rasters = {nTrials};
+%     for iTrial = 1:nTrials
+%         trial_spikes = {nNeurons}; % make cell array, then concat all in one step for speed 
+%         trial_sts = dat.sp.st(dat.sp.st > patchstop_sec(iTrial) & dat.sp.st < patchleave_sec(iTrial)) - patchstop_sec(iTrial); 
+%         trial_clu = dat.sp.clu(dat.sp.st > patchstop_sec(iTrial) & dat.sp.st < patchleave_sec(iTrial)); 
+%         for iNeuron = 1:nNeurons
+%             good_cells_ix = good_cells_sorted(iNeuron); 
+%             i_spike_ts = unique(trial_sts(trial_clu == good_cells_ix));  
+%             trial_spikes{iNeuron} = [iNeuron + zeros(numel(i_spike_ts),1) i_spike_ts];
+%         end  
+%         % add to our data structure
+%         trial_rasters{iTrial} = cat(1,trial_spikes{:}); 
+%         if mod(iTrial,10) == 0
+%             fprintf("Finished trial %i \n",iTrial) 
+%         end
+%     end 
     
     % now make singleCell_trialed_sts 
     singleCell_trialed_sts = {nNeurons}; 
     singleCell_trialed_smoothed = {nNeurons};
     sec_before = 0; 
-    sec_after = 1000 / 1000;
+    sec_after = 2000 / 1000;
     for iNeuron = 1:nNeurons  
-        neuron_spikes = {nTrials}; % make cell array, then concat all in one step for speed  
-        smoothed = {nTrials};
+        neuron_spikes = {numel(prt_withinRew_sort)}; % make cell array, then concat all in one step for speed  
+        smoothed = {numel(prt_withinRew_sort)};
         good_cells_ix = good_cells_sorted(iNeuron); 
         neuron_sts = dat.sp.st(dat.sp.clu == good_cells_ix); 
         neuron_clu = dat.sp.clu(dat.sp.clu == good_cells_ix); 
-        for j = 1:nTrials  
-            iTrial = rewsort(j);
+        for j = 1:numel(prt_withinRew_sort)  
+            iTrial = prt_withinRew_sort(j);
             start = patchstop_sec(iTrial) - sec_before; 
             finish = patchstop_sec(iTrial) + sec_after;
             i_spike_ts = unique(neuron_sts(neuron_sts > start & neuron_sts < finish)) - patchstop_sec(iTrial);  
-            neuron_spikes{iTrial} = [iTrial + zeros(numel(i_spike_ts),1) i_spike_ts];  
+            neuron_spikes{j} = [j + zeros(numel(i_spike_ts),1) i_spike_ts];  
             
-            smoothed{iTrial} = FR_decVar(sIdx).fr_mat{iTrial}(index_sort_all{sIdx}(iNeuron),1:round(sec_after * 1000 / tbin_ms));
+            smoothed{j} = FR_decVar(sIdx).fr_mat{iTrial}(index_sort_all{sIdx}(iNeuron),1:round(sec_after * 1000 / tbin_ms));
         end
         % add to our data structure
         singleCell_trialed_sts{iNeuron} = cat(1,neuron_spikes{:});  
@@ -229,8 +249,15 @@ end
 
 %% visualize some single cells   
 
-colors = cool(3); 
-rewtrials = cumsum([numel(find(rewsize == 1)) numel(find(rewsize == 2)) numel(find(rewsize == 4))]);
+colors3rew = [0 1 1 ;.5 .5 1;1 0 1;.5 1 1 ; .75 .75 1 ; 1 .5 1];
+rewtrials = fliplr(cumsum([1 numel(find(rewsize == 1)) numel(find(rewsize == 2)) numel(find(rewsize == 4))])); 
+trials10x = find(rew_barcode(:,1) == 1 & rew_barcode(:,2) < 0 & prts > 2.55);
+trials20x = find(rew_barcode(:,1) == 2 & rew_barcode(:,2) < 0 & prts > 2.55);
+trials40x = find(rew_barcode(:,1) == 4 & rew_barcode(:,2) < 0 & prts > 2.55);
+trials11x = find(rew_barcode(:,1) == 1 & rew_barcode(:,2) == 1 & prts > 2.55);
+trials22x = find(rew_barcode(:,1) == 2 & rew_barcode(:,2) == 2 & prts > 2.55);
+trials44x = find(rew_barcode(:,1) == 4 & rew_barcode(:,2) == 4 & prts > 2.55);
+r0trials = fliplr(cumsum([1 numel(trials10x) numel(trials20x) numel(trials40x) numel(trials11x) numel(trials22x) numel(trials44x)]));
 close all  
 for iNeuron = 60:70
     figure()  
@@ -239,20 +266,22 @@ for iNeuron = 60:70
     title(sprintf("Neuron %i Spiking Activity",iNeuron))
     xlabel("Time (msec)")    
     ylabel("Trials") 
-    yticks([])  
+%     yticks([])  
     hold on
-    % shade in raster by reward size 
-    for iRewsize = [4,2,1] 
-        v = [1 100; 1 160;1000 160; 1000 100];
+    % shade in raster by reward size  
+    for rewcounter = 1:6
+        v = [1 r0trials(rewcounter); 1 r0trials(rewcounter+1);2000 r0trials(rewcounter+1); 2000 r0trials(rewcounter)];
         f = [1 2 3 4];
-        patch('Faces',f,'Vertices',v,'FaceColor',colors(min(iRewsize,3),:),'FaceAlpha',.1,'EdgeColor','none'); 
-    end
+        patch('Faces',f,'Vertices',v,'FaceColor',colors3rew(rewcounter,:),'FaceAlpha',.1,'EdgeColor','none');  
+    end 
+    xlim([1 2000]) 
+    ylim([1 numel(prt_withinRew_sort)])
     subplot(2,1,2) 
     imagesc(flipud(zscore(singleCell_trialed_smoothed{iNeuron},[],2)));colormap('jet')  
     title(sprintf("Neuron %i Z-Scored Activity",iNeuron))
     xlabel("Time (msec)")  
-    xticks([12 25 37 50]);xticklabels([250 500 750 1000]) 
-    yticks([]) 
+    xticks([12 25 37 50 62 75 87 100]);xticklabels([250 500 750 1000 1250 1500 1750 2000]) 
+%     yticks([]) 
     ylabel("Trials") 
     colorbar()
 end

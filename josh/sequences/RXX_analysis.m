@@ -6,124 +6,28 @@
 % 5. profit
 
 paths = struct;
-paths.data = '/Users/joshstern/Documents/UchidaLab_matlab/neuroPixelsData/80';
-paths.figs = '/Users/joshstern/Documents/UchidaLab_matlab/neural_data_figs'; % where to save figs
+paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/80';
+paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab/HGK_analysis_tools'));
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab'));
+addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData/HGK_analysis_tools'));
+addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData'));
 
 % analysis options
 opt = struct;
 opt.tbin = 0.02; % time bin for whole session rate matrix (in sec)
-tbin_ms = opt.tbin*1000; % for making index vectors
 opt.smoothSigma_time = 0.1; % gauss smoothing sigma for rate matrix (in sec)
 
 sessions = dir(fullfile(paths.data,'*.mat'));
 sessions = {sessions.name};
 
-%% Extract FR matrices and timing information
-
-FR_decVar = struct;
+%% Extract FR matrices and timing information 
+FR_decVar = struct; 
 FRandTimes = struct;
-
-for sIdx = 3:3 % 1:numel(sessions)
-    session = sessions{sIdx}(1:end-4);
-    fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
-    % load data
-    dat = load(fullfile(paths.data,session));
-    good_cells = dat.sp.cids(dat.sp.cgs==2); 
-    
-%     [~, spike_depths_all] = templatePositionsAmplitudes(dat.sp.temps, dat.sp.winv, dat.sp.ycoords, dat.sp.spikeTemplates, dat.sp.tempScalingAmps);
-% 
-%     % take median spike depth for each cell
-%     spike_depths = nan(size(good_cells));
-% 
-%     parfor cIdx = 1:numel(good_cells)
-%         spike_depths(cIdx) = median(spike_depths_all(dat.sp.clu==good_cells(cIdx)));
-%     end  
-%     
-%     mm1_units = find(spike_depths > (max(spike_depths) - 1000));
-%     
-%     figure()
-%     hist(spike_depths);
-%     title("Distribution of spike depths")
-    
-    % time bins
-    opt.tstart = 0;
-    opt.tend = max(dat.sp.st);
-    
-    % behavioral events to align to
-    patchcue_ms = dat.patchCSL(:,1)*1000;
-    patchstop_ms = dat.patchCSL(:,2)*1000;
-    patchleave_ms = dat.patchCSL(:,3)*1000;
-    
-    % Trial level features for decision variable creation
-    patches = dat.patches;
-    patchCSL = dat.patchCSL;
-
-    new_fr_mat = true;
-    if new_fr_mat == true
-        % compute firing rate matrix
-        tic
-        [fr_mat, tbincent] = calcFRVsTime(good_cells,dat,opt); % calc from full matrix
-        toc
-    end 
-    
-%     fr_mat = fr_mat(mm1_units,:); 
-%     display("Using units from top 1 mm of probe")
-
-    buffer = 500; % buffer before leave in ms
-    
-    % create index vectors from our update timestamp vectors
-    patchstop_ix = round(patchstop_ms / tbin_ms) + 1;
-    patchleave_ix = min(round((patchleave_ms - buffer) / tbin_ms) + 1,size(fr_mat,2)); % might not be good
-    
-    % reinitialize ms vectors to make barcode matrix
-    patchstop_ms = patchCSL(:,2);
-    patchleave_ms = patchCSL(:,3);
-    rew_ms = dat.rew_ts;
-    rew_size = mod(dat.patches(:,2),10);
-    prts = patchCSL(:,3) - patchCSL(:,2);
-    floor_prts = floor(prts);
-    patchType = patches(:,2);
-    rewsize = mod(patchType,10);
-    
-    % make barcode matrices
-    nTimesteps = 15;
-    rew_barcode = zeros(length(patchCSL) , nTimesteps);
-    for iTrial = 1:length(patchCSL)
-        rew_indices = round(rew_ms(rew_ms >= patchstop_ms(iTrial) & rew_ms < patchleave_ms(iTrial)) - patchstop_ms(iTrial)) + 1;
-        last_rew_ix = max(rew_indices);
-        rew_sec_cell{iTrial} = rew_indices(rew_indices > 1);
-        rew_barcode(iTrial , (last_rew_ix + 1):end) = -1; % set part of patch after last rew_ix = -1
-        rew_barcode(iTrial , (floor_prts(iTrial) + 1):end) = -2; % set part of patch after leave = -2
-        rew_barcode(iTrial , rew_indices) = rewsize(iTrial);
-    end
-    
-    % make struct
-    FR_decVar(sIdx).fr_mat = {length(dat.patchCSL)};
-    for iTrial = 1:length(dat.patchCSL)
-        FR_decVar(sIdx).fr_mat{iTrial} = fr_mat(:,patchstop_ix(iTrial):patchleave_ix(iTrial));
-        trial_len_ix = size(FR_decVar(sIdx).fr_mat{iTrial},2);
-        FR_decVar(sIdx).decVarTime{iTrial} = (1:trial_len_ix) * tbin_ms / 1000;
-        FR_decVar(sIdx).decVarTimeSinceRew{iTrial} = (1:trial_len_ix) * tbin_ms / 1000;
-        
-        for r = 1:numel(rew_sec_cell{iTrial})
-            rew_ix = (rew_sec_cell{iTrial}(r) - 1) * 1000 / tbin_ms;
-            FR_decVar(sIdx).decVarTimeSinceRew{iTrial}(rew_ix:end) =  (1:length(FR_decVar(sIdx).decVarTimeSinceRew{iTrial}(rew_ix:end))) * tbin_ms / 1000;
-        end
-    end
-    
-    figure();hold on;
-    plot(FR_decVar(sIdx).decVarTime{39})
-    hold on
-    plot(FR_decVar(sIdx).decVarTimeSinceRew{39})
-    legend("Time","Time since last reward")
-    title("Trial 39 decision variables")
-    
-    FRandTimes(sIdx).fr_mat = fr_mat;
-    FRandTimes(sIdx).stop_leave_ms = [patchstop_ms patchleave_ms];
-    FRandTimes(sIdx).stop_leave_ix = [patchstop_ix patchleave_ix];
+for sIdx = 3:3 
+    buffer = 500;
+    [FR_decVar_tmp,FRandTimes_tmp] = genSeqStructs(paths,sessions,opt,sIdx,buffer);
+    FR_decVar(sIdx) = FR_decVar_tmp; 
+    FRandTimes(sIdx) = FRandTimes_tmp; 
 end
 
 %% Sort by all trials to get ordering
@@ -247,7 +151,7 @@ end
 %% Now visualize RX ramp PETHs w/ various sorts
 close all
 conditions = {"10","20","40","11","22","44"};
-for sIdx = 3:3
+for sIdx = 1:1
     ramp_idx = 150:300;
     % iterate over ramp-like neurons and take slope of ramp linreg
     slopes = nan(numel(ramp_idx),1);
@@ -312,7 +216,7 @@ for sIdx = 3:3
     patchleave_ms = data.patchCSL(:,3);
     rew_ms = data.rew_ts;
 
-    sec3ix = 2000/tbin_ms;
+    sec3ix = 3000/tbin_ms;
     
     % Trial level features
     patches = data.patches;
@@ -442,22 +346,6 @@ for sIdx = 3:3
         xticks([0 50 100 150])
         xticklabels([0 1 2 3])
         yticks([0,100,200,300])
-        xlabel("Time on Patch (sec)")
-    end
-    
-    figure();colormap('jet')
-    for cIdx = 5:8
-        subplot(2,2,cIdx-4)
-        imagesc(flipud(RXX_data{sIdx}(cIdx).fr_mat(150:end,:)))
-        if cIdx == 1
-            cl1 = caxis;
-        end
-        caxis(cl1)
-%         title(sprintf("%s Sort Excluding %s",conditions{cIdx},conditions{cIdx}))
-        title(sprintf("%s Sort by Avg PETH",conditions{cIdx}))
-%         xticks([0 50 100 150])
-%         xticklabels([0 1 2 3]) 
-%         yticks([0,100,200,300])
         xlabel("Time on Patch (sec)")
     end
 

@@ -1,0 +1,83 @@
+%% Quantify sequentiality across days using the sequentiality index (SI) from Orhan and Ma 2019 
+
+% SI = entropy of peak time distn + mean log ridge to background ratio
+% Accounts for 1) active periods of neurons should tile uniformly and 
+%              2) each neuron should only be active in short interval 
+
+%% Starting on simulated data
+% show ramp, chaos, and sequence
+close all
+nNeurons = 50;
+time = linspace(.1,10,100);
+
+% Sequence of gaussian activations
+peaks = linspace(0,10,nNeurons);
+ideal_seq = flipud(normpdf(repmat(time,[nNeurons,1])',peaks,ones(1,nNeurons))'); 
+
+% Chaotic activity (Random) 
+ideal_chaos = rand(nNeurons,length(time)); 
+
+% Ramping activity (exponential with varying tau) 
+tau_min = .5; 
+tau_scaling = .1;
+taus = tau_min + tau_scaling * rand(nNeurons,1);
+ideal_ramp = exp(time .* taus); 
+
+% Mix of sequence and ramping activity 
+half = round(nNeurons / 2);
+seq_ramp_mix = zscore([ideal_ramp(half+1:end,:);ideal_seq(half+1:end,:)],[],2);
+
+% now calculate SI 
+opt = struct; 
+ridgeWidth = 2;
+[SI_seq,SI_seq_norm,r2b_seq,entropy_seq] = calculateSI(ideal_seq,ridgeWidth,opt);
+[SI_chaos,SI_chaos_norm,r2b_chaos,entropy_chaos] = calculateSI(ideal_chaos,ridgeWidth,opt);
+[SI_mix,SI_mix_norm,r2b_mix,entropy_mix] = calculateSI(seq_ramp_mix,ridgeWidth,opt);
+[SI_ramp,SI_ramp_norm,r2b_ramp,entropy_ramp] = calculateSI(ideal_ramp,ridgeWidth,opt);
+
+% visualize example activity and title with SI
+figure();colormap('jet') 
+subplot(2,4,1)
+imagesc(ideal_ramp) 
+title(sprintf("Ramping (SI = %.2f, normSI = %.2f)",SI_ramp,SI_ramp_norm))
+subplot(4,4,9) 
+plot(ideal_ramp(1:5,:)','linewidth',2) 
+title("Ramp PSTHs") 
+yticks([])
+ylabel("FR (A.U.)")
+subplot(2,4,2)
+imagesc(ideal_chaos) 
+title(sprintf("Chaotic (SI = %.2f, normSI = %.2f)",SI_chaos,SI_chaos_norm))
+subplot(4,4,10) 
+plot(ideal_chaos(1:2,:)','linewidth',2) 
+title("Chaotic PSTHs")
+yticks([])
+subplot(2,4,3)
+imagesc(seq_ramp_mix) 
+title(sprintf("Chaotic (SI = %.2f, normSI = %.2f)",SI_chaos,SI_chaos_norm))
+subplot(4,4,10) 
+plot(seq_ramp_mix(1:10:50,:)','linewidth',2) 
+title("S PSTHs")
+yticks([])
+ylabel("FR (A.U.)")
+subplot(2,4,4)
+imagesc(ideal_seq)  
+title(sprintf("Sequential (SI = %.2f, normSI = %.2f)",SI_seq,SI_seq_norm))
+subplot(4,4,12) 
+plot(ideal_seq','linewidth',2)  
+title("Sequential PSTHs")
+yticks([])
+ylabel("FR (A.U.)") 
+
+% visualize entropy and r2b 
+figure() 
+hold on
+scatter(mean(r2b_seq),entropy_seq,300,'.') 
+scatter(mean(r2b_chaos),entropy_chaos,300,'.')  
+scatter(mean(r2b_mix),entropy_mix,300,'.')  
+scatter(mean(r2b_ramp),entropy_ramp,300,'.')  
+legend("Sequence","Chaos","Seq/Ramp Mix","Ramp")
+xlabel("Ridge to background ratio")
+ylabel("Entropy of Peak Distribution (Nat)")
+
+

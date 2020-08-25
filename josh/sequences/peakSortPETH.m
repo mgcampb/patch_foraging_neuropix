@@ -56,16 +56,12 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
         end
     end
 
-    unsorted_peth = zeros(size(FR_decVar.fr_mat{1},1), numel(decVar_bins)-1);
-
-    for dIdx = 1:(numel(decVar_bins) - 1)
-        if length(find(fr_mat(:,decVar > decVar_bins(dIdx) & decVar < decVar_bins(dIdx+1)))) > 0
-            unsorted_peth(:,dIdx) = mean(fr_mat(:,decVar > decVar_bins(dIdx) & decVar < decVar_bins(dIdx+1)),2);
-        elseif dIdx > 1
-            unsorted_peth(:,dIdx) = mean(fr_mat(:,decVar > decVar_bins(dIdx-1) & decVar < decVar_bins(dIdx)),2);
-        else
-            unsorted_peth(:,dIdx) = 0;
-        end
+    % perform averaging over bins step with histcounts
+    [~,~,bin] = histcounts(decVar,decVar_bins);
+    disp(size(bin))
+    unsorted_peth = nan(size(fr_mat,1),max(bin));
+    for i = 1:max(bin)
+        unsorted_peth(:,i) = mean(fr_mat(:,bin==i),2);
     end
 
     if norm == "zscore"
@@ -93,7 +89,7 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
         imagesc(flipud(sorted_peth));
         colorbar()
         colormap('jet')
-        xlim([1,40])
+        xlim([1,numel(decVar_bins)])
         if shuffle == false
             xlabel([label; " (ms)"])
             title(sprintf("PETH Sorted to %s",label))
