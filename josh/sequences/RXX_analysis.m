@@ -6,7 +6,7 @@
 % 5. profit
 
 paths = struct;
-paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/80';
+paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/76';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 
 addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData/HGK_analysis_tools'));
@@ -24,7 +24,7 @@ sessions = {sessions.name};
 %% Extract FR matrices and timing information 
 FR_decVar = struct; 
 FRandTimes = struct;
-for sIdx = 3:3
+for sIdx = 1:1
     buffer = 500;
     [FR_decVar_tmp,FRandTimes_tmp] = genSeqStructs(paths,sessions,opt,sIdx,buffer);
     % assign to sIdx
@@ -39,7 +39,7 @@ end
 %% Sort by all trials to get ordering
 
 index_sort_all = {sIdx};
-for sIdx = 3:3
+for sIdx = 1:1
     decVar_bins = linspace(0,2,41);
     opt.norm = "zscore";
     opt.trials = 'all';

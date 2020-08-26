@@ -4,7 +4,7 @@ function threePaneFitPlot(avgFR_decVar_sorted,avgFR_decVar_sortedFitResidual,avg
     colormap('jet')
     imagesc(flipud(avgFR_decVar_sorted))
     colorbar()
-    title("Even Trials sorted by Odd")
+    title("Avg PETH")
     ylabel("Neuron")
     xlim([0,40])
     xlabel(alignmentLabel)

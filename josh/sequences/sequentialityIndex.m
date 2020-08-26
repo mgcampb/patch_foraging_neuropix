@@ -7,7 +7,7 @@
 %% Starting on simulated data
 % show ramp, chaos, and sequence
 close all
-nNeurons = 100;
+nNeurons = 20;
 time = linspace(.1,10,40);
 
 % Sequence of gaussian activations
@@ -25,7 +25,12 @@ ideal_ramp = exp(time .* taus);
 
 % Mix of sequence and ramping activity 
 half = round(nNeurons / 2);
-seq_ramp_mix = zscore([ideal_ramp(half+1:end,:);ideal_seq(half+1:end,:)],[],2);
+seq_ramp_mix = zscore([ideal_ramp(half+1:end,:);ideal_seq(half+1:end,:)],[],2); 
+
+% Linear ramping 
+slopes = rand(nNeurons,1); 
+intercepts = rand(nNeurons,1); 
+linear_ramp = time .* slopes + intercepts;
 
 % now calculate SI 
 opt = struct; 
@@ -33,7 +38,8 @@ ridgeWidth = 2;
 [SI_seq,SI_seq_norm,log_r2b_seq,entropy_seq] = calculateSI(ideal_seq,ridgeWidth,opt);
 [SI_chaos,SI_chaos_norm,log_r2b_chaos,entropy_chaos] = calculateSI(ideal_chaos,ridgeWidth,opt);
 [SI_mix,SI_mix_norm,log_r2b_mix,entropy_mix] = calculateSI(seq_ramp_mix,ridgeWidth,opt);
-[SI_ramp,SI_ramp_norm,log_r2b_ramp,entropy_ramp] = calculateSI(ideal_ramp,ridgeWidth,opt);
+[SI_ramp,SI_ramp_norm,log_r2b_ramp,entropy_ramp] = calculateSI(ideal_ramp,ridgeWidth,opt); 
+[SI_linRamp,SI_linRamp_norm,log_r2b_linRamp,entropy_linRamp] = calculateSI(linear_ramp,ridgeWidth,opt); 
 
 % visualize example activity and title with SI
 figure();colormap('jet') 
@@ -98,7 +104,8 @@ scatter(mean(log_r2b_seq),entropy_seq,300,'.')
 scatter(mean(log_r2b_chaos),entropy_chaos,300,'.')  
 scatter(mean(log_r2b_mix),entropy_mix,300,'.')  
 scatter(mean(log_r2b_ramp),entropy_ramp,300,'.')  
-legend("Sequence","Chaos","Seq/Ramp Mix","Ramp")
+scatter(mean(log_r2b_linRamp),entropy_linRamp,300,'.')  
+legend("Sequence","Chaos","Seq/Ramp Mix","Exp Ramp","Linear Ramp")
 xlabel("Log Ridge to Background Ratio")
 ylabel("Entropy of Peak Distribution (Nat)")
 title("Components of SI Between Idealized Activity Patterns")
@@ -107,7 +114,7 @@ title("Components of SI Between Idealized Activity Patterns")
 % Extract FR matrices and timing information 
 
 paths = struct;
-paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/78';
+paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/80';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 
 addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData/HGK_analysis_tools'));
@@ -126,7 +133,7 @@ FR_decVar = struct;
 FRandTimes = struct;
 index_sort_all = {numel(sessions)};
 
-for sIdx = 2:2
+for sIdx = 1:1
     [FR_decVar_tmp,FRandTimes_tmp] = genSeqStructs(paths,sessions,calc_frOpt,sIdx,buffer);
     % assign to sIdx
     FR_decVar(sIdx).fr_mat = FR_decVar_tmp.fr_mat;
@@ -159,6 +166,69 @@ for sIdx = 2:2
     [SI_317,SI_317_norm,log_r2b_317,entropy_317] = calculateSI(sorted_peth,ridgeWidth,opt);
     [SI_317_shuff,SI_317_norm_shuff,log_r2b_317_shuff,entropy_317_shuff] = calculateSI(shuffled_sorted_peth,ridgeWidth,opt);
     
+    % visualize example activity and title with SI
+    figure();colormap('jet') 
+    subplot(2,4,1)
+    imagesc(ideal_ramp) 
+    ylabel("Neurons")
+    xlabel("Time")
+    xticks([])
+    title(sprintf("Ramp \n (SI = %.2f, normSI = %.2f)",SI_ramp,max(0,SI_ramp_norm)))
+    subplot(4,4,9) 
+    plot(ideal_ramp(1:round(nNeurons/5):nNeurons,:)','linewidth',2) 
+    title("Ramp PSTHs") 
+    ylabel("FR")
+    xlabel("Time")
+    yticks([])
+    xticks([])
+    subplot(2,4,2)
+    imagesc(ideal_chaos) 
+    ylabel("Neurons")
+    xlabel("Time")
+    xticks([])
+    title(sprintf("Chaotic \n (SI = %.2f, normSI = %.2f)",SI_chaos,SI_chaos_norm))
+    subplot(4,4,10) 
+    plot(ideal_chaos(1:2,:)','linewidth',2) 
+    title("Chaotic PSTHs")
+    ylabel("FR")
+    xlabel("Time")
+    yticks([])
+    xticks([])
+    subplot(2,4,3)
+    imagesc(seq_ramp_mix) 
+    ylabel("Neurons")
+    xlabel("Time")
+    xticks([])
+    title(sprintf("Seq/Ramp Mix \n (SI = %.2f, normSI = %.2f)",SI_mix,SI_mix_norm))
+    subplot(4,4,11) 
+    plot(seq_ramp_mix(1:round(nNeurons/5):nNeurons,:)','linewidth',2) 
+    title("Seq/Ramp Mix PSTHs")
+    yticks([])
+    ylabel("FR")
+    xlabel("Time")
+    xticks([])
+    subplot(2,4,4)
+    imagesc(ideal_seq)  
+    ylabel("Neurons")
+    xlabel("Time")
+    xticks([])
+    title(sprintf("m80 3/15 \n (SI = %.2f, normSI = %.2f)",SI_seq,SI_seq_norm))
+    subplot(4,4,12) 
+    plot(ideal_seq(1:round(nNeurons/5):nNeurons,:)','linewidth',2)  
+    title("m80 3/15 PSTHs")
+    yticks([])
+    ylabel("FR") 
+    xlabel("Time")
+    xticks([])
+    title(sprintf("Sequential \n (SI = %.2f, normSI = %.2f)",SI_seq,SI_seq_norm))
+    subplot(4,4,12) 
+    plot(ideal_seq(1:round(nNeurons/5):nNeurons,:)','linewidth',2)  
+    title("Sequential PSTHs")
+    yticks([])
+    ylabel("FR") 
+    xlabel("Time")
+    xticks([])
+
     % visualize entropy and r2b 
     figure() 
     hold on
@@ -168,7 +238,7 @@ for sIdx = 2:2
     scatter(mean(log_r2b_ramp),entropy_ramp,300,'.')  
     scatter(mean(log_r2b_317),entropy_317,300,'.')  
     scatter(mean(log_r2b_317_shuff),entropy_317_shuff,300,'.')  
-    legend("Sequence","Chaos","Seq/Ramp Mix","Ramp","m80 3/17","shuffled m80 3/17")
+    legend("Sequence","Chaos","Seq/Ramp Mix","Ramp","m80 3/15","shuffled m80 3/15")
     xlabel("Log Ridge to Background Ratio")
     ylabel("Entropy of Peak Distribution (Nat)")
     title("Components of SI Between Activity Patterns")

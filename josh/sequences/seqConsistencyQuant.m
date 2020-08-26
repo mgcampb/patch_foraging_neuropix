@@ -1,11 +1,11 @@
 %% Quantify the distribution of peak firing rate time to assess consistency
 clear
 paths = struct;
-paths.data = '/Users/joshstern/Documents/UchidaLab_matlab/neuroPixelsData/80';
-paths.figs = '/Users/joshstern/Documents/UchidaLab_matlab/neural_data_figs'; % where to save figs
+paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/80';
+paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab/HGK_analysis_tools'));
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab'));
+addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData/HGK_analysis_tools'));
+addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData'));
 
 % analysis options
 opt = struct;
@@ -117,12 +117,12 @@ end
 %% Get order from avg PETH
 close all
 index_sort_all = {numel(sessions)};
-for sIdx = 3 
+for sIdx = 1:3 
     decVar_bins = linspace(0,2,41); 
     nTrials = length(FR_decVar(sIdx).fr_mat); 
     opt.norm = "zscore";
     opt.trials = 'all';
-    dvar = "timesince";
+    dvar = "time";
     [sorted_peth,neuron_order,unsorted_peth] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,opt);
     index_sort_all{sIdx} = neuron_order;
 end
@@ -427,7 +427,7 @@ for sIdx = 1:3
     end
     
     % visualize
-    bins = (search_begin+1):4:(2000 / tbin_ms);
+    bins = (search_begin+1):2:(2000 / tbin_ms);
     % build probability density matrix
     activity_density = nan(size(after_rew_ix,1),length(bins));
     for neuron = 1:nNeurons
