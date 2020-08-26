@@ -446,7 +446,7 @@ for sIdx = 1:3
     figure()
     imagesc(flipud(activity_density(:,1:(end-1))))
     xlabel("Time after reward reception (msec)")
-    xticks([1,3,6,9,12,15,18,21,24])
+    xticks([1,3,6,9,12,15,18,21,24] * 2)
     xticklabels([0,250,500,750,1000,1250,1500,1750,2000])
     colorbar()
     session_name = ['m' session(1:2) ' ' session(end-2:end)];
