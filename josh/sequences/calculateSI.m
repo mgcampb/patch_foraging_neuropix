@@ -52,7 +52,7 @@ function [SI,SInorm,log_r2b,entropy] = calculateSI(PETH,ridgeWidth,opt)
     entropy = -sum(probabilities .* log(probabilities)); % calculate shannon entropy! 
     
     % raw SI calculation
-    SI = entropy + mean(log_r2b);
+    SI = entropy + 3 * mean(log_r2b); % upweight ridge to background ratio
     
     if innerCall == false
         % Now find SI for ramping/sequence populations to get normalized value 
@@ -68,7 +68,8 @@ function [SI,SInorm,log_r2b,entropy] = calculateSI(PETH,ridgeWidth,opt)
         % calculate baseline SIs
         opt_rec = opt; 
         opt_rec.innerCall = true; % break recursion 
-        opt_rec.suppressVis = true;
+        opt_rec.suppressVis = true; 
+        opt_rec.norm = "zscore";
         SI_seq = calculateSI(ideal_seq,ridgeWidth,opt_rec);
         SI_ramp = calculateSI(ideal_ramp,ridgeWidth,opt_rec);  
         

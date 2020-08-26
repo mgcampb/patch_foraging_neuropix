@@ -14,7 +14,8 @@ addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData'));
 
 % analysis options
 opt = struct;
-opt.tbin = 0.02; % time bin for whole session rate matrix (in sec)
+opt.tbin = 0.02; % time bin for whole session rate matrix (in sec) 
+tbin_ms = opt.tbin * 1000;
 opt.smoothSigma_time = 0.1; % gauss smoothing sigma for rate matrix (in sec)
 
 sessions = dir(fullfile(paths.data,'*.mat'));
@@ -23,11 +24,16 @@ sessions = {sessions.name};
 %% Extract FR matrices and timing information 
 FR_decVar = struct; 
 FRandTimes = struct;
-for sIdx = 3:3 
+for sIdx = 3:3
     buffer = 500;
     [FR_decVar_tmp,FRandTimes_tmp] = genSeqStructs(paths,sessions,opt,sIdx,buffer);
-    FR_decVar(sIdx) = FR_decVar_tmp; 
-    FRandTimes(sIdx) = FRandTimes_tmp; 
+    % assign to sIdx
+    FR_decVar(sIdx).fr_mat = FR_decVar_tmp.fr_mat;
+    FR_decVar(sIdx).decVarTime = FR_decVar_tmp.decVarTime;
+    FR_decVar(sIdx).decVarTimeSinceRew = FR_decVar_tmp.decVarTimeSinceRew;
+    FRandTimes(sIdx).fr_mat = FRandTimes_tmp.fr_mat;
+    FRandTimes(sIdx).stop_leave_ms = FRandTimes_tmp.stop_leave_ms;
+    FRandTimes(sIdx).stop_leave_ix = FRandTimes_tmp.stop_leave_ix;
 end
 
 %% Sort by all trials to get ordering
@@ -108,7 +114,7 @@ end
 %% Now visualize RX PETHs, sort by peak responsivity
 close all
 conditions = {"10","20","40","11","22","44"};
-for sIdx = 3:3
+for sIdx = 2:2
     figure();colormap('jet')
     for cIdx = 1:6
         subplot(2,3,cIdx)
@@ -276,19 +282,21 @@ for sIdx = 3:3
         RXX_data{sIdx}(rew_counter+1).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); % 3 reward sizes
 %         RXX_data{sIdx}(rew_counter+1).fr_mat = zscore(mean_condition_fr(exclude110order,:),[],2); % 3 reward sizes
         
-        temp_fr_mat = {length(trials101x)};
-        for j = 1:numel(trials101x)
-            iTrial = trials101x(j);
-            stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
-            temp_fr_mat{j} = FRandTimes(sIdx).fr_mat(:,stop_ix:stop_ix + sec3ix);
+        if numel(trials101x) > 0
+            temp_fr_mat = {length(trials101x)};
+            for j = 1:numel(trials101x)
+                iTrial = trials101x(j);
+                stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
+                temp_fr_mat{j} = FRandTimes(sIdx).fr_mat(:,stop_ix:stop_ix + sec3ix);
+            end
+
+            mean_condition_fr = mean(cat(3,temp_fr_mat{:}),3); % concatenate in third dimension, average over it
+            % exclude trials of this exact type
+            opt.trials = setdiff(1:nTrials,trials101x);
+            [~,exclude101order,~] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,opt);
+            RXX_data{sIdx}(rew_counter+2).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); % 3 reward sizes
+    %         RXX_data{sIdx}(rew_counter+2).fr_mat = zscore(mean_condition_fr(exclude101order,:),[],2); % 3 reward sizes
         end
-        
-        mean_condition_fr = mean(cat(3,temp_fr_mat{:}),3); % concatenate in third dimension, average over it
-        % exclude trials of this exact type
-        opt.trials = setdiff(1:nTrials,trials101x);
-        [~,exclude101order,~] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,opt);
-        RXX_data{sIdx}(rew_counter+2).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); % 3 reward sizes
-%         RXX_data{sIdx}(rew_counter+2).fr_mat = zscore(mean_condition_fr(exclude101order,:),[],2); % 3 reward sizes
         
         temp_fr_mat = {length(trials111x)};
         for j = 1:numel(trials111x)
@@ -323,9 +331,9 @@ for sIdx = 3:3
         caxis(cl1)
 %         title(sprintf("%s Sort Excluding %s",conditions{cIdx},conditions{cIdx}))
         title(sprintf("%s Sort by Avg PETH",conditions{cIdx}))
-%         xticks([0 50 100 150])
-%         xticklabels([0 1 2 3]) 
-%         yticks([0,100,200,300])
+        xticks([0 50 100 150])
+        xticklabels([0 1 2 3]) 
+        yticks([0,100,200,300])
         xlabel("Time on Patch (sec)")
     end
     

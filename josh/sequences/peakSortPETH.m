@@ -49,7 +49,7 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
     end
     
     % shuffle by random rotation if told to
-    shifts = randi(size(FR_decVar.fr_mat{1},2),size(FR_decVar.fr_mat{1},1),1);
+    shifts = randi(size(fr_mat,2),size(fr_mat,1),1);
     if shuffle == true
         parfor neuron = 1:size(fr_mat,1)
             fr_mat(neuron,:) = circshift(fr_mat(neuron,:),shifts(neuron));
@@ -58,7 +58,6 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
 
     % perform averaging over bins step with histcounts
     [~,~,bin] = histcounts(decVar,decVar_bins);
-    disp(size(bin))
     unsorted_peth = nan(size(fr_mat,1),max(bin));
     for i = 1:max(bin)
         unsorted_peth(:,i) = mean(fr_mat(:,bin==i),2);
