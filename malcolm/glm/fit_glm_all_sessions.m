@@ -1,29 +1,20 @@
-% script to fit GLM to all cells in an example session
-% using MATLAB's lassoglm
-% MGC 7/1/2020
-
-% TO DO:
-% add more decision variables
-% dropout analysis
-% percent deviance explained for each variable
+% script to fit GLM to all cells in a given list of sessions
+% using the glmnet package
+% MGC 8/27/2020
 
 % 24 Aug 2020: Extended reward kernels to 2 sec, cut off when new reward
 % arrives
+% QUESTION: should we do this cutoff or not?
 
 % 25 Aug 2020: All reward sizes
 
 paths = struct;
 paths.data = 'H:\My Drive\processed_neuropix_data';
-paths.figs_root = 'C:\figs\patch_foraging_neuropix\glm_time_since_reward_kernels_allRewSize\no_zscore';
 paths.malcolm_functions = 'C:\code\patch_foraging_neuropix\malcolm\functions';
 addpath(genpath(paths.malcolm_functions));
-paths.spikes_repo = 'C:\code\spikes';
-addpath(genpath(paths.spikes_repo));
 paths.glmnet = 'C:\code\glmnet_matlab';
 addpath(genpath(paths.glmnet));
-paths.hgrk = 'C:\code\HGRK_analysis_tools'; % Hyunggoo's code
-addpath(genpath(paths.hgrk));
-paths.results = 'C:\code\patch_foraging_neuropix\malcolm\glm\GLM_output\allRewSize\no_zscore';
+paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_27Aug2020';
 if exist(paths.results,'dir')~=7
     mkdir(paths.results);
 end
@@ -41,14 +32,19 @@ opt.rew_size = [1 2 4];
 
 opt.tbin = 0.02; % in seconds
 opt.smooth_sigma_lickrate = 0.1; % in seconds (for smoothing lickrate trace)
-opt.smooth_sigma_fr = 0.1; % for smoothing firing rate traces
 
 % basis functions for time since reward
 opt.nbasis = 11; % number of raised cosine basis functions to use
 opt.basis_length = 2; % in seconds; make sure basis functions divide evenly into 1 second intervals (makes analysis easier)
+opt.cut_off_kernel_sequence_after_each_reward = true; % whether to cut off the sequence of kernels when a new reward arrives
 
 % whether or not to zscore predictors
-opt.zscore_predictors = false;
+% glmnet handles this for us, so turning this off for now. 
+% NOTE: glmnet standardizes X for the fit, then returns the coefficients on
+% the original scale. So, to compare coefficients across variables within a
+% single fit, re-standardize them by multiplying each coefficient by its
+% corresponding variable's standard deviation
+opt.zscore_predictors = false; 
 
 % minimum firing rate to keep neurons
 opt.min_fr = 1;
@@ -57,9 +53,20 @@ opt.min_fr = 1;
 opt.alpha = 0.9; % weighting of L1 and L2 penalties in elastic net regularization
 
 % cross validation over trials
-opt.numFolds = 5; % split up trials into (roughly) equally sized chunks
+opt.numFolds = 5; % split up trials into (roughly) equally sized fold, assigning (roughly) equal numbers of each reward size to each fold
 
-opt.compute_crossval_pval = false;
+opt.compute_full_vs_base_pval = false; % whether to run model comparison between full and base model using nested cross validation
+
+
+%% raised cosine basis for time since reward
+
+t_basis = 0:opt.tbin:opt.basis_length;
+db = (max(t_basis) - min(t_basis))/(opt.nbasis-1);
+c = min(t_basis):db:max(t_basis);
+bas = nan(opt.nbasis,length(t_basis));
+for k = 1:opt.nbasis
+  bas(k,:) = (cos(max(-pi, min(pi,pi*(t_basis - c(k))/(db))) ) + 1) / 2;
+end
 
 %%
 for session_idx = 1:numel(session_all)
@@ -67,20 +74,21 @@ for session_idx = 1:numel(session_all)
     opt.session = session_all{session_idx};
     fprintf('Analyzing session %d/%d: %s\n',session_idx,numel(session_all),opt.session);
 
-    %% load data
+    %% load data    
     dat = load(fullfile(paths.data,opt.session));
-    good_cells = dat.sp.cids(dat.sp.cgs==2);
+    good_cells_all = dat.sp.cids(dat.sp.cgs==2);
 
-    % binned spikecounts for each cell
+    %% compute binned spikecounts for each cell
+    
     t = dat.velt;
-    spikecounts = nan(numel(t),numel(good_cells));
-    for cIdx = 1:numel(good_cells)
-        % spikecounts
-        spike_t = dat.sp.st(dat.sp.clu==good_cells(cIdx));
-        spikecounts(:,cIdx) = histc(spike_t,t);
+    spikecounts_whole_session = nan(numel(t),numel(good_cells_all));
+    for cIdx = 1:numel(good_cells_all)
+        spike_t = dat.sp.st(dat.sp.clu==good_cells_all(cIdx));
+        spikecounts_whole_session(:,cIdx) = histc(spike_t,t);
     end
 
     %% get size of each reward
+    
     dat.rew_size = nan(size(dat.rew_ts));
     rew_size_all = mod(dat.patches(:,2),10);
     for i = 1:numel(dat.rew_size)
@@ -90,27 +98,8 @@ for session_idx = 1:numel(session_all)
         end
     end
 
-    %% filter out cells with low firing rate
-
-    mean_fr = sum(spikecounts)/(size(spikecounts,1)*opt.tbin);
-    spikecounts_filt = spikecounts(:,mean_fr>=opt.min_fr);
-    good_cells_filt = good_cells(mean_fr>=opt.min_fr);
-    Ncells = numel(good_cells_filt);
-
-    %% raised cosine basis for discrete events (rewards)
-
-    t_basis = 0:opt.tbin:opt.basis_length;
-    db = (max(t_basis) - min(t_basis))/(opt.nbasis-1);
-    c = min(t_basis):db:max(t_basis);
-    bas = nan(opt.nbasis,length(t_basis));
-    for k = 1:opt.nbasis
-      bas(k,:) = (cos(max(-pi, min(pi,pi*(t_basis - c(k))/(db))) ) + 1) / 2;
-    end
-
     %% make predictors for this session
     % group by type (in A) for forward search and dropout analysis
-
-    % Q: Where to put reward size information?
 
     A = {}; % grouped by type for forward search and dropout
     grp_name = {'Intercept'};
@@ -154,11 +143,13 @@ for session_idx = 1:numel(session_all)
             conv_this = conv(rew_binary,bas(i,:));
             rew_conv(:,i) = conv_this(1:numel(rew_binary));
         end
-        if opt.basis_length>1
-            % cut off kernels when new reward comes
-            [~,idx]=max(rew_conv>0,[],2);
-            for i = 1:size(rew_conv,1)
-                rew_conv(i,idx(i)+2:end) = 0;
+        if opt.cut_off_kernel_sequence_after_each_reward
+            if opt.basis_length>1
+                % cut off kernels when new reward comes
+                [~,idx]=max(rew_conv>0,[],2);
+                for i = 1:size(rew_conv,1)
+                    rew_conv(i,idx(i)+2:end) = 0;
+                end
             end
         end
         X_this = rew_conv;
@@ -210,27 +201,29 @@ for session_idx = 1:numel(session_all)
         X = [X A{i}];
     end
 
-    %% subselect data to fit GLM to
+    %% subselect data to fit GLM to (in patch times)
 
     % final predictor matrix
     % take zscore to be able to compare coefficients across predictors
     if opt.zscore_predictors
-        X_full = zscore(X(in_patch,:));
+        [X_full,Xmean,Xstd] = zscore(X(in_patch,:));
     else
         X_full = X(in_patch,:);
+        Xmean = mean(X_full);
+        Xstd = std(X_full);
     end
 
-    % final spikecounts matrix
-    spikecounts_final = spikecounts_filt(in_patch,:);
+    % filter spikecounts to only include in patch times
+    spikecounts = spikecounts_whole_session(in_patch,:);
 
-    % further filter by firing rate
-    T = size(spikecounts_final,1)*opt.tbin;
-    N = sum(spikecounts_final);
+    %% remove cells that don't pass minimum firing rate cutoff
+    
+    T = size(spikecounts,1)*opt.tbin;
+    N = sum(spikecounts);
     fr = N/T;
-    spikecounts_filt = spikecounts_filt(:,fr>opt.min_fr);
-    spikecounts_final = spikecounts_final(:,fr>opt.min_fr);
-    good_cells_filt = good_cells_filt(fr>opt.min_fr);
-    Ncells = numel(good_cells_filt);
+    spikecounts = spikecounts(:,fr>opt.min_fr);
+    good_cells = good_cells_all(fr>opt.min_fr);
+    Ncells = numel(good_cells);
 
     %% Create fold indices (for cross validation)
 
@@ -247,20 +240,20 @@ for session_idx = 1:numel(session_all)
     foldid = trial_grp(IC);
 
     %% Fit GLM to each cell
+    
     pb = ParforProgressbar(Ncells);
     beta_all = nan(size(X,2)+1,Ncells);
-    pval = nan(Ncells,1);
+    pval_full_vs_base = nan(Ncells,1);
 
-    % options for glmnet (taken from opt structure)
-    opt_glmnet = struct;
-    opt_glmnet.alpha = opt.alpha;
+    % options for glmnet
+    opt_glmnet = glmnetSet;
+    opt_glmnet.alpha = opt.alpha; % alpha for elastic net
     parfor cIdx = 1:Ncells
 
-        y = spikecounts_final(:,cIdx);
-
+        y = spikecounts(:,cIdx);
 
         try
-            if opt.compute_crossval_pval
+            if opt.compute_full_vs_base_pval
                 % iterate over cross-validation folds
                 log_llh_diff = nan(opt.numFolds,1);
                 for fIdx = 1:opt.numFolds
@@ -274,8 +267,7 @@ for session_idx = 1:numel(session_all)
                         X_train = X_full(foldid~=fIdx,:);
                         X_test = X_full(foldid==fIdx,:);
                         fit = cvglmnet(X_train,y_train,'poisson',opt_glmnet,[],5);
-                        lambda_idx = find(fit.lambda==fit.lambda_1se);
-                        beta = [fit.glmnet_fit.a0(lambda_idx); fit.glmnet_fit.beta(:,lambda_idx)];       
+                        beta = cvglmnetCoef(fit);     
                         r_test = exp([ones(size(X_test,1),1) X_test] * beta);
                         log_llh_full_model = nansum(r_test-y_test.*log(r_test)+log(factorial(y_test)))/sum(y_test);
 
@@ -283,22 +275,20 @@ for session_idx = 1:numel(session_all)
                         X_train = X_full(foldid~=fIdx,base_var==1);
                         X_test = X_full(foldid==fIdx,base_var==1);
                         fit = cvglmnet(X_train,y_train,'poisson',opt_glmnet,[],5);
-                        lambda_idx = find(fit.lambda==fit.lambda_1se);
-                        beta = [fit.glmnet_fit.a0(lambda_idx); fit.glmnet_fit.beta(:,lambda_idx)];       
+                        beta = cvglmnetCoef(fit);    
                         r_test = exp([ones(size(X_test,1),1) X_test] * beta);
                         log_llh_base_model = nansum(r_test-y_test.*log(r_test)+log(factorial(y_test)))/sum(y_test);
 
                         log_llh_diff(fIdx) = log_llh_full_model-log_llh_base_model;
                     end
                 end
-                % statistical test to see if model does better than mean
-                [~,pval(cIdx)] = ttest(log_llh_diff);
+                % statistical test to see if full model does better than base model
+                [~,pval_full_vs_base(cIdx)] = ttest(log_llh_diff);
             end
 
             % fit parameters to full data  
             fit = cvglmnet(X_full,y,'poisson',opt_glmnet,[],[],foldid);
-            lambda_idx = find(fit.lambda==fit.lambda_1se);
-            beta_all(:,cIdx) = [fit.glmnet_fit.a0(lambda_idx); fit.glmnet_fit.beta(:,lambda_idx)];     
+            beta_all(:,cIdx) = cvglmnetCoef(fit);
         catch
             fprintf('error: cell %d\n',cIdx);
         end
@@ -307,6 +297,8 @@ for session_idx = 1:numel(session_all)
     end
     
     % save results
-    save(fullfile(paths.results,sprintf('%s',opt.session)),'beta_all','pval','var_name','X_full','spikecounts_final','good_cells_filt','trial_grp','bas','t_basis');
+    save(fullfile(paths.results,sprintf('%s',opt.session)),'opt','beta_all','pval_full_vs_base',...
+        'var_name','X_full','Xmean','Xstd','spikecounts','good_cells',...
+        'trial_grp','foldid','bas','t_basis');
 
 end
