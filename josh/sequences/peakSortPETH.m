@@ -24,6 +24,13 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
         if ~strcmp(opt.trials,'all')
             trials = opt.trials;
         end
+    end 
+    
+    neurons = 'all';
+    if exist('opt','var') && isfield(opt,'neurons')  
+        if ~strcmp(opt.neurons,'all') 
+            neurons = opt.neurons;  
+        end 
     end
     
     %%%% set alignment variable %%%%
@@ -46,26 +53,21 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
         fr_mat = cat(2,frCell{:});
         decVarCell = decVar_cell(trials);
         decVar = cat(2,decVarCell{:});
-    end
+    end 
     
     % shuffle by random rotation if told to
-    shifts = randi(size(FR_decVar.fr_mat{1},2),size(FR_decVar.fr_mat{1},1),1);
+    shifts = randi(size(fr_mat,2),size(fr_mat,1),1);
     if shuffle == true
         parfor neuron = 1:size(fr_mat,1)
             fr_mat(neuron,:) = circshift(fr_mat(neuron,:),shifts(neuron));
         end
     end
 
-    unsorted_peth = zeros(size(FR_decVar.fr_mat{1},1), numel(decVar_bins)-1);
-
-    for dIdx = 1:(numel(decVar_bins) - 1)
-        if length(find(fr_mat(:,decVar > decVar_bins(dIdx) & decVar < decVar_bins(dIdx+1)))) > 0
-            unsorted_peth(:,dIdx) = mean(fr_mat(:,decVar > decVar_bins(dIdx) & decVar < decVar_bins(dIdx+1)),2);
-        elseif dIdx > 1
-            unsorted_peth(:,dIdx) = mean(fr_mat(:,decVar > decVar_bins(dIdx-1) & decVar < decVar_bins(dIdx)),2);
-        else
-            unsorted_peth(:,dIdx) = 0;
-        end
+    % perform averaging over bins step with histcounts
+    [~,~,bin] = histcounts(decVar,decVar_bins);
+    unsorted_peth = nan(size(fr_mat,1),max(bin));
+    for i = 1:max(bin)
+        unsorted_peth(:,i) = mean(fr_mat(:,bin==i),2);
     end
 
     if norm == "zscore"
@@ -77,7 +79,12 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
     
     [~,index] = max(unsorted_peth');
     [~,neuron_order] = sort(index);
-    sorted_peth = unsorted_peth_norm(neuron_order,:);
+    sorted_peth = unsorted_peth_norm(neuron_order,:); 
+    
+    % subselect neurons? 
+    if ~strcmp(neurons,'all') 
+        sorted_peth = sorted_peth(neurons,:);
+    end
     
     % now making xticks at even seconds
     max_round = floor(max(decVar_bins));
@@ -93,7 +100,7 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
         imagesc(flipud(sorted_peth));
         colorbar()
         colormap('jet')
-        xlim([1,40])
+        xlim([1,numel(decVar_bins)-1])
         if shuffle == false
             xlabel([label; " (ms)"])
             title(sprintf("PETH Sorted to %s",label))

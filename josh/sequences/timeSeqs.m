@@ -3,11 +3,11 @@
 %  - Maybe use some seqNMF here
 clear
 paths = struct;
-paths.data = '/Users/joshstern/Documents/UchidaLab_matlab/neuroPixelsData/80';
-paths.figs = '/Users/joshstern/Documents/UchidaLab_matlab/neural_data_figs'; % where to save figs
+paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/80';
+paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab/HGK_analysis_tools'));
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab'));
+addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData/HGK_analysis_tools'));
+addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData'));
 
 % analysis options
 opt = struct;
@@ -32,7 +32,7 @@ sessions = {sessions.name};
 
 FR_decVar = struct;
 
-for sIdx = 1:3 % 1:numel(sessions)
+for sIdx = 1:1 % 1:numel(sessions)
     session = sessions{sIdx}(1:end-4);
     fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
     % load data
@@ -119,7 +119,7 @@ end
 %% First just make ridge plots w/ cheating on sorting
 close all
 index_sort_all = {sIdx};
-for sIdx = 1:3
+for sIdx = 1:1
     decVar_bins = linspace(0,2,41);
     opt.norm = "zscore";
     opt.trials = 'all';
@@ -138,7 +138,7 @@ mid_responsive_peth = nan(2,nMid,nBins-1);
 %% Use function to perform mid-responsive quantifications
 
 close all
-for sIdx = 3:3
+for sIdx = 1:1
     nTrials = length(FR_decVar(sIdx).fr_mat);
     
     % set decision variable
@@ -161,6 +161,7 @@ for sIdx = 3:3
     
     % regress out linear, then nonlinear components to find neurons more defined by nonlinear
     % responsivity
+    tic
     regressions = true;
     if regressions == true
         x = 1:size(sorted_peth,2);
@@ -197,6 +198,7 @@ for sIdx = 3:3
             avgFR_decVar_sortedGauss(neuron,:) = gauss_fit;
         end
     end
+    toc
     
     % visualize fits
     threePaneFitPlot(sorted_peth,avgFR_decVar_sortedLinearResidual,avgFR_decVar_sortedLinear,decVar_bins,label,"Linear")

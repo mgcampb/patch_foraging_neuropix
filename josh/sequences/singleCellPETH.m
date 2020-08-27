@@ -1,11 +1,11 @@
 %% Make single cell figures ala Plitt Preprint
 
 paths = struct;
-paths.data = '/Users/joshstern/Documents/UchidaLab_matlab/neuroPixelsData/80';
-paths.figs = '/Users/joshstern/Documents/UchidaLab_matlab/neural_data_figs'; % where to save figs
+paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/80';
+paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab/HGK_analysis_tools'));
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab'));
+addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData/HGK_analysis_tools'));
+addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData'));
 
 % analysis options
 opt = struct;
@@ -90,13 +90,6 @@ for sIdx = 3:3 % 1:numel(sessions)
             FR_decVar(sIdx).decVarTimeSinceRew{iTrial}(rew_ix:end) =  (1:length(FR_decVar(sIdx).decVarTimeSinceRew{iTrial}(rew_ix:end))) * tbin_ms / 1000;
         end
     end
-    
-    close all; figure();hold on;
-    plot(FR_decVar(sIdx).decVarTime{39})
-    hold on
-    plot(FR_decVar(sIdx).decVarTimeSinceRew{39})
-    legend("Time","Time since last reward")
-    title("Trial 39 decision variables")
     
     FRandTimes(sIdx).fr_mat = fr_mat;
     FRandTimes(sIdx).stop_leave_ms = [patchstop_ms patchleave_ms];
@@ -187,7 +180,7 @@ for sIdx = 3:3
         x_idx = [x_idx find(decVar_bins > i,1)];
     end
     
-    for iNeuron = 75:85
+    for iNeuron = 1:1
         neuron = index_sort_all{sIdx}(iNeuron);
         start = (0 / tbin_ms) + 1; % beginning of trial
         stop = (2000 / tbin_ms) + 1;
@@ -307,10 +300,10 @@ close all
 for sIdx = 3:3 
     nNeurons = numel(index_sort_all{sIdx});
     med_dists = nan(nNeurons,1); 
-    prtRewsize_corr = nan(100,1); 
-    prtRewsize_p = zeros(100,1);
+    prtRewsize_corr = nan(nNeurons,1); 
+    prtRewsize_p = zeros(nNeurons,1);
     
-    for iNeuron = 40:140
+    for iNeuron = 1:nNeurons
         neuron = index_sort_all{sIdx}(iNeuron);
         start = (0 / tbin_ms) + 1; % beginning of trial
         stop = (2000 / tbin_ms) + 1;
@@ -346,8 +339,8 @@ for sIdx = 3:3
     ylabel("Median cosine distance between trials") 
     figure() 
     gscatter(1:numel(prtRewsize_corr),prtRewsize_corr,prtRewsize_p,[.4 .4 .4;1 0 0],'.')  
-    xlim([40,140])
-    title("Pearson Correlation between peak firing location and PRT ordering within Rewsize") 
+%     xlim([40,140])
+    title("Pearson Correlation between peak firing location and R0 PRT") 
     xlabel("Peak-response sorted neurons")
     ylabel("Pearson Correlation") 
     legend("Non-significant","Significant")

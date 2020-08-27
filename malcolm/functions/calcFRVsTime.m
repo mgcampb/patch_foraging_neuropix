@@ -9,7 +9,7 @@ if ~exist('opt','var')
     opt.tbin = 0.02;
     opt.tstart = 0;
     opt.tend = max(dat.sp.st);
-    opt.smoothSigma_time = 0.2;
+    opt.smoothSigma_time = 0.1;
 end
 
 tbinedge = opt.tstart:opt.tbin:opt.tend;
