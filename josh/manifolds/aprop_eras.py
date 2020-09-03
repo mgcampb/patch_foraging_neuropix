@@ -79,7 +79,7 @@ n_unique_labels = len(np.unique(reduced_labels))
 # reward size per cluster
 mean_rewsizes = np.zeros(n_unique_labels)
 mean_rewsizes_shuffled = np.zeros(n_unique_labels)
-for l in np.unique(reduced_labels):
+for l in np.unique(reduced_labels[reduced_labels >= 0]):
     if l > 0:
         mean_rewsizes[int(l)] = np.mean(rewsize_concatTrials[np.where(reduced_labels == l)[0]])
         mean_rewsizes_shuffled[int(l)] = np.mean(rewsize_concatTrials[np.where(reduced_labels_shuffled == l)[0]])
@@ -95,19 +95,25 @@ transition_graph_vis(timepoints,clusteroids,mean_rewsizes,T,p_leave,p_visit)
 T_shuffled,p_leave_shuffled,p_visit_shuffled = create_transition_graph(reduced_labels_shuffled,reduced_time_full,reduced_timeSince_full)
 transition_graph_vis(timepoints,clusteroids,mean_rewsizes_shuffled,T_shuffled,p_leave_shuffled,p_visit_shuffled,shuffled = True)
 
-
-print(np.unique(reduced_labels).shape)
-print(p_leave.shape)
-print(p_leave)
 # get averaged activity w.r.t clusters within eras sorted by P(Leave)
 # first get pLeave_label_sort
-labels_pLeave_sort = np.zeros(np.unique(reduced_labels).shape[0] - 1)
+labels_pLeave_sort = np.zeros(p_leave.shape)
 n_eraClusts = [c.shape[1] for c in clusteroids]
 n_eraClusts.insert(0,0)
 cumulativeClusts = np.cumsum(n_eraClusts)
-for i in range(len(cumulativeClusts)):
+for i in range(len(cumulativeClusts)-1):
+    era_p_leave = p_leave[cumulativeClusts[i]:cumulativeClusts[i+1]]
+    era_pLeave_sort = np.argsort(era_p_leave) + cumulativeClusts[i]
+    labels_pLeave_sort[cumulativeClusts[i]:cumulativeClusts[i+1]] = era_pLeave_sort
 
-
+# now find avg activity within these within-era sorted clusters
+nNeurons = reduced_fr_mat.shape[0]
+avg_cluster_activity = np.zeros((nNeurons,len(labels_pLeave_sort)-1))
+for i in labels_pLeave_sort[:-1]:
+    avg_cluster_activity[:,int(i)] = np.mean(reduced_fr_mat[:,np.where(reduced_labels == i)[0]],axis = 1)
+# turn this into a list of lists for niceness
+avg_cluster_activity = [avg_cluster_activity[:,cumulativeClusts[i]:cumulativeClusts[i+1]] for i in range(len(cumulativeClusts)-1)]
+print([activity.shape for activity in avg_cluster_activity])
 
 # Visualize activity... change this to order within cluster by p_leave
 for e_idx in range(3):

@@ -49,7 +49,7 @@ def rewsize_stream(rewsize,t_lens_reduced):
     return rewsize_concatTrials
 
 def create_transition_graph(labels,reduced_time_full,reduced_timeSince_full):
-    n_unique_labels = len(np.unique(labels))
+    n_unique_labels = len(np.unique(labels[np.where(labels >= 0)[0]]))
     # construct graph of transitions, excluding transitions going over reward deliveries
     T = np.zeros((n_unique_labels,n_unique_labels)) # "T[i,j] indicates transition from  j to i"
     leave_count = np.zeros(n_unique_labels)
