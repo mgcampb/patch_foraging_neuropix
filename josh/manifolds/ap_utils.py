@@ -1,6 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
-from scipy.stats import zscore
+from scipy.stats import zscore,mode
 
 def downsample_fr(fr_mat,t_lens,avg_window,sort_sIdx):
     reduced_fr_mat = []
@@ -66,3 +66,46 @@ def create_transition_graph(labels,reduced_time_full,reduced_timeSince_full):
     p_leave = leave_count / cluster_count
     p_visit = cluster_count / np.sum(cluster_count)
     return T,p_leave,p_visit
+
+def reduce_labels(labels):
+    """
+        A simple function to make labels range from 0-n_unique_labels
+    """
+    reduced_labels = -1 * np.ones(len(labels))
+    for i,l in enumerate(np.unique(labels[np.where(labels >= 0)[0]])):
+        reduced_labels[np.where(labels == l)[0]] = i
+    return reduced_labels
+
+def shuffle_within_eras(labels,cumulativeClusts):
+    clusters = np.unique(labels[labels >= 0])
+    era_clusters = [clusters[cumulativeClusts[i]:cumulativeClusts[i+1]] for i in range(len(cumulativeClusts)-1)]
+    shuffled_labels = np.full(labels.shape,-1)
+    for era in range(len(cumulativeClusts)-1):
+        era_locs = np.where(np.isin(labels,era_clusters[era]))
+        era_labels = np.copy(labels[era_locs])
+        np.random.shuffle(era_labels) # shuffle
+        shuffled_labels[era_locs] = era_labels
+    return shuffled_labels
+
+def leave1out_decoding(prediction_steps,reduced_labels,non_rew_locs):
+    step_accs = np.zeros(len(prediction_steps))
+    for iStep,pred_step in enumerate(prediction_steps):
+        prediction_truths = np.empty(max(prediction_steps) * len(non_rew_locs)) # being generous here
+        prediction_truths[:] = np.nan
+        counter = 0
+        for cluster in np.unique(reduced_labels[reduced_labels >= 0]):
+            cluster_locs = np.where(reduced_labels == cluster)[0]
+            for LO_loc in cluster_locs: # iterate over locations where cluster was visited
+                train_locs = np.setdiff1d(cluster_locs,LO_loc,assume_unique = True) # training set as all other pts
+                if 0 <= LO_loc + pred_step < len(reduced_labels):
+                    pred_locs = train_locs + pred_step # look forward or back
+                    pred_locs = pred_locs[(pred_locs >= 0) & (pred_locs < len(reduced_labels))] # get rid of invalid pts
+                    pred_locs = np.intersect1d(pred_locs,non_rew_locs,assume_unique = True) # don't look at rwd pts
+                    predicted_label = mode(reduced_labels[pred_locs])[0] # predict the most common transition
+                    true_label = reduced_labels[LO_loc + pred_step] # L1O test truth
+                    if len(predicted_label) > 0 and predicted_label > 0:
+                        prediction_truths[counter] = int(true_label == predicted_label) # assign
+                        counter += 1
+
+        step_accs[iStep] = np.nanmean(prediction_truths)
+    return step_accs

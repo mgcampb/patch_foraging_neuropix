@@ -1,18 +1,3 @@
-%% Use a variety of methods to classify dimensionally reduced neural data into 2 classes 
-% class 1) within .5 sec of leaving (500 ms before running cut off) 
-% class 2) not within .5 sec of leaving 
-
-% will unbalanced data be a problem? (more of class 2 than class 1) 
-
-% The motivation for this analysis is to determine whether there exists a
-% decision boundary in state space that is predictive of leaving
-
-% Some potentially interesting questions: 
-% 1. What combinations of neurons/PCs do or don't improve classification
-%    accuracy? 
-% 2. Does the boundary change across trial types? See if accuracy increases
-%    by separating by reward size or time in session. 
-
 %% Basics
 paths = struct;
 paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/80';
@@ -59,7 +44,7 @@ for sIdx = 3:3
     patchCSL = dat.patchCSL; 
     nTrials = length(patchCSL);
 
-    new_fr_mat = false;
+    new_fr_mat = true;
     if new_fr_mat == true
         % compute firing rate matrix
         tic
@@ -95,35 +80,86 @@ for sIdx = 3:3
     classification_zone = 500; % how much time before leave we're labeling in ms
     classification_struct(sIdx).rew_ix = {nTrials}; 
     classification_struct(sIdx).PCs = {nTrials};  
-    classification_struct(sIdx).labels = {nTrials};
+    classification_struct(sIdx).labels = {nTrials}; 
+    classification_struct(sIdx).vel = {nTrials};
     for iTrial = 1:nTrials
         rew_indices = round(rew_ms(rew_ms >= patchstop_ms(iTrial) & rew_ms < patchleave_ms(iTrial)) - patchstop_ms(iTrial));
         classification_struct(sIdx).rew_ix{iTrial} = round(rew_indices(rew_indices > 1) / tbin_ms); 
         classification_struct(sIdx).PCs{iTrial} = score(1:10,new_patchstop_ix(iTrial):new_patchleave_ix(iTrial)); 
-        classification_struct(sIdx).labels{iTrial} = 1:t_lens(iTrial) > (t_lens(iTrial) - classification_zone / tbin_ms);
+        classification_struct(sIdx).labels{iTrial} = 1:t_lens(iTrial) > (t_lens(iTrial) - classification_zone / tbin_ms); 
+        classification_struct(sIdx).vel{iTrial} = dat.vel(patchstop_ix(iTrial):patchleave_ix(iTrial));
     end
 end 
 
-%% Visualize the classification problem on a few single trials 
-for sIdx = 3:3 
-    test_trials = 11:19;  
-    sp_counter = 1;
-    figure()
-    for iTrial = test_trials 
-        subplot(3,3,sp_counter)
-        gscatter(classification_struct(sIdx).PCs{iTrial}(1,:), ...
-                 classification_struct(sIdx).PCs{iTrial}(2,:), ...
-                 classification_struct(sIdx).labels{iTrial}, ... 
-                 [],[],5) 
-        title(sprintf("Trial %i",iTrial)) 
-        xlabel("PC1"); ylabel("PC2")
-        sp_counter = sp_counter + 1; 
-        disp(sp_counter)
-    end 
+%% Now try out LDA 
+close all 
+for sIdx = 3:3
+    all_concat_PCs = horzcat(classification_struct(sIdx).PCs{:})';   
+    all_concat_vel = horzcat(classification_struct(sIdx).vel{:})'; 
+    all_concat_labels = horzcat(classification_struct(sIdx).labels{:}) + 1;    
     
-    concat_PCs = classification_struct(sIdx).PCs(test_trials);
-    concat_PCs = horzcat(concat_PCs{:}); 
-    concat_labels = 
+    % fit LDA to all data
+    lda = fitcdiscr(all_concat_PCs,all_concat_labels); 
+    classes_pca = resubPredict(lda);  
+    classes_pca_confusion = classes_pca;
+    
+    % now do k-fold xval to determine predictiveness
+    cp = cvpartition(all_concat_labels,'KFold',10);
+    cvlda = crossval(lda,'CVPartition',cp);
+    ldaCVErr = kfoldLoss(cvlda);  
+    
+    misclassified = classes_pca_confusion ~= all_concat_labels'; 
+    classes_pca_confusion(misclassified & classes_pca_confusion == 1) = 3;
+    classes_pca_confusion(misclassified & classes_pca_confusion == 2) = 4; 
+    
+    % velocity control
+    lda_vel = fitcdiscr(all_concat_vel,all_concat_labels); 
+    cp_vel = cvpartition(all_concat_labels,'KFold',10); 
+    cvlda_vel = crossval(lda_vel,'CVPartition',cp_vel);
+    ldaCVErr_vel = kfoldLoss(cvlda_vel);   
+    classes_vel = resubPredict(lda_vel);
+
+    figure()  
+%     gscatter(all_concat_PCs(misclassified,1),all_concat_PCs(misclassified,3),ldaClass(misclassified),[],'x') 
+    hold on
+    gscatter(all_concat_PCs(:,1),all_concat_PCs(:,3),classes_pca_confusion,'brcy','.') 
+    xlabel("PC 1"); ylabel("PC 3") 
+    title(sprintf("PC 1:10 Full Session LDA Results (10-fold X-Val Accuracy: %f)",1-ldaCVErr))
+    legend("Predict Stay","Predict Leave in 500-1000 msec","Misclassified as Stay","Misclassified as Leave")  
+    
+    % now add PCs 1 by 1 and see how much X-val accuracy increases  
+    xPC_ldaCVAcc = nan(10,1);
+    for iPC = 1:10 
+        lda = fitcdiscr(all_concat_PCs(:,1:iPC),all_concat_labels); 
+        cp = cvpartition(all_concat_labels,'KFold',10);
+        cvlda = crossval(lda,'CVPartition',cp);
+        xPC_ldaCVAcc(iPC) = 1 - kfoldLoss(cvlda);  
+    end  
+    
+    figure() 
+    plot(xPC_ldaCVAcc,'linewidth',2)  
+    title("LDA 10-Fold X-Val Accuracy using different ranges of PCs")
+    xlabel("PCs included in LDA") 
+    ylabel("10-fold X-Val Accuracy")
+    
+    % here, use kfold x-val to see if we can make some claims about
+    % predictiveness 
+    session = sessions{sIdx}(1:end-4); 
+    data = load(fullfile(paths.data,session));
+    patches = data.patches;
+    patchType = patches(:,2);
+    rewsize = mod(patchType,10); 
+    
+    % confusion matrices for PCA, velocity 
+    C_vel = confusionmat(all_concat_labels,classes_vel); 
+    C_pca = confusionmat(all_concat_labels,classes_pca); 
+    figure() 
+    subplot(1,2,1) 
+    confusionchart(C_vel,'RowSummary','row-normalized')  
+    title("Confusion Matrix for Velocity LDA")
+    subplot(1,2,2) 
+    confusionchart(C_pca,'RowSummary','row-normalized') 
+    title("Confusion Matrix for PCA LDA")
+    
+    
 end
-
-

@@ -35,12 +35,11 @@ def sorted_cluster_vis(labels,sort_variable,timepoints):
 def scatter_cluster_vis(clusteroid_ix,peak_sort,avg_cluster_activity):
     nNeurons = avg_cluster_activity.shape[0]
     fig, axes = plt.subplots(int(np.ceil(len(clusteroid_ix[:20]) / 5)),5, sharey='row', sharex='col', constrained_layout=True,figsize=(8, 8))
-    for i,c_idx in enumerate(clusteroid_ix[peak_sort[:20]]):
+    for i,c_idx in enumerate(clusteroid_ix[peak_sort[:20]]): # dont need enum anymore
         row = int(np.floor(i / 5))
         col = i % 5
         axes[row,col].scatter(list(range(nNeurons)),avg_cluster_activity[:,i],marker = '.',s = 5)
         axes[row,col].set_xticks([])
-    #     axes[row,col].set_yticks([])
         axes[row,col].set_title("Cluster %i"%i)
         if col == 0:
             axes[row,col].set_ylabel("Z-Scored Activity")

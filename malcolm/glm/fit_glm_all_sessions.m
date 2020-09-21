@@ -257,7 +257,7 @@ for session_idx = 1:numel(session_all)
                 % iterate over cross-validation folds
                 log_llh_diff = nan(opt.numFolds,1);
                 for fIdx = 1:opt.numFolds
-
+                    
                     y_train = y(foldid~=fIdx);
                     y_test = y(foldid==fIdx);
 
