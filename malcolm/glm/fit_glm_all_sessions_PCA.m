@@ -10,13 +10,15 @@
 
 % NOTE: currently only analyzes sessions with histology
 
+% NOTE: There is no patch leave buffer here
+
 paths = struct;
 paths.data = 'H:\My Drive\processed_neuropix_data';
 paths.malcolm_functions = 'C:\code\patch_foraging_neuropix\malcolm\functions';
 addpath(genpath(paths.malcolm_functions));
 paths.glmnet = 'C:\code\glmnet_matlab';
 addpath(genpath(paths.glmnet));
-paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_18Sep2020_new_data';
+paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_1Sep2020_PCA_MOs';
 if exist(paths.results,'dir')~=7
     mkdir(paths.results);
 end
@@ -35,6 +37,7 @@ opt.rew_size = [1 2 4];
 
 opt.tbin = 0.02; % in seconds
 opt.smooth_sigma_lickrate = 0.1; % in seconds (for smoothing lickrate trace)
+opt.smoothSigma_time  = 0.1; % for smoothing firing rate (prior to computing PCA)
 
 % basis functions for time since reward
 opt.nbasis = 11; % number of raised cosine basis functions to use
@@ -42,12 +45,11 @@ opt.basis_length = 2; % in seconds; make sure basis functions divide evenly into
 opt.cut_off_kernel_sequence_after_each_reward = true; % whether to cut off the sequence of kernels when a new reward arrives
 
 % whether or not to zscore predictors
-% glmnet handles this for us, so turning this off for now. 
 % NOTE: glmnet standardizes X for the fit, then returns the coefficients on
-% the original scale. So, to compare coefficients across variables within a
+% the original scale. So, if this option is FALSE, to compare coefficients across variables within a
 % single fit, re-standardize them by multiplying each coefficient by its
 % corresponding variable's standard deviation
-opt.zscore_predictors = false; 
+opt.zscore_predictors = true; 
 
 % minimum firing rate to keep neurons
 opt.min_fr = 1;
@@ -58,8 +60,15 @@ opt.alpha = 0.9; % weighting of L1 and L2 penalties in elastic net regularizatio
 % cross validation over trials
 opt.numFolds = 5; % split up trials into (roughly) equally sized fold, assigning (roughly) equal numbers of each reward size to each fold
 
-opt.compute_full_vs_base_pval = false; % whether to run model comparison between full and base model using nested cross validation
+% which brain region to analyze
+opt.brain_region = 'MOs';
 
+% how many PCs to analyze
+opt.num_pcs = 10;
+opt.min_num_cells_for_pca = 10;
+
+% only takes within patch times up to this amount before patch leave
+opt.patch_leave_buffer = 0.5; % in seconds
 
 %% raised cosine basis for time since reward
 
@@ -72,7 +81,7 @@ for k = 1:opt.nbasis
 end
 
 %%
-for session_idx = [18 21 22 23] % 1:numel(session_all)
+for session_idx = 1:numel(session_all)
     
     opt.session = session_all{session_idx};
     fprintf('Analyzing session %d/%d: %s\n',session_idx,numel(session_all),opt.session);
@@ -83,9 +92,18 @@ for session_idx = [18 21 22 23] % 1:numel(session_all)
 
     if isfield(dat,'anatomy')
         anatomy_all = dat.anatomy.cell_labels;
-    else
-        % continue;
-        anatomy_all = nan(numel(good_cells_all),4);
+    elseif ~strcmp(opt.brain_region,'all')
+        continue;
+    end
+    
+    % only keep cells from given brain region
+    if ~strcmp(opt.brain_region,'all')
+        keep = contains(anatomy_all{:,2},opt.brain_region);
+        good_cells_all = good_cells_all(keep);
+        anatomy_all = anatomy_all(keep,:);
+        if numel(good_cells_all)<opt.min_num_cells_for_pca
+            continue
+        end
     end
 
     %% compute binned spikecounts for each cell
@@ -107,12 +125,17 @@ for session_idx = [18 21 22 23] % 1:numel(session_all)
             dat.rew_size(i) = rew_size_all(which_patch);
         end
     end
+    
+    %% get in-patch times (with buffer)
+    
+    in_patch = false(size(t));
+    for i = 1:size(dat.patchCSL,1)
+        in_patch(t>=dat.patchCSL(i,2) & t<=dat.patchCSL(i,3)-opt.patch_leave_buffer) = true;
+    end
 
     %% make predictors for this session
     % group by type (in A) for forward search and dropout analysis
 
-    keyboard; 
-    
     A = {}; % grouped by type for forward search and dropout
     grp_name = {'Intercept'};
     var_name = {'Intercept'};
@@ -180,7 +203,7 @@ for session_idx = [18 21 22 23] % 1:numel(session_all)
             % include one time bin before patch stop to catch the first reward
             patch_num(t>=(dat.patchCSL(i,2)-opt.tbin) & t<=dat.patchCSL(i,3)) = i;
         end
-        in_patch = ~isnan(patch_num);
+        patch_num(~in_patch) = nan;
         % time on patch
         t_on_patch = zeros(size(t));
         t_on_patch(in_patch) = t(in_patch) - dat.patchCSL(patch_num(in_patch),2)';
@@ -237,6 +260,25 @@ for session_idx = [18 21 22 23] % 1:numel(session_all)
     good_cells = good_cells_all(fr>opt.min_fr);
     anatomy = anatomy_all(fr>opt.min_fr,:);
     Ncells = numel(good_cells);
+    
+    %% compute PCA
+
+    % time bins
+    opt.tstart = 0;
+    opt.tend = max(dat.sp.st);
+
+    % compute firing rate mat
+    fr_mat = calcFRVsTime(good_cells,dat,opt);
+    fr_mat = [fr_mat fr_mat(:,end)];
+
+    % only keep "in-patch" times
+    fr_mat_in_patch = fr_mat(:,in_patch);
+
+    % take zscore
+    fr_mat_zscore = zscore(fr_mat_in_patch,[],2);
+
+    % pca on firing rate matrix
+    [coeffs,score,~,~,expl] = pca(fr_mat_zscore');
 
     %% Create fold indices (for cross validation)
 
@@ -254,64 +296,21 @@ for session_idx = [18 21 22 23] % 1:numel(session_all)
 
     %% Fit GLM to each cell
     
-    pb = ParforProgressbar(Ncells);
-    beta_all = nan(size(X,2)+1,Ncells);
-    pval_full_vs_base = nan(Ncells,1);
+    beta_all = nan(size(X,2)+1,opt.num_pcs);
 
     % options for glmnet
     opt_glmnet = glmnetSet;
     opt_glmnet.alpha = opt.alpha; % alpha for elastic net
-    parfor cIdx = 1:Ncells
-
-        y = spikecounts(:,cIdx);
-
-        try
-            if opt.compute_full_vs_base_pval
-                % iterate over cross-validation folds
-                log_llh_diff = nan(opt.numFolds,1);
-                for fIdx = 1:opt.numFolds
-
-                    y_train = y(foldid~=fIdx);
-                    y_test = y(foldid==fIdx);
-
-                    if sum(y_train)>0 && sum(y_test)>0
-
-                        % FULL MODEL
-                        X_train = X_full(foldid~=fIdx,:);
-                        X_test = X_full(foldid==fIdx,:);
-                        fit = cvglmnet(X_train,y_train,'poisson',opt_glmnet,[],5);
-                        beta = cvglmnetCoef(fit);     
-                        r_test = exp([ones(size(X_test,1),1) X_test] * beta);
-                        log_llh_full_model = nansum(r_test-y_test.*log(r_test)+log(factorial(y_test)))/sum(y_test);
-
-                        % BASE MODEL
-                        X_train = X_full(foldid~=fIdx,base_var==1);
-                        X_test = X_full(foldid==fIdx,base_var==1);
-                        fit = cvglmnet(X_train,y_train,'poisson',opt_glmnet,[],5);
-                        beta = cvglmnetCoef(fit);    
-                        r_test = exp([ones(size(X_test,1),1) X_test] * beta);
-                        log_llh_base_model = nansum(r_test-y_test.*log(r_test)+log(factorial(y_test)))/sum(y_test);
-
-                        log_llh_diff(fIdx) = log_llh_full_model-log_llh_base_model;
-                    end
-                end
-                % statistical test to see if full model does better than base model
-                [~,pval_full_vs_base(cIdx)] = ttest(log_llh_diff);
-            end
-
-            % fit parameters to full data  
-            fit = cvglmnet(X_full,y,'poisson',opt_glmnet,[],[],foldid);
-            beta_all(:,cIdx) = cvglmnetCoef(fit);
-        catch
-            fprintf('error: cell %d\n',cIdx);
-        end
-
-        pb.increment();
+    
+    for pIdx = 1:opt.num_pcs    
+        % use cross validation to find optimal lambda for this PC
+        fit = cvglmnet(X_full,score(:,pIdx),'gaussian',opt_glmnet,[],[],foldid);
+        beta_all(:,pIdx) = cvglmnetCoef(fit);
     end
     
     % save results
-    save(fullfile(paths.results,sprintf('%s',opt.session)),'opt','beta_all','pval_full_vs_base',...
-        'var_name','X_full','Xmean','Xstd','spikecounts','good_cells',...
+    save(fullfile(paths.results,sprintf('%s',opt.session)),'opt','beta_all',...
+        'var_name','X_full','Xmean','Xstd','score','expl','good_cells',...
         'trial_grp','foldid','bas','t_basis','anatomy');
 
 end

@@ -1,6 +1,6 @@
 paths = struct;
 
-paths.model_fits = 'C:\code\patch_foraging_neuropix\malcolm\glm\GLM_output\allRewSize\no_zscore';
+paths.model_fits = 'C:\data\patch_foraging_neuropix\GLM_output\run_30Aug2020_anatomy_only';
 paths.figs = 'C:\figs\patch_foraging_neuropix\glm_time_since_reward_kernels_allRewSize';
 
 model_fits = dir(fullfile(paths.model_fits,'*.mat'));
@@ -15,25 +15,29 @@ opt.nbasis = 11;
 % opt.pval_thresh = 0.05;
 opt.rew_size = [1 2 4];
 
+opt.brain_region = 'ORB'; % for all, put ''
+
 %% load all model fits
 pval_all = [];
 beta_all = [];
+anatomy_all = [];
 for mIdx = 1:numel(model_fits)
     dat = load(fullfile(paths.model_fits,model_fits{mIdx}));
-    pval_all = [pval_all; dat.pval];
+    pval_all = [pval_all; dat.pval_full_vs_base];
     beta_all = [beta_all dat.beta_all];
     var_name = dat.var_name;
     bas = dat.bas;
     t_basis = dat.t_basis;
+    anatomy_all = [anatomy_all; dat.anatomy];
 end
 
 %% plot
 
 hfig = figure('Position',[200 200 1400 1000]);
-hfig.Name = 'Post reward modulation allRewSize allSessions';
+hfig.Name = sprintf('Post reward modulation allRewSize allSessions %s',opt.brain_region);
 
 rew_kern = contains(var_name,'Kern') | contains(var_name,'TimeSinceRew');
-keep = sum(beta_all(rew_kern,:)>0)>0;
+keep = sum(beta_all(rew_kern,:)>0)>0 & contains(anatomy_all{:,2},opt.brain_region)';
 beta_filt = beta_all(:,keep);
 
 % Kernels only
