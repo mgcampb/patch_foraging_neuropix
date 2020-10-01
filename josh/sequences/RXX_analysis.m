@@ -6,7 +6,7 @@
 % 5. profit
 
 paths = struct;
-paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/76';
+paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/80';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 
 addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData/HGK_analysis_tools'));
@@ -24,7 +24,7 @@ sessions = {sessions.name};
 %% Extract FR matrices and timing information 
 FR_decVar = struct; 
 FRandTimes = struct;
-for sIdx = 1:1
+for sIdx = 1:3
     buffer = 500;
     [FR_decVar_tmp,FRandTimes_tmp] = genSeqStructs(paths,sessions,opt,sIdx,buffer);
     % assign to sIdx
@@ -39,7 +39,7 @@ end
 %% Sort by all trials to get ordering
 
 index_sort_all = {sIdx};
-for sIdx = 1:1
+for sIdx = 1:3
     decVar_bins = linspace(0,2,41);
     opt.norm = "zscore";
     opt.trials = 'all';
@@ -114,7 +114,7 @@ end
 %% Now visualize RX PETHs, sort by peak responsivity
 close all
 conditions = {"10","20","40","11","22","44"};
-for sIdx = 2:2
+for sIdx = 3:3
     figure();colormap('jet')
     for cIdx = 1:6
         subplot(2,3,cIdx)
@@ -333,7 +333,7 @@ for sIdx = 3:3
         title(sprintf("%s Sort by Avg PETH",conditions{cIdx}))
         xticks([0 50 100 150])
         xticklabels([0 1 2 3]) 
-        yticks([0,100,200,300])
+        yticks([0,100,200,300,400])
         xlabel("Time on Patch (sec)")
     end
     

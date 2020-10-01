@@ -15,6 +15,6 @@ function [mean_r2b,r2b] = calcR2B(PETH,ridgeWidth,norm)
             r2b(neuron) = ridge / background;
         end
     end 
-    mean_r2b = mean(r2b);
+    mean_r2b = nanmean(r2b);
 end
 

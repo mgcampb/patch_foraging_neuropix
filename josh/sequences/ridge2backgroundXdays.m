@@ -4,7 +4,7 @@
 
 %% Start testing with single session to check that fits are working
 paths = struct;
-paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/75';
+paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/80';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 
 addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData/HGK_analysis_tools'));
@@ -20,7 +20,7 @@ sessions = dir(fullfile(paths.data,'*.mat'));
 sessions = {sessions.name};
 
 close all
-for sIdx = 1:1
+for sIdx = 3:3
     new_structs = true; 
     if new_structs == true
         [FR_decVar_tmp,~] = genSeqStructs(paths,sessions,calc_frOpt,sIdx,buffer);
@@ -97,7 +97,8 @@ for sIdx = 1:1
     toc
     
     visualization = true;
-    if visualization == true
+    if visualization == true 
+        label = "Time Since Reward (msec)";
         % visualize fits
         threePaneFitPlot(sorted_peth,peth_linResid,peth_linFit,decVar_bins,label,"Linear")
         threePaneFitPlot(sorted_peth,peth_gaussResid,peth_gaussFit,decVar_bins,label,"Gaussian") 
@@ -151,7 +152,7 @@ for sIdx = 1:1
     mean_r2b = calcR2B(midResp_peth,ridgeWidth,"zscore");
     
     % now repeat for shuffled data 
-    nShuffles = 100; 
+    nShuffles = 0; 
     shuffle_opt.norm = "zscore";
     shuffle_opt.trials = 'all'; 
     shuffle_opt.neurons = mid_resp; % pull off mid-responsive
@@ -205,7 +206,7 @@ for mouse = {'75','76','78','79','80'}
         % Create PETH/perform sort
         nBins = 40;
         decVar_bins = linspace(0,2,nBins+1);
-        opt.norm = "zscore";
+        opt.norm = "peak";
         opt.trials = 'all';
         opt.suppressVis = true;
         dvar = "timesince";
@@ -264,7 +265,7 @@ for mouse = {'75','76','78','79','80'}
         
         % now repeat for shuffled data
         nShuffles = 500;
-        shuffle_opt.norm = "zscore";
+        shuffle_opt.norm = "peak";
         shuffle_opt.trials = 'all';
         shuffle_opt.neurons = mid_resp; % pull off mid-responsive
         shuffle_opt.suppressVis = true;
