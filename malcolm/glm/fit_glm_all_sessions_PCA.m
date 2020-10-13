@@ -13,7 +13,7 @@
 % NOTE: There is no patch leave buffer here
 
 paths = struct;
-paths.data = 'H:\My Drive\processed_neuropix_data';
+paths.data = 'H:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
 paths.malcolm_functions = 'C:\code\patch_foraging_neuropix\malcolm\functions';
 addpath(genpath(paths.malcolm_functions));
 paths.glmnet = 'C:\code\glmnet_matlab';
@@ -29,6 +29,7 @@ session_all = {session_all.name}';
 for i = 1:numel(session_all)
     session_all{i} = session_all{i}(1:end-4);
 end
+session_all = {'80_20200317'};
 
 % analysis opts
 opt = struct;
@@ -279,6 +280,7 @@ for session_idx = 1:numel(session_all)
 
     % pca on firing rate matrix
     [coeffs,score,~,~,expl] = pca(fr_mat_zscore');
+    
 
     %% Create fold indices (for cross validation)
 

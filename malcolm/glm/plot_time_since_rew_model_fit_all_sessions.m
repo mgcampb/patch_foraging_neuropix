@@ -15,7 +15,7 @@ opt.nbasis = 11;
 % opt.pval_thresh = 0.05;
 opt.rew_size = [1 2 4];
 
-opt.brain_region = 'ORB'; % for all, put ''
+opt.brain_region = ''; % 'ORB'; % for all, put ''
 
 %% load all model fits
 pval_all = [];
@@ -55,8 +55,8 @@ imagesc(t_basis,1:size(ypred,2),ypred(:,sort_idx1)');
 caxis([-2.2 2.2]);
 cb = colorbar;
 xlabel('Time since reward');
-ylabel('Neuron, sorted by abs peak');
-title('A. Model fit (kernels + ramp): 4uL')
+ylabel('Neuron');
+title(sprintf('A. Model fit (kernels + ramp)\nSorted by abs peak\n4uL'))
 ylabel(cb,'Log firing rate change');
 
 % sort by positive change
@@ -68,8 +68,8 @@ imagesc(t_basis,1:size(ypred,2),ypred(:,sort_idx2)');
 caxis([-2.2 2.2]);
 cb = colorbar;
 xlabel('Time since reward');
-ylabel('Neuron, sorted by pos peak');
-title('B. Model fit (kernels + ramp): 4uL')
+ylabel('Neuron');
+title(sprintf('B. Model fit (kernels + ramp)\nSorted by positive peak\n4uL'))
 ylabel(cb,'Log firing rate change');
 
 % sort by negative change
@@ -81,8 +81,8 @@ imagesc(t_basis,1:size(ypred,2),ypred(:,sort_idx3)');
 caxis([-2.2 2.2]);
 cb = colorbar;
 xlabel('Time since reward');
-ylabel('Neuron, sorted by neg peak');
-title('C. Model fit (kernels + ramp): 4uL')
+ylabel('Neuron');
+title(sprintf('C. Model fit (kernels + ramp)\nSorted by negative peak\n4uL'));
 ylabel(cb,'Log firing rate change');
 
 rew_size_this = [2 1];
