@@ -166,7 +166,7 @@ if decoding == True:
                                         index = np.arange(n_shuffles),
                                         columns = prediction_steps,
                                         dtype = np.float32)
-                                        
+
     bar = IncrementalBar('Shuffled Decoding', max = n_shuffles)
     for i in range(n_shuffles):
         shuffled_labels = shuffle_within_eras(reduced_labels,cumulativeClusts)

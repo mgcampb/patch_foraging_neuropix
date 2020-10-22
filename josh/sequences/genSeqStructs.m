@@ -11,7 +11,8 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,b
     % load data
     dat = load(fullfile(paths.data,session));
     fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
-    good_cells = dat.sp.cids(dat.sp.cgs==2); 
+    good_cells = dat.sp.cids(dat.sp.cgs==2);  
+    FR_decVar.goodcell_IDs = good_cells;
     
 %      % todo: depth/brain region specificity
 %     [~, spike_depths_all] = templatePositionsAmplitudes(dat.sp.temps, dat.sp.winv, dat.sp.ycoords, dat.sp.spikeTemplates, dat.sp.tempScalingAmps);
@@ -89,8 +90,22 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,b
             rew_ix = (rew_sec_cell{iTrial}(r) - 1) * 1000 / tbin_ms;
             FR_decVar.decVarTimeSinceRew{iTrial}(rew_ix:end) =  (1:length(FR_decVar.decVarTimeSinceRew{iTrial}(rew_ix:end))) * tbin_ms / 1000;
         end
-    end
+    end 
     
+    % add PCA
+    fr_mat_onPatch = horzcat(FR_decVar.fr_mat{:}); 
+    fr_mat_onPatchZscore = zscore(fr_mat_onPatch,[],2); 
+    [~,score,~,~,expl] = pca(fr_mat_onPatchZscore');
+    score = score'; % reduced data  
+    t_lens = cellfun(@(x) size(x,2),FR_decVar.fr_mat); 
+    new_patchleave_ix = cumsum(t_lens);
+    new_patchstop_ix = new_patchleave_ix - t_lens + 1;  
+    FR_decVar.pca = {length(dat.patchCSL)};
+    for iTrial = 1:length(dat.patchCSL) 
+        FR_decVar.pca{iTrial} = score(1:10,new_patchstop_ix(iTrial):new_patchleave_ix(iTrial)); 
+    end 
+    FR_decVar.expl10 = sum(expl(1:10)) / sum(expl);
+
     FRandTimes.fr_mat = fr_mat;
     FRandTimes.stop_leave_ms = [patchstop_ms patchleave_ms];
     FRandTimes.stop_leave_ix = [patchstop_ix patchleave_ix];

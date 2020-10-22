@@ -133,7 +133,7 @@ FR_decVar = struct;
 FRandTimes = struct;
 index_sort_all = {numel(sessions)};
 
-for sIdx = 1:1
+for sIdx = 1:24
     [FR_decVar_tmp,FRandTimes_tmp] = genSeqStructs(paths,sessions,calc_frOpt,sIdx,buffer);
     % assign to sIdx
     FR_decVar(sIdx).fr_mat = FR_decVar_tmp.fr_mat;
@@ -147,7 +147,7 @@ for sIdx = 1:1
     decVar_bins = linspace(0,2,41);
     opt.norm = "zscore";
     opt.trials = 'all';
-    opt.suppressVis = false;
+    opt.suppressVis = true;
     dvar = "timesince";
     [sorted_peth,~,~] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,opt);
     
@@ -311,6 +311,7 @@ close all
 colors = cool(5);
 figure() 
 hold on
+grid()
 % synthetic data
 scatter(mean(log_r2b_seq),entropy_seq,300,'.') 
 scatter(mean(log_r2b_chaos),entropy_chaos,300,'.')  
@@ -335,11 +336,12 @@ for i = 1:(numel(cumulative_session_counts)-1)
     mouse_sessions = cumulative_session_counts(i)+1:cumulative_session_counts(i+1);
     b.CData(mouse_sessions,:) = repmat(colors(i,:),[session_counts(i),1]); 
 end 
-hold on 
+hold on  
 yline(SI_chaos_norm,'--',"Chaos",'linewidth',1.5)
 yline(SI_mix_norm,'--',"Mix",'linewidth',1.5)
-ylim([0,1]) 
-xticklabels(session_names)  
+ylim([0,1])  
+xticks(cumulative_session_counts+1)
+xticklabels(session_names(min(cumulative_session_counts(1:end-1)+1,length(session_names))))  
 ylabel("Normalized SI")  
 title("Normalized SI Across Sessions")
 

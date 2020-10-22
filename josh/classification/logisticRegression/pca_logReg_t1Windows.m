@@ -1,9 +1,6 @@
-%% A script to do some analysis of questions regarding timewindow choices 
-
-% 1. how do B coefficients across PCs change w.r.t. timewindow of
-%    prediction?  
-% 2. what is the appropriate window to remove pre-rew to maximize
-%    clustering fidelity? measure w/ AUROC 
+%% change how large of a buffer we take to predict reward 
+% eg 0.5-1.0s vs. 1.0-1.5s 
+% this is just going to be a matter of changing the pre-leave buffer 
 
 %% Basics
 paths = struct;
@@ -20,13 +17,12 @@ tbin_ms = frCalc_opt.tbin * 1000;
 frCalc_opt.smoothSigma_time = 0.050; % gauss smoothing sigma for rate matrix (in sec)
 
 sessions = dir(fullfile(paths.data,'*.mat'));
-sessions = {sessions.name}; 
+sessions = {sessions.name};  
 
-%% Acquire PC reductions and a binary classification vector
-
+%% Create struct 
 classification_struct = struct; 
 
-for sIdx = 21:24
+for sIdx = 22:22
     % initialize structs
     session = sessions{sIdx}(1:end-4);
     tbin_ms = frCalc_opt.tbin*1000;
@@ -60,7 +56,8 @@ for sIdx = 21:24
         toc
     end 
     
-    buffer = 500; % ms before leave to exclude in analysis of neural data
+    % no buffer; deal with this directly later
+    buffer = 0; % ms before leave to exclude in analysis of neural data
     
     % create index vectors from our update timestamp vectors
     patchstop_ix = round(patchstop_ms / tbin_ms) + 1;
@@ -86,51 +83,56 @@ for sIdx = 21:24
     new_patchleave_ix = cumsum(t_lens);
     new_patchstop_ix = new_patchleave_ix - t_lens + 1; 
     classification_struct(sIdx).rew_ix = {nTrials}; 
-    classification_struct(sIdx).PCs = {nTrials};    
-    % make labels vectors with t2 windows
-    test_windows = [250,500,750,1000]; 
-    classification_struct(sIdx).labels = {length(test_windows)};
-    for iWindow = 1:length(test_windows)
-        classification_struct(sIdx).labels{iWindow} = {{nTrials}};  
-    end
-    classification_struct(sIdx).vel = {nTrials};  
+    classification_struct(sIdx).PCs = {nTrials};   
     
-    pre_rew_window = 1000; % keep this fixed for now
+    % make labels vectors with different t1 windows
+    test_t1 = floor([0,250,500,750,1000] / tbin_ms);  
+    t2 = 500;
+    
+    for wIdx = 1:length(test_t1)
+        classification_struct(sIdx).labels{wIdx} = {{nTrials}};
+        classification_struct(sIdx).PCs{wIdx} = {{nTrials}}; % use this to figure out what data to look at
+        classification_struct(sIdx).vel{wIdx} = {nTrials};  
+    end 
+    
+    pre_rew_window = 1500; % keep this fixed for now
     
     for iTrial = 1:nTrials
         rew_indices = round(rew_ms(rew_ms >= patchstop_ms(iTrial) & rew_ms < patchleave_ms(iTrial)) - patchstop_ms(iTrial));
-        classification_struct(sIdx).rew_ix{iTrial} = round(rew_indices(rew_indices > 1) / tbin_ms); 
-        classification_struct(sIdx).PCs{iTrial} = score(1:10,new_patchstop_ix(iTrial):new_patchleave_ix(iTrial));  
-        for iWindow = 1:length(test_windows)
-            classification_struct(sIdx).labels{iWindow}{iTrial} = 1:t_lens(iTrial) > (t_lens(iTrial) - test_windows(iWindow) / tbin_ms);  
-        end
-        classification_struct(sIdx).vel{iTrial} = dat.vel(patchstop_ix(iTrial):patchleave_ix(iTrial));   
-        classification_struct(sIdx).rewsize{iTrial} = zeros(t_lens(iTrial),1) + rewsize(iTrial);
+        classification_struct(sIdx).rew_ix{iTrial} = round(rew_indices(rew_indices > 1) / tbin_ms);
         
-        % now take out timesteps that came right before reward to better train regression
-        pre_rew_label = zeros(t_lens(iTrial),1);  
-        rew_ix = classification_struct(sIdx).rew_ix{iTrial}; 
-        for iRew_ix = 1:numel(classification_struct(sIdx).rew_ix{iTrial}) 
-            pre_rew_label(max(1,(rew_ix(iRew_ix) - pre_rew_window / tbin_ms)) : rew_ix(iRew_ix)) = 1; % take off the full second of activity
-        end 
-        
-        non_pre_rew = find(pre_rew_label == 0);
-        classification_struct(sIdx).PCs_noPreRew{iTrial} = classification_struct(sIdx).PCs{iTrial}(:,non_pre_rew); 
-        for iWindow = 1:length(test_windows)
-            classification_struct(sIdx).labels_noPreRew{iWindow}{iTrial} = classification_struct(sIdx).labels{iWindow}{iTrial}(non_pre_rew); 
+        for wIdx = 1:length(test_t1)
+            w_t_len =  new_patchleave_ix(iTrial) - new_patchstop_ix(iTrial) - test_t1(wIdx);
+            
+            classification_struct(sIdx).PCs{wIdx}{iTrial} = score(1:10,new_patchstop_ix(iTrial):new_patchleave_ix(iTrial) - test_t1(wIdx));
+            classification_struct(sIdx).labels{wIdx}{iTrial} = 1:w_t_len > (w_t_len - t2 / tbin_ms);
+            classification_struct(sIdx).vel{wIdx}{iTrial} = dat.vel(patchstop_ix(iTrial):patchleave_ix(iTrial));
+            classification_struct(sIdx).rewsize{wIdx}{iTrial} = zeros(w_t_len,1) + rewsize(iTrial);
+            
+            % now take out timesteps that came right before reward to better train regression
+            pre_rew_label = zeros(w_t_len,1);
+            rew_ix = classification_struct(sIdx).rew_ix{iTrial};
+            for iRew_ix = 1:numel(classification_struct(sIdx).rew_ix{iTrial})
+                pre_rew_label(max(1,(rew_ix(iRew_ix) - pre_rew_window / tbin_ms)) : rew_ix(iRew_ix)) = 1; % take off pre-rew activity
+            end
+            
+            non_pre_rew = find(pre_rew_label == 0);
+            
+            classification_struct(sIdx).PCs_noPreRew{wIdx}{iTrial} = classification_struct(sIdx).PCs{wIdx}{iTrial}(:,non_pre_rew);
+            
+            classification_struct(sIdx).labels_noPreRew{wIdx}{iTrial} = classification_struct(sIdx).labels{wIdx}{iTrial}(non_pre_rew);
+            classification_struct(sIdx).vel_noPreRew{wIdx}{iTrial} = classification_struct(sIdx).vel{wIdx}{iTrial}(non_pre_rew);
+            classification_struct(sIdx).rewsize_noPreRew{wIdx}{iTrial} = classification_struct(sIdx).rewsize{wIdx}{iTrial}(non_pre_rew);
         end
-        classification_struct(sIdx).vel_noPreRew{iTrial} = classification_struct(sIdx).vel{iTrial}(non_pre_rew); 
-        classification_struct(sIdx).rewsize_noPreRew{iTrial} = classification_struct(sIdx).rewsize{iTrial}(non_pre_rew);
     end
 end 
 
-%% Now perform classification with logistic regression, using k-fold x-val  
-%  add velocity classification as a control 
-
+%% now perform classification across t1 values
 close all 
 figcounter = 1;
-for sIdx = 21:21
-    session = sessions{sIdx}(1:end-4); 
+for sIdx = 22:22
+    session = sessions{sIdx}(1:end-4);   
+    session_title = sessions{sIdx}([1:2 end-6:end-4]);
     data = load(fullfile(paths.data,session)); 
     patches = data.patches;
     patchCSL = data.patchCSL;
@@ -138,65 +140,69 @@ for sIdx = 21:21
     patchType = patches(:,2);
     rewsize = mod(patchType,10);  
     
-    all_concat_PCs_noPreRew = horzcat(classification_struct(sIdx).PCs_noPreRew{:});   
-    all_concat_labels_noPreRew = {length(test_windows)};
-    for iWindow = 1:length(test_windows)
+    all_concat_PCs_noPreRew = {length(test_t1)}; 
+    all_concat_labels_noPreRew = {length(test_t1)};  
+    all_concat_rewsize_noPrewRew = {length(test_t1)};   
+    all_concat_vel_noPreRew = {length(test_t1)};   
+    for iWindow = 1:length(test_t1) 
+        all_concat_PCs_noPreRew{iWindow} = horzcat(classification_struct(sIdx).PCs_noPreRew{iWindow}{:});   
         all_concat_labels_noPreRew{iWindow} = horzcat(classification_struct(sIdx).labels_noPreRew{iWindow}{:}) + 1;   
+        all_concat_rewsize_noPrewRew{iWindow} = vertcat(classification_struct(sIdx).rewsize_noPreRew{iWindow}{:})'; 
+        all_concat_vel_noPreRew{iWindow} = horzcat(classification_struct(sIdx).vel_noPreRew{iWindow}{:}); 
     end
-    all_concat_rewsize_noPrewRew = vertcat(classification_struct(sIdx).rewsize_noPreRew{:})'; 
-    all_concat_vel_noPreRew = horzcat(classification_struct(sIdx).vel_noPreRew{:}); 
-    
-    % folds are going to be over points that did not directly precede reward
-    points = 1:numel(all_concat_rewsize_noPrewRew);
     
     % make folds
     xval_opt = struct;
     xval_opt.numFolds = 10;
     xval_opt.rew_size = [1,2,4];
-    % split trials into groups (num groups = opt.numFolds)
-    [points,~,IC] = unique(points); % don't reeeeally know what's going on here
-    data_grp = nan(size(points));
-    shift_by = 0; % to make sure equal numbers of trials end up in each fold
-    % make sure all folds have roughly equal numbers of points from every rewsize
-    for i = 1:numel(xval_opt.rew_size)
-        keep_this = all_concat_rewsize_noPrewRew == xval_opt.rew_size(i);
-        data_grp_this = repmat(circshift(1:xval_opt.numFolds,shift_by),1,ceil(sum(keep_this)/xval_opt.numFolds)*xval_opt.numFolds);
-        data_grp(keep_this) = data_grp_this(1:sum(keep_this)); % assign folds 1:10
-        shift_by = shift_by - mod(sum(keep_this),xval_opt.numFolds); % shift which fold is getting fewer trials
-    end
     
-    foldid = data_grp(IC)';  
     threshold_step = .05;
     thresholds = 0:threshold_step:1; 
     
-    new_xval = true;
+    new_xval = false;
     if new_xval == true 
         % set up datastructures to measure classification fidelity
-        accuracies = nan(numel(test_windows),xval_opt.numFolds,numel(thresholds));
-        precisions = nan(numel(test_windows),xval_opt.numFolds,numel(thresholds));
-        TP_rates = nan(numel(test_windows),xval_opt.numFolds,numel(thresholds));
-        FP_rates = nan(numel(test_windows),xval_opt.numFolds,numel(thresholds)); 
-        ROC_AUC = nan(numel(test_windows),xval_opt.numFolds); 
-        PR_AUC = nan(numel(test_windows),xval_opt.numFolds); 
+        accuracies = nan(numel(test_t1),xval_opt.numFolds,numel(thresholds));
+        precisions = nan(numel(test_t1),xval_opt.numFolds,numel(thresholds));
+        TP_rates = nan(numel(test_t1),xval_opt.numFolds,numel(thresholds));
+        FP_rates = nan(numel(test_t1),xval_opt.numFolds,numel(thresholds)); 
+        ROC_AUC = nan(numel(test_t1),xval_opt.numFolds); 
+        PR_AUC = nan(numel(test_t1),xval_opt.numFolds); 
         % same for velocity
-        accuracies_vel = nan(numel(test_windows),xval_opt.numFolds,numel(thresholds));
-        precisions_vel = nan(numel(test_windows),xval_opt.numFolds,numel(thresholds));
-        TP_rates_vel = nan(numel(test_windows),xval_opt.numFolds,numel(thresholds));
-        FP_rates_vel = nan(numel(test_windows),xval_opt.numFolds,numel(thresholds));
-        ROC_AUC_vel = nan(numel(test_windows),xval_opt.numFolds); 
-        PR_AUC_vel = nan(numel(test_windows),xval_opt.numFolds);
+        accuracies_vel = nan(numel(test_t1),xval_opt.numFolds,numel(thresholds));
+        precisions_vel = nan(numel(test_t1),xval_opt.numFolds,numel(thresholds));
+        TP_rates_vel = nan(numel(test_t1),xval_opt.numFolds,numel(thresholds));
+        FP_rates_vel = nan(numel(test_t1),xval_opt.numFolds,numel(thresholds));
+        ROC_AUC_vel = nan(numel(test_t1),xval_opt.numFolds);
+        PR_AUC_vel = nan(numel(test_t1),xval_opt.numFolds);
         
-        for wIdx = 1:numel(test_windows) 
+        for wIdx = 1:numel(test_t1)
+            
+            % Need to re-do xval division every new window
+            points = 1:numel(all_concat_rewsize_noPrewRew{wIdx});
+            % split trials into groups (num groups = opt.numFolds)
+            [points,~,IC] = unique(points); % don't reeeeally know what's going on here
+            data_grp = nan(size(points));
+            shift_by = 0; % to make sure equal numbers of trials end up in each fold
+            % make sure all folds have roughly equal numbers of points from every rewsize
+            for i = 1:numel(xval_opt.rew_size)
+                keep_this = all_concat_rewsize_noPrewRew{wIdx} == xval_opt.rew_size(i);
+                data_grp_this = repmat(circshift(1:xval_opt.numFolds,shift_by),1,ceil(sum(keep_this)/xval_opt.numFolds)*xval_opt.numFolds);
+                data_grp(keep_this) = data_grp_this(1:sum(keep_this)); % assign folds 1:10
+                shift_by = shift_by - mod(sum(keep_this),xval_opt.numFolds); % shift which fold is getting fewer trials
+            end
+            foldid = data_grp(IC)';
             
             % Iterate over folds to use as test data
             for fIdx = 1:xval_opt.numFolds
                 % separate training and test data for both pcs and vel
-                data_train = all_concat_PCs_noPreRew(:,foldid~=fIdx); 
-                data_train_vel = all_concat_vel_noPreRew(foldid~=fIdx);
+                data_train = all_concat_PCs_noPreRew{wIdx}(:,foldid~=fIdx); 
+                data_train_vel = all_concat_vel_noPreRew{wIdx}(foldid~=fIdx);
                 labels_train = all_concat_labels_noPreRew{wIdx}(foldid~=fIdx); 
+                
+                data_test = all_concat_PCs_noPreRew{wIdx}(:,foldid==fIdx); 
+                data_test_vel = all_concat_vel_noPreRew{wIdx}(foldid==fIdx);
                 labels_test = all_concat_labels_noPreRew{wIdx}(foldid==fIdx);
-                data_test = all_concat_PCs_noPreRew(:,foldid==fIdx); 
-                data_test_vel = all_concat_vel_noPreRew(foldid==fIdx);
                 
                 % now fit logistic regression to our training data
                 [B,~,~] = mnrfit(data_train',labels_train);
@@ -255,12 +261,12 @@ for sIdx = 21:21
                 ROC_AUC_vel(wIdx,fIdx) = threshold_step * sum(TP_rates_vel(wIdx,fIdx,:));
                 PR_AUC_vel(wIdx,fIdx) = threshold_step * sum(precisions_vel(wIdx,fIdx,~isnan(precisions_vel(wIdx,fIdx,:))));
             end
-            fprintf("Window %i / %i Complete \n",wIdx,numel(test_windows))
+            fprintf("Window %i / %i Complete \n",wIdx,numel(test_t1))
         end 
     end
     
     % visualize results with AUROC and Precision-Recall Curve
-    for wIdx = 1:numel(test_windows)
+    for wIdx = 1:numel(test_t1)
         figure(figcounter)
         errorbar(thresholds,squeeze(mean(accuracies(wIdx,:,:))),1.96 * squeeze(std(accuracies(wIdx,:,:))),'linewidth',1.5) 
         hold on
@@ -274,13 +280,13 @@ for sIdx = 21:21
         hold on
         xlabel("Mean False Positive Rate Across Folds")
         ylabel("Mean True Positive Rate Across Folds")
-        title("PCA Receiver Operator Characteristic Curve")
+        title(sprintf("%s PCA Receiver Operator Characteristic Curve",session_title))
         subplot(1,2,2)
         errorbar(squeeze(mean(TP_rates(wIdx,:,:))),squeeze(mean(precisions(wIdx,:,:))),1.96 * squeeze(std(precisions(wIdx,:,:))),'linewidth',1.5)
         hold on
         xlabel("Mean True Positive Rate Across Folds")
         ylabel("Mean Precision Across Folds")
-        title("PCA Precision Recall Curve") 
+        title(sprintf("%s PCA Precision Recall Curve",session_title)) 
         
         % make same plot for velocity
         figure(figcounter + 2)
@@ -289,70 +295,34 @@ for sIdx = 21:21
         hold on
         xlabel("Mean False Positive Rate Across Folds")
         ylabel("Mean True Positive Rate Across Folds")
-        title("Velocity Receiver Operator Characteristic Curve")
+        title(sprintf("%s Velocity Receiver Operator Characteristic Curve",session_title))
         subplot(1,2,2)
         errorbar(squeeze(mean(TP_rates_vel(wIdx,:,:))),squeeze(mean(precisions_vel(wIdx,:,:))),1.96 * squeeze(std(precisions_vel(wIdx,:,:))),'linewidth',1.5)
         hold on
         xlabel("Mean True Positive Rate Across Folds")
         ylabel("Mean Precision Across Folds")
-        title("Velocity Precision Recall Curve")
+        title(sprintf("%s Velocity Precision Recall Curve",session_title))
     end
     
     figure(figcounter + 1)  
     subplot(1,2,1) 
     plot([0,1],[0,1],'k--','linewidth',1.5) 
     ylim([0,1])
-    legend("Classify 250 msec pre-leave","Classify 500 msec pre-leave","Classify 750 msec pre-leave","Classify 1000 msec pre-leave","Naive Performance") 
+    legend("Classify 0-.5 sec pre-leave","Classify .25-.75 sec pre-leave","Classify .5-1.0 sec pre-leave","Classify .75-1.25 sec pre-leave","Classify 1.0-1.5 sec pre-leave","Naive Performance") 
     subplot(1,2,2) 
     yline(.5,'k--','linewidth',1.5)
-    legend("Classify 250 msec pre-leave","Classify 500 msec pre-leave","Classify 750 msec pre-leave","Classify 1000 msec pre-leave","Naive Performance") 
+    ylim([0,1])
+    legend("Classify 0-.5 sec pre-leave","Classify .25-.75 sec pre-leave","Classify .5-1.0 sec pre-leave","Classify .75-1.25 sec pre-leave","Classify 1.0-1.5 sec pre-leave","Naive Performance")
     
     figure(figcounter + 2)  
     subplot(1,2,1)
     plot([0,1],[0,1],'k--','linewidth',1.5) 
     ylim([0,1])
-    legend("Classify 250 msec pre-leave","Classify 500 msec pre-leave","Classify 750 msec pre-leave","Classify 1000 msec pre-leave","Naive Performance") 
+    legend("Classify 0-.5 sec pre-leave","Classify .25-.75 sec pre-leave","Classify .5-1.0 sec pre-leave","Classify .75-1.25 sec pre-leave","Classify 1.0-1.5 sec pre-leave","Naive Performance")
     subplot(1,2,2) 
+    ylim([0,1])
     yline(.5,'k--','linewidth',1.5)
-    legend("Classify 250 msec pre-leave","Classify 500 msec pre-leave","Classify 750 msec pre-leave","Classify 1000 msec pre-leave","Naive Performance") 
+    legend("Classify 0-.5 sec pre-leave","Classify .25-.75 sec pre-leave","Classify .5-1.0 sec pre-leave","Classify .75-1.25 sec pre-leave","Classify 1.0-1.5 sec pre-leave","Naive Performance")
     
-    figcounter = figcounter + 3;
+    figcounter = figcounter + 3; 
 end
-
-%% Now just check how logreg weights on PCs change by prediction window
-
-close all 
-for sIdx = 22:22
-    all_concat_PCs_noPreRew = horzcat(classification_struct(sIdx).PCs_noPreRew{:})';   
-    all_concat_PCs = horzcat(classification_struct(sIdx).PCs{:})';  
-    session_len = size(all_concat_PCs,1);  
-    
-    B_coeffs = nan(size(all_concat_PCs_noPreRew,2),numel(test_windows));
-    
-    for iWindow = 1:numel(test_windows)
-        all_concat_labels_noPreRew = horzcat(classification_struct(sIdx).labels_noPreRew{iWindow}{:}) + 1;  
-        [B,dev,stats] = mnrfit(all_concat_PCs_noPreRew,all_concat_labels_noPreRew);
-        B_coeffs(:,iWindow) = B(2:end);
-        [~,pc_sort_by_logW] = sort(abs(B(2:end)),'descend');
-        pi_hat = mnrval(B,all_concat_PCs);    
-        
-        decode_pc1 = pc_sort_by_logW(1); 
-        decode_pc2 = pc_sort_by_logW(2);  
-        decode_pc3 = pc_sort_by_logW(3); 
-
-        figure();colormap('hot')
-        scatter3(all_concat_PCs(:,decode_pc1),all_concat_PCs(:,decode_pc2),all_concat_PCs(:,decode_pc3),3,pi_hat(:,2)','.')
-        colorbar()
-        xlabel(sprintf("PC%i",decode_pc1))
-        ylabel(sprintf("PC%i",decode_pc2))
-        zlabel(sprintf("PC%i",decode_pc3))
-    end
-
-    figure()
-    bar(B_coeffs)
-    xlabel("PC")
-    ylabel("Logistic Regression Weight")
-    title("PC Logistic Regression Results")
-    
-end
-
