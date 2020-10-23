@@ -1,6 +1,13 @@
 function [coeffs,fr_mat,good_cells,score] = standard_pca_fn(paths,opt)
 % Standard function to calculate PCA and perform smoothing 
 
+    %% Handle optional arguments
+    % include off patch data?
+    onPatchOnly = true;
+    if exist('opt', 'var') && isfield(opt,'onPatchOnly')
+        onPatchOnly = opt.onPatchOnly;
+    end
+
     %% Load in data
     dat = load(fullfile(paths.data,opt.session));
     good_cells_all = dat.sp.cids(dat.sp.cgs==2);
@@ -9,7 +16,7 @@ function [coeffs,fr_mat,good_cells,score] = standard_pca_fn(paths,opt)
     opt.tstart = 0;
     opt.tend = max(dat.sp.st);
     tbinedge = opt.tstart:opt.tbin:opt.tend;
-    tbincent = tbinedge(1:end-1)+opt.tbin/2;
+    tbincent = tbinedge(1:end-1)+opt.tbin/2; 
 
     %% extract in-patch times
     in_patch = false(size(tbincent));
@@ -49,7 +56,11 @@ function [coeffs,fr_mat,good_cells,score] = standard_pca_fn(paths,opt)
     fr_mat_zscore = zscore(fr_mat,[],2); % z-score is across whole session including out-of-patch times - is this weird??
 
     % pca on firing rate matrix, only in patches with buffer before patch leave
-    coeffs = pca(fr_mat_zscore(:,in_patch_buff)');
+    if onPatchOnly == true
+        coeffs = pca(fr_mat_zscore(:,in_patch_buff)'); 
+    else 
+        coeffs = pca(fr_mat_zscore');  
+    end
 
     % project full session onto these PCs
     score = coeffs'*fr_mat_zscore;
