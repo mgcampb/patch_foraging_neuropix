@@ -23,13 +23,13 @@ opt.smoothSigma_time = 0.100; % gauss smoothing sigma for rate matrix (in sec)
 sessions = dir(fullfile(paths.data,'*.mat'));
 sessions = {sessions.name};
 
-load('forward_search_struct.mat') % struct from logistic regression forward search  
+% load('forward_search_struct.mat') % struct from logistic regression forward search  
 
 %% Extract FR matrices and timing information, get peaksort ordering
 FR_decVar = struct; 
 FRandTimes = struct;
-index_sort_all = {sIdx};
-for sIdx = 1:24
+index_sort_all = cell(numel(sessions),1);
+for sIdx = 24:24
     buffer = 500;
     [FR_decVar_tmp,FRandTimes_tmp] = genSeqStructs(paths,sessions,opt,sIdx,buffer);
     % assign to sIdx 
@@ -216,7 +216,7 @@ RX_data = {};
 RXX_data = {};
 %% Make RX and RXX data structs 
 
-for sIdx = 1:24
+for sIdx = 24
     RX_data{sIdx} = struct; 
     RXX_data{sIdx} = struct;
     session = sessions{sIdx}(1:end-4);
@@ -397,7 +397,7 @@ close all
 colors = {[.5 1 1],[.75 .75 1],[1 .5 1],[0 1 1],[.5 .5 1],[1 0 1]}; 
 conds = [2,3,5,6];
 % run PCA logreg beforehand to get meshgrid data
-for sIdx = 17:17
+for sIdx = 24:24
     disp(sessions(sIdx))
     decoding_order = forward_search(sIdx).pc_decodingOrder;
     all_concat_PCs_noPreRew = horzcat(classification_struct(sIdx).PCs_noPreRew{:})';

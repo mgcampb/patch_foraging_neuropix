@@ -44,7 +44,7 @@ function [coeffs,fr_mat,good_cells,score] = standard_pca_fn(paths,opt)
     T = size(spikecounts,1)*opt.tbin;
     N = sum(spikecounts);
     fr = N/T;
-    good_cells = good_cells_all(fr>opt.min_fr);
+    good_cells = good_cells_all(fr>=opt.min_fr);
 
 
     %% compute PCA

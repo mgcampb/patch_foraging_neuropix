@@ -9,7 +9,6 @@ paths = struct;
 paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/all_mice';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData/HGK_analysis_tools'));
 addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData'));
 
 % analysis options
@@ -24,14 +23,15 @@ sessions = {sessions.name};
 %% Extract FR matrices and timing information 
 FR_decVar = struct; 
 FRandTimes = struct;
-for sIdx = 24:24
+for sIdx = 20:24
     buffer = 500;
     [FR_decVar_tmp,FRandTimes_tmp] = genSeqStructs(paths,sessions,opt,sIdx,buffer);
     % assign to sIdx
     FR_decVar(sIdx).fr_mat = FR_decVar_tmp.fr_mat; 
     FR_decVar(sIdx).goodcell_IDs = FR_decVar_tmp.goodcell_IDs; 
     FR_decVar(sIdx).decVarTime = FR_decVar_tmp.decVarTime;
-    FR_decVar(sIdx).decVarTimeSinceRew = FR_decVar_tmp.decVarTimeSinceRew;
+    FR_decVar(sIdx).decVarTimeSinceRew = FR_decVar_tmp.decVarTimeSinceRew; 
+    FR_decVar(sIdx).cell_depths = FR_decVar_tmp.spike_depths;
     FRandTimes(sIdx).fr_mat = FRandTimes_tmp.fr_mat;
     FRandTimes(sIdx).stop_leave_ms = FRandTimes_tmp.stop_leave_ms;
     FRandTimes(sIdx).stop_leave_ix = FRandTimes_tmp.stop_leave_ix; 
@@ -39,20 +39,25 @@ end
 
 %% Sort by all trials to get ordering
 
-index_sort_all = {sIdx};
-for sIdx = 24:24
+index_sort_all = cell(numel(sessions),1);
+for sIdx = 20:24
     decVar_bins = linspace(0,2,41);
     opt.norm = "zscore";
     opt.trials = 'all';
-    opt.suppressVis = false;
+    opt.suppressVis = true;
     dvar = "timesince";
     [sorted_peth,neuron_order,unsorted_peth] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,opt);
-    index_sort_all{sIdx} = neuron_order;
+    index_sort_all{sIdx} = neuron_order; 
+    
+%     figure()
+%     binscatter(1:numel(neuron_order),FR_decVar(sIdx).cell_depths(neuron_order),10)
+%     hold on
+%     yline(mean(FR_decVar(sIdx).cell_depths),'k--','linewidth',2) 
 end
 
 %% Now average over RX conditions 
 RX_data = {};
-for sIdx = 24:24
+for sIdx = 1:24
     RX_data{sIdx} = struct;
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
@@ -90,24 +95,31 @@ for sIdx = 24:24
         trials10x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == 0 & prts > 2.55);
         trials11x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & prts > 2.55);
         
-        temp_fr_mat = {length(trials10x)};
-        for j = 1:numel(trials10x)
-            iTrial = trials10x(j);
-            stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
-            temp_fr_mat{j} = FRandTimes(sIdx).fr_mat(:,(stop_ix):stop_ix + sec2ix);
+        if ~isempty(trials10x)
+            temp_fr_mat = {length(trials10x)};
+            for j = 1:numel(trials10x)
+                iTrial = trials10x(j);
+                stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
+                temp_fr_mat{j} = FRandTimes(sIdx).fr_mat(:,(stop_ix):stop_ix + sec2ix);
+            end
+            mean_condition_fr = mean(cat(3,temp_fr_mat{:}),3); % concatenate in third dimension, average over it
+            RX_data{sIdx}(rew_counter).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2);
+        else
+            RX_data{sIdx}(rew_counter).fr_mat = zeros(length(index_sort_all{sIdx}),sec2ix);
         end
         
-        mean_condition_fr = mean(cat(3,temp_fr_mat{:}),3); % concatenate in third dimension, average over it
-        RX_data{sIdx}(rew_counter).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2);
-        
-        temp_fr_mat = {length(trials11x)};
-        for j = 1:numel(trials11x)
-            iTrial = trials11x(j);
-            stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
-            temp_fr_mat{j} = FRandTimes(sIdx).fr_mat(:,stop_ix:(stop_ix + sec2ix));
+        if ~isempty(trials11x)
+            temp_fr_mat = {length(trials11x)};
+            for j = 1:numel(trials11x)
+                iTrial = trials11x(j);
+                stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
+                temp_fr_mat{j} = FRandTimes(sIdx).fr_mat(:,stop_ix:(stop_ix + sec2ix));
+            end
+            mean_condition_fr = mean(cat(3,temp_fr_mat{:}),3); % concatenate in third dimension, average over it
+            RX_data{sIdx}(rew_counter+3).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); % 3 reward sizes
+        else
+            RX_data{sIdx}(rew_counter+3).fr_mat = zeros(length(index_sort_all{sIdx}),sec2ix);
         end
-        mean_condition_fr = mean(cat(3,temp_fr_mat{:}),3); % concatenate in third dimension, average over it
-        RX_data{sIdx}(rew_counter+3).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); % 3 reward sizes
         rew_counter = rew_counter + 1;
     end
 end
@@ -115,46 +127,89 @@ end
 %% Now visualize RX PETHs, sort by peak responsivity
 close all
 conditions = {"10","20","40","11","22","44"};
-for sIdx = 24:24
-    figure();colormap('jet') 
+for sIdx = 21:24
+    session = sessions{sIdx}; 
+    session_title = session([1:2 end-6:end-4]); 
+    nNeurons = length(index_sort_all{sIdx});
+    figure(); % colormap('jet') 
     spcounter = 1;
-    for cIdx = [1 4 2 5 3 6]
-        subplot(3,2,spcounter)
+    for cIdx = 1:6
+        subplot(2,3,spcounter)
         imagesc(flipud(RX_data{sIdx}(cIdx).fr_mat))
-        if cIdx == 1
-            cl1 = caxis;
-        end
-        caxis(cl1)
-        title(sprintf("Z-Scored Mean %s Trial Activity",conditions{cIdx}))
+        title(sprintf("%s %s (All)",session_title,conditions{cIdx}))
         xlabel("Time (msec)")
         xticks([0 50 100])
         xticklabels([0 1000 2000]) 
-        spcounter = spcounter + 1;
-    end
+        spcounter = spcounter + 1; 
+        caxis([-3,3]) 
+        colorbar()
+    end 
     
-    figure();colormap('jet')
-    index_sorts = {3};
+    figure()
+    spcounter = 1;
     for cIdx = 1:6
-        subplot(2,3,cIdx)
-        % re-sort if on an omission trial
-        sortIdx = cIdx;
-        if sortIdx > 3
-            sortIdx = cIdx - 3;
-        else
-            [~,index] = max(RX_data{sIdx}(cIdx).fr_mat,[],2);
-            [~,index_sort] = sort(index);
-            index_sorts{sortIdx} = index_sort;
-        end
-        imagesc(flipud(RX_data{sIdx}(cIdx).fr_mat(index_sorts{sortIdx},:)))
-        if cIdx == 1
-            cl1 = caxis;
-        end
-        caxis(cl1)
-        title(sprintf("%s Sort by %s",conditions{cIdx},conditions{sortIdx}))
+        subplot(2,3,spcounter)
+        imagesc(flipud(RX_data{sIdx}(cIdx).fr_mat(midresp_struct(sIdx).gaussian_selection,:)))
+        title(sprintf("%s %s (Gaussian Selection)",session_title,conditions{cIdx}))
         xlabel("Time (msec)")
         xticks([0 50 100])
-        xticklabels([0 1000 2000])
+        xticklabels([0 1000 2000]) 
+        spcounter = spcounter + 1; 
+        caxis([-3,3]) 
+        colorbar()
+    end 
+    
+    figure()
+    spcounter = 1;
+    for cIdx = 1:6
+        subplot(2,3,spcounter)
+        imagesc(flipud(RX_data{sIdx}(cIdx).fr_mat(midresp_struct(sIdx).r2b_selection,:)))
+        title(sprintf("%s %s (R2B Selection)",session_title,conditions{cIdx}))
+        xlabel("Time (msec)")
+        xticks([0 50 100])
+        xticklabels([0 1000 2000]) 
+        spcounter = spcounter + 1; 
+        caxis([-3,3]) 
+        colorbar()
+    end 
+    
+    figure()
+    spcounter = 1;
+    for cIdx = 1:6
+        subplot(2,3,spcounter)
+        imagesc(flipud(RX_data{sIdx}(cIdx).fr_mat(setdiff(1:nNeurons,midresp_struct(sIdx).gaussian_selection),:)))
+        title(sprintf("%s %s (Not Gaussian-Selected)",session_title,conditions{cIdx}))
+        xlabel("Time (msec)")
+        xticks([0 50 100])
+        xticklabels([0 1000 2000]) 
+        spcounter = spcounter + 1; 
+        caxis([-3,3]) 
+        colorbar()
     end
+%     
+%     figure();colormap('jet')
+%     index_sorts = {3};
+%     for cIdx = 1:6
+%         subplot(2,3,cIdx)
+%         % re-sort if on an omission trial
+%         sortIdx = cIdx;
+%         if sortIdx > 3
+%             sortIdx = cIdx - 3;
+%         else
+%             [~,index] = max(RX_data{sIdx}(cIdx).fr_mat,[],2);
+%             [~,index_sort] = sort(index);
+%             index_sorts{sortIdx} = index_sort;
+%         end
+%         imagesc(flipud(RX_data{sIdx}(cIdx).fr_mat(index_sorts{sortIdx},:)))
+%         if cIdx == 1
+%             cl1 = caxis;
+%         end
+%         caxis(cl1)
+%         title(sprintf("%s Sort by %s",conditions{cIdx},conditions{sortIdx}))
+%         xlabel("Time (msec)")
+%         xticks([0 50 100])
+%         xticklabels([0 1000 2000])
+%     end
 end
 
 %% Now visualize RX ramp PETHs w/ various sorts
@@ -177,7 +232,7 @@ for sIdx = 1:1
     [~,int_sort] = sort(intercepts);
     int_sort = ramp_idx(int_sort);
     
-    figure();colormap('jet')
+    figure(); % colormap('jet')
     for cIdx = 1:6
         subplot(2,3,cIdx)
         imagesc(flipud(RX_data{sIdx}(cIdx).fr_mat(ramp_idx,:)))
@@ -214,7 +269,7 @@ end
 %% Now same over RXX conditions 
 
 RXX_data = {};
-for sIdx = 1:24
+for sIdx = 20:24
     RXX_data{sIdx} = struct;
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
@@ -269,11 +324,11 @@ for sIdx = 1:24
             % exclude trials of this exact type
             opt.trials = setdiff(1:nTrials,trials100x);
             [~,exclude100order,~] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,opt);
-            RXX_data{sIdx}(rew_counter).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2);
+            RXX_data{sIdx}(rew_counter).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2);  
+%             RXX_data{sIdx}(rew_counter).fr_mat = zscore(mean_condition_fr(exclude100order,:),[],2);
         else
             RXX_data{sIdx}(rew_counter).fr_mat = zeros(length(index_sort_all{sIdx}),sec3ix);
         end
-        %         RXX_data{sIdx}(rew_counter).fr_mat = zscore(mean_condition_fr(exclude100order,:),[],2);
         
         if ~isempty(trials110x)
             temp_fr_mat = {length(trials110x)};
@@ -287,11 +342,11 @@ for sIdx = 1:24
             % exclude trials of this exact type
             opt.trials = setdiff(1:nTrials,trials110x);
             [~,exclude110order,~] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,opt);
-            RXX_data{sIdx}(rew_counter+1).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); % 3 reward sizes
+            RXX_data{sIdx}(rew_counter+1).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); % 3 reward sizes 
+%             RXX_data{sIdx}(rew_counter+1).fr_mat = zscore(mean_condition_fr(exclude110order,:),[],2); % 3 reward sizes
         else
             RXX_data{sIdx}(rew_counter+1).fr_mat = zeros(length(index_sort_all{sIdx}),sec3ix);
-        end
-        %         RXX_data{sIdx}(rew_counter+1).fr_mat = zscore(mean_condition_fr(exclude110order,:),[],2); % 3 reward sizes
+        end    
         
         if ~isempty(trials101x)
             temp_fr_mat = {length(trials101x)};
@@ -306,7 +361,7 @@ for sIdx = 1:24
             opt.trials = setdiff(1:nTrials,trials101x);
             [~,exclude101order,~] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,opt);
             RXX_data{sIdx}(rew_counter+2).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); % 3 reward sizes
-            %         RXX_data{sIdx}(rew_counter+2).fr_mat = zscore(mean_condition_fr(exclude101order,:),[],2); % 3 reward sizes
+%             RXX_data{sIdx}(rew_counter+2).fr_mat = zscore(mean_condition_fr(exclude101order,:),[],2); % 3 reward sizes
         else
             RXX_data{sIdx}(rew_counter+2).fr_mat = zeros(length(index_sort_all{sIdx}),sec3ix);
         end
@@ -324,9 +379,7 @@ for sIdx = 1:24
         opt.trials = setdiff(1:nTrials,trials111x);
         [~,exclude111order,~] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,opt);
         RXX_data{sIdx}(rew_counter+3).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); % 3 reward sizes
-%         RXX_data{sIdx}(rew_counter+3).fr_mat =
-%         zscore(mean_condition_fr(exclude111order,:),[],2); % 3 reward
-%         sizes  
+%         RXX_data{sIdx}(rew_counter+3).fr_mat = zscore(mean_condition_fr(exclude111order,:),[],2); % 3 reward sizes  
         else 
             RXX_data{sIdx}(rew_counter+3).fr_mat = zeros(length(index_sort_all{sIdx}),sec3ix);
         end
@@ -339,23 +392,42 @@ end
 close all
 conditions = {"200","220","202","222","400","440","404","444"};
 sorts = {"10","20","40"};
-for sIdx = 11:24
+for sIdx = 20:24
     session = sessions{sIdx}; 
-    session_title = session([1:2 end-2:end]);
-    figure();colormap('jet')
+    session_title = session([1:2 end-6:end-4]);
+    nNeurons = size(RXX_data{sIdx}(1).fr_mat,2);  
+    
+    figure();
     for cIdx = 1:8
-        subplot(2,4,cIdx)
-        imagesc(flipud(RXX_data{sIdx}(cIdx).fr_mat))
+        subplot(2,4,cIdx);colormap('parula')
+        imagesc(flipud(RXX_data{sIdx}(cIdx).fr_mat(midresp_struct(sIdx).gaussian_selection,:)))
+        %         imagesc(flipud(RXX_data{sIdx}(cIdx).fr_mat));colormap('parula')
         if cIdx == 1
             cl1 = caxis;
         end
         caxis(cl1)
-%         title(sprintf("%s Sort Excluding %s",conditions{cIdx},conditions{cIdx}))
-        title(sprintf("%s %s Sort by Avg PETH",session_title,conditions{cIdx}))
+        %         title(sprintf("%s %s Sort Excluding %s",session_title,conditions{cIdx},conditions{cIdx}))
+        title(sprintf("%s %s (Gaussian Selection)",session_title,conditions{cIdx}))
+        xticks([0 50 100 150])
+        xticklabels([0 1 2 3])
+        yticks([0,100,200,300,400])
+        xlabel("Time on Patch (sec)")
+        caxis([-3,3])
+        colorbar()
+    end
+    
+    figure();
+    for cIdx = 1:8
+        subplot(2,4,cIdx);colormap('parula')
+        imagesc(flipud(RXX_data{sIdx}(cIdx).fr_mat));colormap('parula')
+        %         title(sprintf("%s %s Sort Excluding %s",session_title,conditions{cIdx},conditions{cIdx}))
+        title(sprintf("%s %s (All)",session_title,conditions{cIdx}))
         xticks([0 50 100 150])
         xticklabels([0 1 2 3]) 
         yticks([0,100,200,300,400])
-        xlabel("Time on Patch (sec)")
+        xlabel("Time on Patch (sec)")  
+        caxis([-3,3])
+        colorbar()
     end
     
 %     figure();colormap('jet')

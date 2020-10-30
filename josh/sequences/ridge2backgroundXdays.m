@@ -34,7 +34,7 @@ for sIdx = 1:24
     opt.trials = 'all';
     opt.suppressVis = true;
     dvar = "timesince";
-    [sorted_peth,~,~] = peakSortPETH(FR_decVar_tmp,dvar,decVar_bins,opt); 
+    [sorted_peth,neuron_order,~] = peakSortPETH(FR_decVar_tmp,dvar,decVar_bins,opt); 
     nNeurons = size(sorted_peth,1);
     
 %     sorted_peth = sorted_peth(1:5:end,:); % downsample for testing 
@@ -135,43 +135,51 @@ for sIdx = 1:24
     % Pull off mid-responsive neurons 
     eps = .01; 
     mid_resp = find(gauss_exp_labels == 1 & mu_fit > (5+eps) & mu_fit < (35-eps));
-    midresp_struct(sIdx).mid_resp_ix = mid_resp;
-%     midResp_peth = sorted_peth(mid_resp,:);  
-%     
-%     if visualization == true
-%         % Show mid-responsive neurons pulled off 
-%         figure();colormap('jet')
-%         imagesc(flipud(midResp_peth))
-%         colorbar()
-%         title("Activity of selected mid-responsive neurons") 
-%         xlabel("Time Since Reward (msec)") 
-%         xticks([1 10 20 30 40]) 
-%         xticklabels([0 500 1000 1500 2000]) 
-%         ylabel("Sorted mid-responsive neurons") 
-%     end
-%     
-%     % calculate ridge to background ratio for mid-responsive neurons 
-%     ridgeWidth = 2; % +/- 100 msec
-%     mean_r2b = calcR2B(midResp_peth,ridgeWidth,"zscore");
-%     
-%     % now repeat for shuffled data 
-%     nShuffles = 0; 
-%     shuffle_opt.norm = "zscore";
-%     shuffle_opt.trials = 'all'; 
-%     shuffle_opt.neurons = mid_resp; % pull off mid-responsive
-%     shuffle_opt.suppressVis = true; 
-%     shuffle_opt.shuffle = true;
-%     dvar = "timesince"; 
-%     mean_r2b_shuffled = nan(nShuffles,1); 
-%     tic 
-%     for shuffle = 1:nShuffles
-%         [shuffled_peth,~,~] = peakSortPETH(FR_decVar_tmp,dvar,decVar_bins,shuffle_opt);  
-%         mean_r2b_shuffled(shuffle) = calcR2B(shuffled_peth,ridgeWidth,"zscore");
-%     end 
-%     toc 
-%     
-%     % calculate a p value
-%     p = numel(find(mean_r2b_shuffled > mean_r2b)) / nShuffles;
+    midresp_struct(sIdx).gaussian_selection = mid_resp;
+    midResp_peth = sorted_peth(mid_resp,:);  
+    
+    if visualization == true
+        % Show mid-responsive neurons pulled off 
+        figure();colormap('jet')
+        imagesc(flipud(midResp_peth))
+        colorbar()
+        title("Activity of selected mid-responsive neurons") 
+        xlabel("Time Since Reward (msec)") 
+        xticks([1 10 20 30 40]) 
+        xticklabels([0 500 1000 1500 2000]) 
+        ylabel("Sorted mid-responsive neurons") 
+    end
+    
+    % calculate ridge to background ratio for mid-responsive neurons 
+    ridgeWidth = 4; % +/- 100 msec
+    [mean_r2b,r2b] = calcR2B(midResp_peth,ridgeWidth,"zscore");
+    
+    % now repeat for shuffled data 
+    nShuffles = 1000; 
+    shuffle_opt.norm = "zscore";
+    shuffle_opt.trials = 'all'; 
+    shuffle_opt.neurons = mid_resp; % pull off mid-responsive
+    shuffle_opt.suppressVis = true; 
+    shuffle_opt.shuffle = true;
+    dvar = "timesince"; 
+    mean_r2b_shuffled = nan(nShuffles,1);  
+    r2b_shuffled = nan(nShuffles,numel(mid_resp));
+    tic 
+    for shuffle = 1:nShuffles
+        [shuffled_peth,~,~] = peakSortPETH(FR_decVar_tmp,dvar,decVar_bins,shuffle_opt);  
+        [mean_r2b_shuffled(shuffle),r2b_shuffled(shuffle,:)] = calcR2B(shuffled_peth,ridgeWidth,"zscore"); 
+    end 
+    toc 
+    
+    p_singleCells = nan(numel(mid_resp),1);
+    for neuron = 1:numel(mid_resp) 
+        p_singleCells(neuron) = numel(find(r2b_shuffled(:,neuron) > r2b(neuron))) / nShuffles;
+    end  
+    
+    midresp_struct(sIdx).r2b_selection = mid_resp(p_singleCells < 0.05);
+    
+    % calculate a p value
+    p = numel(find(mean_r2b_shuffled > mean_r2b)) / nShuffles;
 end
 
 %% Now repeat across sessions and mice 

@@ -74,11 +74,14 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
         unsorted_peth_norm = zscore(unsorted_peth,[],2);
     elseif norm == "peak"
         unsorted_peth_norm = unsorted_peth ./ max(unsorted_peth,[],2);
-        unsorted_peth_norm(isnan(unsorted_peth_norm)) = 0;
+        unsorted_peth_norm(isnan(unsorted_peth_norm)) = 0; 
+    elseif norm == "none" 
+        unsorted_peth_norm = unsorted_peth;
     end
     
-    [~,index] = max(unsorted_peth');
-    [~,neuron_order] = sort(index);
+    [~,index] = max(unsorted_peth'); 
+    
+    [~,neuron_order] = sort(index); 
     sorted_peth = unsorted_peth_norm(neuron_order,:); 
     
     % subselect neurons? 

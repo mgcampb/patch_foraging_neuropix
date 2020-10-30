@@ -14,15 +14,16 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,b
     good_cells = dat.sp.cids(dat.sp.cgs==2);  
     FR_decVar.goodcell_IDs = good_cells;
     
-%      % todo: depth/brain region specificity
-%     [~, spike_depths_all] = templatePositionsAmplitudes(dat.sp.temps, dat.sp.winv, dat.sp.ycoords, dat.sp.spikeTemplates, dat.sp.tempScalingAmps);
-% 
-%     % take median spike depth for each cell
-%     spike_depths = nan(size(good_cells));
-% 
-%     parfor cIdx = 1:numel(good_cells)
-%         spike_depths(cIdx) = median(spike_depths_all(dat.sp.clu==good_cells(cIdx)));
-%     end  
+     % todo: depth/brain region specificity
+    [~, spike_depths_all] = templatePositionsAmplitudes(dat.sp.temps, dat.sp.winv, dat.sp.ycoords, dat.sp.spikeTemplates, dat.sp.tempScalingAmps);
+
+    % take median spike depth for each cell
+    spike_depths = nan(size(good_cells));
+
+    for cIdx = 1:numel(good_cells)
+        spike_depths(cIdx) = median(spike_depths_all(dat.sp.clu==good_cells(cIdx)));
+    end  
+    FR_decVar.spike_depths = spike_depths;
 %     
 %     mm1_units = find(spike_depths > (max(spike_depths) - 1000));
 %     
