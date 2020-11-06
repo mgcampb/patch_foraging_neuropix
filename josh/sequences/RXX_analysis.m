@@ -15,7 +15,8 @@ addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData'));
 opt = struct;
 opt.tbin = 0.02; % time bin for whole session rate matrix (in sec) 
 tbin_ms = opt.tbin * 1000;
-opt.smoothSigma_time = 0.100; % gauss smoothing sigma for rate matrix (in sec)
+opt.smoothSigma_time = 0.100; % gauss smoothing sigma for rate matrix (in sec) 
+opt.preLeave_buffer = 500;
 
 sessions = dir(fullfile(paths.data,'*.mat'));
 sessions = {sessions.name};
@@ -25,7 +26,7 @@ FR_decVar = struct;
 FRandTimes = struct;
 for sIdx = 20:24
     buffer = 500;
-    [FR_decVar_tmp,FRandTimes_tmp] = genSeqStructs(paths,sessions,opt,sIdx,buffer);
+    [FR_decVar_tmp,FRandTimes_tmp] = genSeqStructs(paths,sessions,opt,sIdx);
     % assign to sIdx
     FR_decVar(sIdx).fr_mat = FR_decVar_tmp.fr_mat; 
     FR_decVar(sIdx).goodcell_IDs = FR_decVar_tmp.goodcell_IDs; 

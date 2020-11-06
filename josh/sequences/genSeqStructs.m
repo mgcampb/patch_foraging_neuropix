@@ -1,7 +1,13 @@
-function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,buffer)
+function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx)
 % Just a function to make two standardized structs useful for sequence
 % analysis
-
+    
+    % extract keyword arguments
+    preLeave_buffer = 500;
+    if exist('opt', 'var') && isfield(opt,'preLeave_buffer')
+        preLeave_buffer = opt.preLeave_buffer;
+    end 
+    
     % initialize structs
     FR_decVar = struct;
     FRandTimes = struct;
@@ -14,23 +20,6 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,b
     good_cells = dat.sp.cids(dat.sp.cgs==2);  
     FR_decVar.goodcell_IDs = good_cells;
     
-     % todo: depth/brain region specificity
-    [~, spike_depths_all] = templatePositionsAmplitudes(dat.sp.temps, dat.sp.winv, dat.sp.ycoords, dat.sp.spikeTemplates, dat.sp.tempScalingAmps);
-
-    % take median spike depth for each cell
-    spike_depths = nan(size(good_cells));
-
-    for cIdx = 1:numel(good_cells)
-        spike_depths(cIdx) = median(spike_depths_all(dat.sp.clu==good_cells(cIdx)));
-    end  
-    FR_decVar.spike_depths = spike_depths;
-%     
-%     mm1_units = find(spike_depths > (max(spike_depths) - 1000));
-%     
-%     figure()
-%     hist(spike_depths);
-%     title("Distribution of spike depths")
-    
     % time bins
     frCalc_opt.tstart = 0;
     frCalc_opt.tend = max(dat.sp.st);
@@ -41,7 +30,8 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,b
     
     % Trial level features for decision variable creation
     patches = dat.patches;
-    patchCSL = dat.patchCSL;
+    patchCSL = dat.patchCSL; 
+    nTrials = length(patchCSL);
 
     new_fr_mat = true;
     if new_fr_mat == true
@@ -50,13 +40,10 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,b
         [fr_mat, ~] = calcFRVsTime(good_cells,dat,frCalc_opt); % calc from full matrix
         toc
     end 
-    
-%     fr_mat = fr_mat(mm1_units,:); % subselect 
-%     display("Using units from top 1 mm of probe")
-    
+
     % create index vectors from our update timestamp vectors
     patchstop_ix = round(patchstop_ms / tbin_ms) + 1;
-    patchleave_ix = min(round((patchleave_ms - buffer) / tbin_ms) + 1,size(fr_mat,2)); % might not be good
+    patchleave_ix = min(round((patchleave_ms - preLeave_buffer) / tbin_ms) + 1,size(fr_mat,2)); % might not be good
     
     % reinitialize ms vectors to make barcode matrix
     patchstop_ms = patchCSL(:,2);
@@ -69,8 +56,9 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,b
     
     % make barcode matrices
     nTimesteps = 15;
-    rew_barcode = zeros(length(patchCSL) , nTimesteps);
-    for iTrial = 1:length(patchCSL)
+    rew_barcode = zeros(nTrials , nTimesteps); 
+    rew_sec_cell = cell(nTrials,1);
+    for iTrial = 1:nTrials
         rew_indices = round(rew_ms(rew_ms >= patchstop_ms(iTrial) & rew_ms < patchleave_ms(iTrial)) - patchstop_ms(iTrial)) + 1;
         last_rew_ix = max(rew_indices);
         rew_sec_cell{iTrial} = rew_indices(rew_indices > 1);
