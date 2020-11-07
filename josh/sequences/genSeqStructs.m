@@ -1,4 +1,4 @@
-function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx)
+function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,opt,sIdx)
 % Just a function to make two standardized structs useful for sequence
 % analysis
     
@@ -6,23 +6,41 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx)
     preLeave_buffer = 500;
     if exist('opt', 'var') && isfield(opt,'preLeave_buffer')
         preLeave_buffer = opt.preLeave_buffer;
-    end 
+    end  
+    
+    cortex_only = false;  
+    if exist('opt','var') && isfield(opt,'cortex_only') 
+        cortex_only = opt.cortex_only;  
+    end
     
     % initialize structs
     FR_decVar = struct;
     FRandTimes = struct;
     session = sessions{sIdx}(1:end-4);
-    tbin_ms = frCalc_opt.tbin*1000;
+    tbin_ms = opt.tbin*1000;
     
     % load data
     dat = load(fullfile(paths.data,session));
     fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
-    good_cells = dat.sp.cids(dat.sp.cgs==2);  
-    FR_decVar.goodcell_IDs = good_cells;
+    good_cells = dat.sp.cids(dat.sp.cgs==2);    
+    
+    if cortex_only == true && isfield(dat,'anatomy')
+        good_cells = good_cells(find(dat.anatomy.cell_labels.Cortex)); 
+    end 
+    
+    FR_decVar.goodcell_IDs = good_cells; 
+    [~, spike_depths_all] = templatePositionsAmplitudes(dat.sp.temps, dat.sp.winv, dat.sp.ycoords, dat.sp.spikeTemplates, dat.sp.tempScalingAmps);
+    % take median spike depth for each cell
+    spike_depths = nan(size(good_cells));
+
+    for cIdx = 1:numel(good_cells)
+        spike_depths(cIdx) = median(spike_depths_all(dat.sp.clu==good_cells(cIdx)));
+    end   
+    FR_decVar.spike_depths = spike_depths;
     
     % time bins
-    frCalc_opt.tstart = 0;
-    frCalc_opt.tend = max(dat.sp.st);
+    opt.tstart = 0;
+    opt.tend = max(dat.sp.st);
     
     % behavioral events to align to
     patchstop_ms = dat.patchCSL(:,2)*1000;
@@ -37,7 +55,7 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx)
     if new_fr_mat == true
         % compute firing rate matrix
         tic
-        [fr_mat, ~] = calcFRVsTime(good_cells,dat,frCalc_opt); % calc from full matrix
+        [fr_mat, ~] = calcFRVsTime(good_cells,dat,opt); % calc from full matrix
         toc
     end 
 

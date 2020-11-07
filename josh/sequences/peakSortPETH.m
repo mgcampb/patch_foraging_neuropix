@@ -31,7 +31,17 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
         if ~strcmp(opt.neurons,'all') 
             neurons = opt.neurons;  
         end 
-    end
+    end 
+    
+    preRew_buffer = NaN;
+    if exist('opt', 'var') && isfield(opt,'preRew_buffer')
+        preRew_buffer = opt.preRew_buffer;
+    end 
+
+    postStop_buffer = NaN;
+    if exist('opt', 'var') && isfield(opt,'postStop_buffer')
+        postStop_buffer = opt.postStop_buffer;
+    end   
     
     %%%% set alignment variable %%%%
     if dvar == "time"
@@ -42,7 +52,10 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
         label = "Time Since Last Reward";
     else
         disp("Please input time or timesince as alignment variable") 
-    end
+    end 
+    
+    timesince = cat(2,FR_decVar.decVarTime{:});
+    timepatch = cat(2,FR_decVar.decVarTimeSinceRew{:});
 
     %%%% prep decision variable bins %%%%
     if length(trials) == nTrials
@@ -54,6 +67,36 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
         decVarCell = decVar_cell(trials);
         decVar = cat(2,decVarCell{:});
     end 
+    
+    % subselect neurons
+    if ~strcmp(neurons,'all')  
+        fr_mat = fr_mat(neurons,:);
+    end 
+    
+    % optionally take off some time before reward reception (smoothing)
+    % would be nice to procedurally generate indices
+    if ~isnan(preRew_buffer)
+        rew_ix = find(timesince == opt.tbin_ms / 1000 & timepatch > opt.tbin_ms / 1000);
+        preRew_bool = false(length(timesince));
+        for iRew = 1:numel(rew_ix)
+            preRew_bool(rew_ix(iRew) - preRew_buffer:rew_ix(iRew)) = true;
+        end
+        fr_mat(:,preRew_bool) = [];
+        timesince(preRew_bool) = [];
+        timepatch(preRew_bool) = [];
+    end
+
+    % optionally take off some time after patch stop
+    if ~isnan(postStop_buffer)
+        stop_ix = find(timepatch == opt.tbin_ms / 1000);
+        postStop_bool = false(length(timesince));
+        for iTrial = 1:numel(stop_ix)
+            postStop_bool(stop_ix(iTrial):stop_ix(iTrial) + postStop_buffer) = true;
+        end
+        fr_mat(:,postStop_bool) = [];
+        timesince(postStop_bool) = [];
+        %     timepatch(postStop_bool) = [];
+    end
     
     % shuffle by random rotation if told to
     shifts = randi(size(fr_mat,2),size(fr_mat,1),1);
@@ -83,11 +126,6 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
     
     [~,neuron_order] = sort(index); 
     sorted_peth = unsorted_peth_norm(neuron_order,:); 
-    
-    % subselect neurons? 
-    if ~strcmp(neurons,'all') 
-        sorted_peth = sorted_peth(neurons,:);
-    end
     
     % now making xticks at even seconds
     max_round = floor(max(decVar_bins));
