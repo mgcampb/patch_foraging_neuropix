@@ -70,7 +70,8 @@ end
 close all
 
 mid_resp_mPFC_sessions = [(1:8) (10:18) 23 25];  
-mouse_groups = {1:2,3:8,9:12,13:17,18:19}; % group mPFC sessions by animal 
+mouse_groups = {1:2,3:8,9:12,13:17,18:19}; % group mPFC sessions by animal  
+mouse_names = {"Mouse 75","Mouse 76","Mouse 78","Mouse 79","Mouse 80"};
 
 % log regressions per session
 r_seqProg = nan(numel(mid_resp_mPFC_sessions),1);  
@@ -362,21 +363,53 @@ title("Mid Responsive Neuron Behavioral Correlations Across Sessions")
 % Plot pooled within reward size results across mice   
 % First progression speed
 figure(); 
-colors = cool(3);
-b = bar([r1uL_seqProg_pooled r2uL_seqProg_pooled r4uL_seqProg_pooled],'FaceColor','flat');
+colors = cool(3); 
+corrSeqProg = [r1uL_seqProg_pooled r2uL_seqProg_pooled r4uL_seqProg_pooled]; 
+pSeqProg = [p1uL_seqProg_pooled p2uL_seqProg_pooled p4uL_seqProg_pooled]; 
+b = bar(corrSeqProg,'FaceColor','flat');
 for k = 1:3
-    b(k).CData = colors(k,:);
-end 
+    b(k).CData = colors(k,:);  
+    sig05 = find(pSeqProg(:,k) < .05 & pSeqProg(:,k) > .01);
+    sig01 = find(pSeqProg(:,k) < .01 & pSeqProg(:,k) > .001);
+    sig001 = find(pSeqProg(:,k) < .001);
+    x = b(k).XEndPoints;
+    y = b(k).YEndPoints + .1 * sign(corrSeqProg(:,k))';
+    text(x(sig05),y(sig05),"*",'HorizontalAlignment','center',...
+        'VerticalAlignment','bottom') 
+    text(x(sig01),y(sig01),"* *",'HorizontalAlignment','center',...
+        'VerticalAlignment','bottom') 
+    text(x(sig001),y(sig001),"* * *",'HorizontalAlignment','center',...
+        'VerticalAlignment','bottom') 
+end    
+ylim([-1,1]) 
+legend("Pooled 1uL Trials","Pooled 2 uL Trials","Pooled 4 uL Trials") 
+xticklabels(mouse_names) 
+title({"Pooled Within-Reward-Size Correlations Between" "Slope of Sequence Progression and" "Patch Residence Time"})
 
-% plot pooled within reward size results across mice  
+% Second, mean activity
 figure(); 
-colors = cool(3);
-b = bar([r1uL_meanMid_pooled r2uL_meanMid_pooled r4uL_meanMid_pooled],'FaceColor','flat');
+colors = cool(3); 
+corrMeanMid = [r1uL_meanMid_pooled r2uL_meanMid_pooled r4uL_meanMid_pooled]; 
+pMeanMid = [p1uL_meanMid_pooled p2uL_meanMid_pooled p4uL_meanMid_pooled]; 
+b = bar(corrMeanMid,'FaceColor','flat');
 for k = 1:3
-    b(k).CData = colors(k,:);
-end 
-
-
+    b(k).CData = colors(k,:); 
+    sig05 = find(pMeanMid(:,k) < .05 & pMeanMid(:,k) > .01);
+    sig01 = find(pMeanMid(:,k) < .01 & pMeanMid(:,k) > .001);
+    sig001 = find(pMeanMid(:,k) < .001);
+    x = b(k).XEndPoints;
+    y = b(k).YEndPoints + .05 * sign(corrMeanMid(:,k))';
+    text(x(sig05),y(sig05),"*",'HorizontalAlignment','center',...
+        'VerticalAlignment','bottom') 
+    text(x(sig01),y(sig01),"* *",'HorizontalAlignment','center',...
+        'VerticalAlignment','bottom') 
+    text(x(sig001),y(sig001),"* * *",'HorizontalAlignment','center',...
+        'VerticalAlignment','bottom') 
+end   
+ylim([-1,1]) 
+legend("Pooled 1uL Trials","Pooled 2 uL Trials","Pooled 4 uL Trials") 
+xticklabels(mouse_names) 
+title({"Pooled Within-Reward-Size Correlations Between" "Z-scored Sequence Neuron Activity and" "Patch Residence Time"})
 
 % Plot within reward size within single days
 % results for progSpeed all rewsizes vs progSpeed 4 uL
