@@ -25,7 +25,9 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,opt,sIdx)
     good_cells = dat.sp.cids(dat.sp.cgs==2);    
     
     if cortex_only == true && isfield(dat,'anatomy')
-        good_cells = good_cells(find(dat.anatomy.cell_labels.Cortex)); 
+        good_cells = good_cells(dat.anatomy.cell_labels.Cortex);  
+    elseif cortex_only == true 
+        disp("Cortex only but no anatomy file!")
     end 
     
     FR_decVar.goodcell_IDs = good_cells; 

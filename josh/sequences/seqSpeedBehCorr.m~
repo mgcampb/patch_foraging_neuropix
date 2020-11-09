@@ -119,7 +119,7 @@ p4uL_seqProg_pooled = nan(numel(mouse_groups),1);
 r4uL_meanMid_pooled = nan(numel(mouse_groups),1); 
 p4uL_meanMid_pooled = nan(numel(mouse_groups),1);  
 
-for m = 1:numel(mouse_groups)
+for m = 4
     prt1uL_pooled{m} = [];
     prt2uL_pooled{m} = [];
     prt4uL_pooled{m} = [];
@@ -286,15 +286,15 @@ for m = 1:numel(mouse_groups)
     % 1 uL pooling
     [r1_progSlope,p1_progSlope] = corrcoef(seqProg1uL_pooled{m},prt1uL_pooled{m});
     [r1_meanMid,p1_meanMid] = corrcoef(meanMid1uL_pooled{m},prt1uL_pooled{m});
-%     colors1uL = [linspace(.5,0,numel(mouse_groups{m}))' ones(numel(mouse_groups{m}),1) ones(numel(mouse_groups{m}),1)];
-%     figure();hold on
-%     gscatter(seqProg1uL_pooled{m},prt1uL_pooled{m},dayLabels1uL{m},colors1uL,'.')
-%     scatter(seqProg1uL_pooled{m},prt1uL_pooled{m},'ko')
-%     xlabel("Slope of sequence progression")
-%     ylabel("PRT")
-%     mouseName = session_titles_grp{m}{1}(1:2);
-%     title(sprintf("m%s 1 uL Slope of sequence progression vs PRT (p = %f,r = %f)",mouseName,p1_progSlope(2),r1_progSlope(2)))
-%     legend(session_titles_grp{m}) % days from this mice 
+    colors1uL = [linspace(.5,0,numel(mouse_groups{m}))' ones(numel(mouse_groups{m}),1) ones(numel(mouse_groups{m}),1)];
+    figure();hold on
+    gscatter(seqProg1uL_pooled{m},prt1uL_pooled{m},dayLabels1uL{m},colors1uL,'.')
+    scatter(seqProg1uL_pooled{m},prt1uL_pooled{m},'ko')
+    xlabel("Slope of sequence progression")
+    ylabel("PRT")
+    mouseName = session_titles_grp{m}{1}(1:2);
+    title(sprintf("m%s 1 uL Slope of sequence progression vs PRT (p = %f,r = %f)",mouseName,p1_progSlope(2),r1_progSlope(2)))
+    legend(session_titles_grp{m}) % days from this mice 
     % log regression results
     r1uL_seqProg_pooled(m) = r1_progSlope(2);
     p1uL_seqProg_pooled(m) = p1_progSlope(2);
@@ -303,37 +303,38 @@ for m = 1:numel(mouse_groups)
     
     [r2_progSlope,p2_progSlope] = corrcoef(seqProg2uL_pooled{m},prt2uL_pooled{m});  
     [r2_meanMid,p2_meanMid] = corrcoef(meanMid2uL_pooled{m},prt2uL_pooled{m});
-%     colors2uL = [linspace(.5,0,numel(mouse_groups{m}))' linspace(.5,0,numel(mouse_groups{m}))' ones(numel(mouse_groups{m}),1)];
-%     figure();hold on
-%     gscatter(seqProg2uL_pooled{m},prt2uL_pooled{m},dayLabels2uL{m},colors2uL,'.') 
-%     scatter(seqProg2uL_pooled{m},prt2uL_pooled{m},'ko')
-%     xlabel("Slope of sequence progression")
-%     ylabel("PRT") 
-%     mouseName = session_titles_grp{m}{1}(1:2);
-%     title(sprintf("m%s 2 uL Slope of sequence progression vs PRT (p = %f,r = %f)",mouseName,p2_progSlope(2),r2_progSlope(2)))
-%     legend(session_titles_grp{m}) % days from this mice 
+    colors2uL = [linspace(.5,0,numel(mouse_groups{m}))' linspace(.5,0,numel(mouse_groups{m}))' ones(numel(mouse_groups{m}),1)];
+    figure();hold on
+    gscatter(seqProg2uL_pooled{m},prt2uL_pooled{m},dayLabels2uL{m},colors2uL,'.') 
+    scatter(seqProg2uL_pooled{m},prt2uL_pooled{m},'ko')
+    xlabel("Slope of sequence progression")
+    ylabel("PRT") 
+    mouseName = session_titles_grp{m}{1}(1:2);
+    title(sprintf("m%s 2 uL Slope of sequence progression vs PRT (p = %f,r = %f)",mouseName,p2_progSlope(2),r2_progSlope(2)))
+    legend(session_titles_grp{m}) % days from this mice 
     % log regression results
     r2uL_seqProg_pooled(m) = r2_progSlope(2);
     p2uL_seqProg_pooled(m) = p2_progSlope(2);
     r2uL_meanMid_pooled(m) = r2_meanMid(2);
     p2uL_meanMid_pooled(m) = p2_meanMid(2);
     
-    [r3_progSlope,p3_progSlope] = corrcoef(seqProg4uL_pooled{m},prt4uL_pooled{m}); 
-    [r3_meanMid,p3_meanMid] = corrcoef(meanMid4uL_pooled{m},prt4uL_pooled{m});
-%     colors4uL = [ones(numel(mouse_groups{m}),1) linspace(.5,0,numel(mouse_groups{m}))' ones(numel(mouse_groups{m}),1)];
-%     figure();hold on
-%     gscatter(seqProg4uL_pooled{m},prt4uL_pooled{m},dayLabels4uL{m},colors4uL,'.') 
-%     scatter(seqProg4uL_pooled{m},prt4uL_pooled{m},'ko')
-%     xlabel("Slope of sequence progression")
-%     ylabel("PRT") 
-%     mouseName = session_titles_grp{m}{1}(1:2);
-%     title(sprintf("m%s 4 uL Slope of sequence progression vs PRT (p = %f,r = %f)",mouseName,p3(2),r3(2)))
-%     legend(session_titles_grp{m}) % days from this mice 
+    [r3_progS,p3] = corrcoef(seqProg4uL_pooled{m},prt4uL_pooled{m}); 
+    [r2_meanMid,p2_meanMid] = corrcoef(meanMid2uL_pooled{m},prt2uL_pooled{m});
+    colors4uL = [ones(numel(mouse_groups{m}),1) linspace(.5,0,numel(mouse_groups{m}))' ones(numel(mouse_groups{m}),1)];
+    figure();hold on
+    gscatter(seqProg4uL_pooled{m},prt4uL_pooled{m},dayLabels4uL{m},colors4uL,'.') 
+    scatter(seqProg4uL_pooled{m},prt4uL_pooled{m},'ko')
+    xlabel("Slope of sequence progression")
+    ylabel("PRT") 
+    mouseName = session_titles_grp{m}{1}(1:2);
+    title(sprintf("m%s 4 uL Slope of sequence progression vs PRT (p = %f,r = %f)",mouseName,p3(2),r3(2)))
+    legend(session_titles_grp{m}) % days from this mice 
     % log regression results
-    r4uL_seqProg_pooled(m) = r3_progSlope(2);
-    p4uL_seqProg_pooled(m) = p3_progSlope(2);
-    r4uL_meanMid_pooled(m) = r3_meanMid(2);
-    p4uL_meanMid_pooled(m) = p3_meanMid(2);
+    r4uL_seqProg_pooled = nan(numel(mouse_groups),1);
+    p4uL_seqProg_pooled = nan(numel(mouse_groups),1);
+    r4uL_meanMid_pooled = nan(numel(mouse_groups),1);
+    p4uL_meanMid_pooled = nan(numel(mouse_groups),1);
+    
 end
 
 %% Visualize cross session results 
@@ -359,22 +360,7 @@ xlabel("Progression Speed vs PRT Pearson Corr")
 ylabel("Mean Activity vs PRT Pearson Corr")
 title("Mid Responsive Neuron Behavioral Correlations Across Sessions")  
 
-% Plot pooled within reward size results across mice   
-% First progression speed
-figure(); 
-colors = cool(3);
-b = bar([r1uL_seqProg_pooled r2uL_seqProg_pooled r4uL_seqProg_pooled],'FaceColor','flat');
-for k = 1:3
-    b(k).CData = colors(k,:);
-end 
-
-% plot pooled within reward size results across mice  
-figure(); 
-colors = cool(3);
-b = bar([r1uL_meanMid_pooled r2uL_meanMid_pooled r4uL_meanMid_pooled],'FaceColor','flat');
-for k = 1:3
-    b(k).CData = colors(k,:);
-end 
+% plot pooled within reward size results across mice 
 
 
 

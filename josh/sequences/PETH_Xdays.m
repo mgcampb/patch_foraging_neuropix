@@ -35,7 +35,7 @@ end
 
 %% Generate "reward barcodes" to average firing rates  
 rew_barcodes = cell(numel(sessions),1);
-for sIdx = 23:25
+for sIdx = 1:25
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session)); 
     
@@ -71,7 +71,7 @@ end
 % column 2:: avg PETHs, peak indices (from unvisualized trials)
 % column 3:: sessions
 RXX_data = cell(8,2,numel(sessions)); 
-for sIdx = 23:25 
+for sIdx = 1:25 
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
     prts = data.patchCSL(:,3) - data.patchCSL(:,2);  
@@ -106,9 +106,9 @@ for sIdx = 23:25
 end 
 
 %% Now collect PETH across days with cross validated sort  
-session_grps = {[23 25],(23:25)};  
+session_grps = {(2:9),(10:12),(14:18),[23 25],[1:18 23 25]};  
 RXX_avgPETHs = cell(12,numel(session_grps));
-for iSessions = 1:2
+for iSessions = 1:4
     these_sessions = session_grps{iSessions};
     for cond = 1:8 
         cond_frmat_cell = squeeze(RXX_data(cond,1,these_sessions));
@@ -126,10 +126,10 @@ end
 %% Now visualize  
 close all
 
-session_grp_titles = {"m80 3/15, 3/17 (Just Cortex)","m80 All Days"};  
+session_grp_titles = {"m76 (Cortex)","m78 (Cortex)","m79 (Cortex)","m80 (Cortex)","All Cortex"};  
 conditions = {"200","220","202","222","400","440","404","444"};
 
-for iSessions = 1  
+for iSessions = 2
     session_grp_title = session_grp_titles{iSessions};
     figure();
     for cIdx = 1:8
