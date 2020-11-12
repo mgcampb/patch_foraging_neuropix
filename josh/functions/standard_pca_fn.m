@@ -1,4 +1,4 @@
-function [coeffs,fr_mat,good_cells,score] = standard_pca_fn(paths,opt)
+function [coeffs,fr_mat,good_cells,score,score_full,expl] = standard_pca_fn(paths,opt)
 % Standard function to calculate PCA and perform smoothing 
 
     %% Handle optional arguments
@@ -6,11 +6,19 @@ function [coeffs,fr_mat,good_cells,score] = standard_pca_fn(paths,opt)
     onPatchOnly = true;
     if exist('opt', 'var') && isfield(opt,'onPatchOnly')
         onPatchOnly = opt.onPatchOnly;
-    end
+    end 
+    
+    cortex_only = true; 
+    if exist('opt', 'var') && isfield(opt,'cortex_only')
+        cortex_only = opt.cortex_only;
+    end  
 
     %% Load in data
     dat = load(fullfile(paths.data,opt.session));
-    good_cells_all = dat.sp.cids(dat.sp.cgs==2);
+    good_cells_all = dat.sp.cids(dat.sp.cgs==2);  
+    if cortex_only == true
+        good_cells_all = good_cells_all(dat.anatomy.cell_labels.Cortex); 
+    end
 
     % time bins
     opt.tstart = 0;
@@ -57,15 +65,17 @@ function [coeffs,fr_mat,good_cells,score] = standard_pca_fn(paths,opt)
 
     % pca on firing rate matrix, only in patches with buffer before patch leave
     if onPatchOnly == true
-        coeffs = pca(fr_mat_zscore(:,in_patch_buff)'); 
+%         coeffs = pca(fr_mat_zscore(:,in_patch_buff)'); 
+        [coeffs,~,~,~,expl] = pca(fr_mat_zscore(:,in_patch_buff)');  
     else 
-        coeffs = pca(fr_mat_zscore');  
+%         coeffs = pca(fr_mat_zscore');  
+        [coeffs,~,~,~,expl] = pca(fr_mat_zscore');  
     end
 
     % project full session onto these PCs
-    score = coeffs'*fr_mat_zscore;
+    score_full = coeffs'*fr_mat_zscore;
 
     % only take on-patch times (including buffer)
-    score = score(:,in_patch)';
+    score = score_full(:,in_patch)';
 end
 

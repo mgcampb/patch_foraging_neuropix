@@ -7,9 +7,10 @@
 
 paths = struct;
 paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/all_mice';
-paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
+paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs 
+paths.rampIDs = 'Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/ramping_neurons';
 
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData'));
+addpath('/Users/joshstern/Documents/UchidaLab_NeuralData');
 
 % analysis options
 FR_calcOpt = struct;
@@ -24,7 +25,7 @@ sessions = {sessions.name};
 
 %% Extract FR matrices and timing information
 FR_decVar = struct;
-for sIdx = 1:25
+for sIdx = 23:25
     FR_decVar_tmp = genSeqStructs(paths,sessions,FR_calcOpt,sIdx);
     % assign to sIdx
     FR_decVar(sIdx).fr_mat = FR_decVar_tmp.fr_mat;
@@ -36,7 +37,7 @@ end
 
 %% Generate "reward barcodes" to average firing rates
 rew_barcodes = cell(numel(sessions),1);
-for sIdx = 1:25
+for sIdx = 23:25
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
     
@@ -82,13 +83,16 @@ for sIdx = 23:25
         trialsR0Nil = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) < 0);
         trialsRRNil = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) < 0);
         
-        % Get median PRTs to stretch to 
-        medianPRT_R0Nil_ix = round((1000 * median(prts(trialsR0Nil)) / tbin_ms)); 
+        % Get median PRTs - 1 to stretch to 
+        medianPRT_R0Nil_ix = round((1000 * median(prts(trialsR0Nil) - 1) / tbin_ms)); 
         medianPostRewRT_RRNil_ix = round((1000 * (median(prts(trialsRRNil) - 1)) / tbin_ms)); 
         
         % collect stretched firing rates in cell 
-        % note fancy stuff w/ RRNil; only stretch following rew reception
-        R0Nil_tmpCell = cellfun(@(x) imresize(x,[nNeurons,medianPRT_R0Nil_ix]),FR_decVar(sIdx).fr_mat(trialsR0Nil),'UniformOutput',false);
+        % note fancy stuff: only stretch following last rew reception 
+        % also do this for R0Nil to match part of trial that is stretched
+%         R0Nil_tmpCell = cellfun(@(x) imresize(x,[nNeurons,medianPRT_R0Nil_ix]),FR_decVar(sIdx).fr_mat(trialsR0Nil),'UniformOutput',false);
+        R0Nil_tmpCell = cellfun(@(x) cat(2,x(:,1:sec1ix),imresize(x(:,sec1ix:end),[nNeurons,medianPRT_R0Nil_ix])) ... 
+                                                            ,FR_decVar(sIdx).fr_mat(trialsR0Nil),'UniformOutput',false);
         RRNil_tmpCell = cellfun(@(x) cat(2,x(:,1:sec1ix),imresize(x(:,sec1ix:end),[nNeurons,medianPostRewRT_RRNil_ix])) ... 
                                                             ,FR_decVar(sIdx).fr_mat(trialsRRNil),'UniformOutput',false);
         
@@ -121,7 +125,8 @@ for sIdx = 23:25
     end
 end 
 
-%% Now visualize  
+%% Now visualize   
+close all
 conditions = {"10Nil","20Nil","40Nil","11Nil","22Nil","44Nil"};
 for sIdx = 23:25
     session = sessions{sIdx}; 
@@ -131,7 +136,11 @@ for sIdx = 23:25
         subplot(2,3,cIdx);colormap('parula')
         imagesc(flipud(RXNil_peakSortPETH{sIdx,cIdx}))
         title(sprintf("%s %s",session_title,conditions{cIdx})) 
-        caxis([-3,3])
+        caxis([-3,3])  
+        t_len = size(RXNil_peakSortPETH{sIdx,cIdx},2);
+        xticks(0:50:t_len) 
+        xticklabels((0:50:t_len) * tbin_ms / 1000)
+        
     end
 end 
 

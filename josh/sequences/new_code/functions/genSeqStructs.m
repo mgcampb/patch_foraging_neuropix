@@ -8,7 +8,7 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,opt,sIdx)
         preLeave_buffer = opt.preLeave_buffer;
     end  
     
-    cortex_only = false;  
+    cortex_only = true;  
     if exist('opt','var') && isfield(opt,'cortex_only') 
         cortex_only = opt.cortex_only;  
     end
@@ -22,16 +22,21 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,opt,sIdx)
     % load data
     dat = load(fullfile(paths.data,session));
     fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
-    good_cells = dat.sp.cids(dat.sp.cgs==2);      
-    % now load ramp struct
-    ramp_file = load([paths.rampIDs '/m' sessions{sIdx}(1:end-4) '_rampIDs.mat']); 
-    ramps = ramp_file.ramps; 
-    
+    good_cells = dat.sp.cids(dat.sp.cgs==2);
     if cortex_only == true && isfield(dat,'anatomy')
-        good_cells = good_cells(dat.anatomy.cell_labels.Cortex);  
-    elseif cortex_only == true 
+        good_cells = good_cells(dat.anatomy.cell_labels.Cortex);
+    elseif cortex_only == true
         disp("Cortex only but no anatomy file!")
-    end 
+    end
+    % now load ramp struct 
+    ramp_fname = [paths.rampIDs '/m' sessions{sIdx}(1:end-4) '_rampIDs.mat'];   
+    if exist(ramp_fname,'file')
+        % add indices of ramping cells 
+        ramp_file = load(ramp_fname); 
+        ramps = ramp_file.ramps;  
+        FR_decVar.ramp_up_all_ix = find(ismember(good_cells,ramps.up_all)); 
+        FR_decVar.ramp_up_common_ix = find(ismember(good_cells,ramps.up_common)); 
+    end
 
     FR_decVar.goodcell_IDs = good_cells; 
     [~, spike_depths_all] = templatePositionsAmplitudes(dat.sp.temps, dat.sp.winv, dat.sp.ycoords, dat.sp.spikeTemplates, dat.sp.tempScalingAmps);
@@ -42,10 +47,6 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,opt,sIdx)
         spike_depths(cIdx) = median(spike_depths_all(dat.sp.clu==good_cells(cIdx)));
     end   
     FR_decVar.spike_depths = spike_depths; 
-    
-    % add indices of ramping cells
-    FR_decVar.ramp_up_all_ix = find(ismember(good_cells,ramps.up_all)); 
-    FR_decVar.ramp_up_common_ix = find(ismember(good_cells,ramps.up_common)); 
     
     % time bins
     opt.tstart = 0;
@@ -63,9 +64,7 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,opt,sIdx)
     new_fr_mat = true;
     if new_fr_mat == true
         % compute firing rate matrix
-        tic
         [fr_mat, ~] = calcFRVsTime(good_cells,dat,opt); % calc from full matrix
-        toc
     end 
 
     % create index vectors from our update timestamp vectors
