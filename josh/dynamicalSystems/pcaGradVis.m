@@ -15,14 +15,16 @@ opt = struct;
 opt.tbin = 0.02; % time bin for whole session rate matrix (in sec)
 opt.smoothSigma_time = 0.1; % gauss smoothing sigma for rate matrix (in sec)
 opt.patch_leave_buffer = 0; % in seconds; only takes within patch times up to this amount before patch leave
-opt.min_fr = 2; % minimum firing rate (on patch, excluding buffer) to keep neurons
+opt.min_fr = 0; % minimum firing rate (on patch, excluding buffer) to keep neurons
 tbin_ms = opt.tbin*1000;
 sessions = dir(fullfile(paths.data,'*.mat'));
 sessions = {sessions.name};
 
 %% Load firing rate matrices, perform PCA
-pca_trialed = cell(numel(sessions),1);
-for sIdx = 1:24
+pca_trialed = cell(numel(sessions),1); 
+mPFC_sessions = [1:8 10:13 15:18 23 25];
+for i = 1:numel(mPFC_sessions) 
+    sIdx = mPFC_sessions(i);
     % Get the session name
     session = sessions{sIdx}(1:end-4); 
     dat = load(fullfile(paths.data,session));
@@ -41,7 +43,7 @@ for sIdx = 1:24
     patchleave_ix = min(round((patchleave_sec - 1000 * opt.patch_leave_buffer) / tbin_ms) + 1,size(fr_mat,2));
     
     % Gather firing rate matrices in trial form
-    fr_mat_trials = cell(length(dat.patchCSL));
+    fr_mat_trials = cell(length(dat.patchCSL),1);
     for iTrial = 1:length(dat.patchCSL)
         fr_mat_trials{iTrial} = fr_mat(:,patchstop_ix(iTrial):patchleave_ix(iTrial)); 
     end  
@@ -62,7 +64,8 @@ end
 %% Group RX PC traces in RX_data struct 
 
 RX_data = cell(numel(sessions),1);
-for sIdx = 1:24
+for i = 1:numel(mPFC_sessions) 
+    sIdx = mPFC_sessions(i);
     RX_data{sIdx} = cell(6,2);
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
@@ -145,7 +148,8 @@ colors = {[.5 1 1],[.75 .75 1],[1 .5 1],[0 1 1],[.5 .5 1],[1 0 1]};
 conds = 1:6; 
 plot_pcs = [1,2];
 
-for sIdx = 1:10
+for i = 18
+    sIdx = mPFC_sessions(i);
     session = sessions{sIdx}(1:end-4);
     session_title = session([1:2 end-2:end]); 
     arrowSize = 5; 
@@ -175,7 +179,9 @@ for sIdx = 1:10
     end 
     xlim([xl(1) - 2, xl(2) + 2]) 
     ylim([yl(1) - 2, yl(2) + 2]) 
-    title(sprintf("%s RX PC Traces",session_title))
+    title(sprintf("%s RX PC Traces",session_title)) 
+    xlabel(sprintf("PC %i",plot_pcs(1)))
+    ylabel(sprintf("PC %i",plot_pcs(2)))
 end
 
 %% Now make six-pane plot  
@@ -184,7 +190,8 @@ plot_pcs = [1,2];
 Nbins = 25; 
 conds = 1:3; 
 condNames = {"10","20","40","11","22","44"};
-for sIdx = 24
+for i = 18
+    sIdx = mPFC_sessions(i);
     session = sessions{sIdx}(1:end-4);
     session_title = session([1:2 end-2:end]); 
     
@@ -260,7 +267,7 @@ for sIdx = 24
         xticks([])
         yticks([]) 
         title(condNames{cIdx})  
-        title(sprintf("%s |F(x)|",condNames{cIdx}))
+        title(sprintf("%s |F'(x)|",condNames{cIdx}))
         % get average gradients per point in binned PC space 
         figure(3)
         dPC1_hmap = heatmap(pca_gradient_table,"PC1",...

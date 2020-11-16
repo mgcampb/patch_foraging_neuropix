@@ -11,7 +11,12 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,opt,sIdx)
     cortex_only = true;  
     if exist('opt','var') && isfield(opt,'cortex_only') 
         cortex_only = opt.cortex_only;  
-    end
+    end 
+    
+    region_selection = []; 
+    if exist('opt','var') && isfield(opt,'region_selection') 
+        region_selection = opt.region_selection;  
+    end 
     
     % initialize structs
     FR_decVar = struct;
@@ -20,14 +25,22 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,opt,sIdx)
     tbin_ms = opt.tbin*1000;
     
     % load data
-    dat = load(fullfile(paths.data,session));
+    dat = load(fullfile(paths.data,session)); 
+%     disp(dat)
     fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
-    good_cells = dat.sp.cids(dat.sp.cgs==2);
+    good_cells = dat.sp.cids(dat.sp.cgs==2); 
+    
+    % subselect w/ cortex binary label
     if cortex_only == true && isfield(dat,'anatomy')
         good_cells = good_cells(dat.anatomy.cell_labels.Cortex);
     elseif cortex_only == true
         disp("Cortex only but no anatomy file!")
+    end 
+    % subselect w/ rough brain region
+    if ~isempty(region_selection) 
+        good_cells = good_cells(dat.brain_region_rough == region_selection);
     end
+    
     % now load ramp struct 
     ramp_fname = [paths.rampIDs '/m' sessions{sIdx}(1:end-4) '_rampIDs.mat'];   
     if exist(ramp_fname,'file')
@@ -94,32 +107,40 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,opt,sIdx)
     end
     
     % make struct
-    FR_decVar.fr_mat = {length(dat.patchCSL)};
+    FR_decVar.fr_mat = cell(length(dat.patchCSL),1); 
+    FR_decVar.decVarTime = cell(length(dat.patchCSL),1);
+    FR_decVar.decVarTimeSinceRew = cell(length(dat.patchCSL),1);
+    FR_decVar.rew_sec = cell(length(dat.patchCSL),1);
+    FR_decVar.rew_num = cell(length(dat.patchCSL),1);
     for iTrial = 1:length(dat.patchCSL)
         FR_decVar.fr_mat{iTrial} = fr_mat(:,patchstop_ix(iTrial):patchleave_ix(iTrial));
         trial_len_ix = size(FR_decVar.fr_mat{iTrial},2);
         FR_decVar.decVarTime{iTrial} = (1:trial_len_ix) * tbin_ms / 1000;
-        FR_decVar.decVarTimeSinceRew{iTrial} = (1:trial_len_ix) * tbin_ms / 1000;
+        FR_decVar.decVarTimeSinceRew{iTrial} = (1:trial_len_ix) * tbin_ms / 1000;  
+        FR_decVar.rew_sec{iTrial} = zeros(1,trial_len_ix);
+        FR_decVar.rew_num{iTrial} = zeros(1,trial_len_ix);
         
         for r = 1:numel(rew_sec_cell{iTrial})
             rew_ix = (rew_sec_cell{iTrial}(r) - 1) * 1000 / tbin_ms;
             FR_decVar.decVarTimeSinceRew{iTrial}(rew_ix:end) =  (1:length(FR_decVar.decVarTimeSinceRew{iTrial}(rew_ix:end))) * tbin_ms / 1000;
+            FR_decVar.rew_sec{iTrial}(rew_ix:end) = rew_sec_cell{iTrial}(r); 
+            FR_decVar.rew_num{iTrial}(rew_ix:end) = r; 
         end
     end 
     
-    % add PCA
-    fr_mat_onPatch = horzcat(FR_decVar.fr_mat{:}); 
-    fr_mat_onPatchZscore = zscore(fr_mat_onPatch,[],2); 
-    [~,score,~,~,expl] = pca(fr_mat_onPatchZscore');
-    score = score'; % reduced data  
-    t_lens = cellfun(@(x) size(x,2),FR_decVar.fr_mat); 
-    new_patchleave_ix = cumsum(t_lens);
-    new_patchstop_ix = new_patchleave_ix - t_lens + 1;  
-    FR_decVar.pca = {length(dat.patchCSL)};
-    for iTrial = 1:length(dat.patchCSL) 
-        FR_decVar.pca{iTrial} = score(1:10,new_patchstop_ix(iTrial):new_patchleave_ix(iTrial)); 
-    end 
-    FR_decVar.expl10 = sum(expl(1:10)) / sum(expl);
+%     % add PCA
+%     fr_mat_onPatch = horzcat(FR_decVar.fr_mat{:}); 
+%     fr_mat_onPatchZscore = zscore(fr_mat_onPatch,[],2); 
+%     [~,score,~,~,expl] = pca(fr_mat_onPatchZscore');
+%     score = score'; % reduced data  
+%     t_lens = cellfun(@(x) size(x,2),FR_decVar.fr_mat); 
+%     new_patchleave_ix = cumsum(t_lens);
+%     new_patchstop_ix = new_patchleave_ix - t_lens + 1;  
+%     FR_decVar.pca = {length(dat.patchCSL)};
+%     for iTrial = 1:length(dat.patchCSL) 
+%         FR_decVar.pca{iTrial} = score(1:10,new_patchstop_ix(iTrial):new_patchleave_ix(iTrial)); 
+%     end 
+%     FR_decVar.expl10 = sum(expl(1:10)) / sum(expl);
 
     FRandTimes.fr_mat = fr_mat;
     FRandTimes.stop_leave_ms = [patchstop_ms patchleave_ms];

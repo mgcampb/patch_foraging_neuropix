@@ -29,33 +29,38 @@ pcCalcOpt.smoothSigma_time = 0.1; % gauss smoothing sigma for rate matrix (in se
 pcCalcOpt.patch_leave_buffer = .5; % in seconds; only takes within patch times up to this amount before patch leave 
 patch_leave_buffer_ms = pcCalcOpt.patch_leave_buffer * 1000;
 pcCalcOpt.min_fr = 0; % minimum firing rate (on patch, excluding buffer) to keep neurons 
-pcCalcOpt.cortex_only = true;  
+pcCalcOpt.cortex_only = true;   
 pcCalcOpt.onPatchOnly = true;
 tbin_ms = pcCalcOpt.tbin*1000;
 
 sessions = dir(fullfile(paths.data,'*.mat'));
-sessions = {sessions.name};
+sessions = {sessions.name}; 
+% mgcPFC_sessions = [1:2 5 7]; 
+% mgcSTR_sessions = [3:4 6 8:9];
 
 %% Acquire PC reductions and a binary classification vector
 
+% mPFC_sessions = [1:8 10:13 15:18 23 25];
 classification_struct = struct; 
 prop10 = nan(numel(sessions),1); 
 standard_scores = cell(numel(sessions),1); 
 meanUpAll_full = cell(numel(sessions),1);
-meanUpCommon_full = cell(numel(sessions),1); 
+meanUpCommon_full = cell(numel(sessions),1);  
+expl_mat = nan(numel(sessions),40);
 
-for sIdx = 1:numel(sessions)
+for sIdx = 8
     session = sessions{sIdx}; 
     pcCalcOpt.session = session;
     dat = load(fullfile(paths.data,session)); 
     ramp_fname = [paths.rampIDs '/m' sessions{sIdx}(1:end-4) '_rampIDs.mat']; 
-    if isfield(dat,'anatomy') && exist(ramp_fname,'file')
+    if isfield(dat,'anatomy')  % && exist(ramp_fname,'file')
         % initialize structs
         session = sessions{sIdx}(1:end-4);
 
         % load data
         fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
-        good_cells = dat.sp.cids(dat.sp.cgs==2);
+        good_cells = dat.sp.cids(dat.sp.cgs==2); 
+        
         % subselect cortex 
         good_cells = good_cells(dat.anatomy.cell_labels.Cortex);    
 
@@ -77,8 +82,18 @@ for sIdx = 1:numel(sessions)
         patchType = dat.patches(:,2);
         rewsize = mod(patchType,10);  
         rew_ms = dat.rew_ts * 1000;
-        patchCSL = dat.patchCSL; 
-        nTrials = length(patchCSL);  
+        patchCSL = dat.patchCSL;
+        nTrials = length(patchCSL);
+        
+%         if ismember(sIdx,mgcPFC_sessions)
+%             pcCalcOpt.region_selection = "PFC";
+%             pcCalcOpt.cortex_only = false;
+%         elseif ismember(sIdx,mgcSTR_sessions)
+%             pcCalcOpt.region_selection = "STR";
+%             pcCalcOpt.cortex_only = false;
+%         else
+%             disp("Warning: no region for this session")
+%         end
         
         % calculate PCs, generate firing rate matrix
         [coeffs,fr_mat,good_cells,score,score_full,expl] = standard_pca_fn(paths,pcCalcOpt);  
@@ -106,16 +121,9 @@ for sIdx = 1:numel(sessions)
         
         meanUpAll_full{sIdx} = meanRamp_upAll;
         meanUpCommon_full{sIdx} = meanRamp_upCommon;
-        
-%         fr_mat_onPatchZscore = zscore(fr_mat_onPatch,[],2)';
-%         [coeffs,score,~,~,expl] = pca(fr_mat_onPatchZscore); % this will change
-        % [coeffs,score,~,~,expl]  = pca(fr_mat_normalized(:,in_patch_buff)');
-        % project full session onto these PCs
-        % score_full = coeffs'*fr_mat_normalized;
-%         score = score'; % reduced data
 
         fprintf("Proportion Variance explained by first 10 PCs: %f \n",sum(expl(1:10)) / sum(expl))
-
+        expl_mat(sIdx,:) = expl(1:40);
         prop10(sIdx) = sum(expl(1:10)) / sum(expl);
 
         % Get reward timings, prepare classification struct 
@@ -132,7 +140,6 @@ for sIdx = 1:numel(sessions)
         for iTrial = 1:nTrials
             rew_indices = round(rew_ms(rew_ms >= patchstop_ms(iTrial) & rew_ms < patchleave_ms(iTrial)) - patchstop_ms(iTrial));
             classification_struct(sIdx).rew_ix{iTrial} = round(rew_indices(rew_indices > 1) / tbin_ms); 
-%             classification_struct(sIdx).PCs{iTrial} = score(1:10,new_patchstop_ix(iTrial):new_patchleave_ix(iTrial)); 
             classification_struct(sIdx).labels{iTrial} = 1:t_lens(iTrial) > (t_lens(iTrial) - classification_zone / tbin_ms); 
             classification_struct(sIdx).vel{iTrial} = dat.vel(patchstop_ix(iTrial):patchleave_ix(iTrial));   
             classification_struct(sIdx).rewsize{iTrial} = zeros(t_lens(iTrial),1) + rewsize(iTrial);
@@ -151,193 +158,146 @@ for sIdx = 1:numel(sessions)
             classification_struct(sIdx).meanRamp_upCommon_noPreRew{iTrial} = classification_struct(sIdx).meanRamp_upCommon{iTrial}(non_pre_rew);
             classification_struct(sIdx).vel_noPreRew{iTrial} = classification_struct(sIdx).vel{iTrial}(non_pre_rew); 
             classification_struct(sIdx).rewsize_noPreRew{iTrial} = classification_struct(sIdx).rewsize{iTrial}(non_pre_rew);
-        end 
+        end
     end
-end 
+end
+
+%% Variance explained visualization   
+close all
+figure() 
+histogram(prop10,6)
+xlim([0,1])
+ylim([0,10])
+xlabel("Variance Explained by Top 10 PCs")
+ylabel("Session Density")
+title("Distribution of Variance Explained by Top 10 PCs Across Sessions")
+
+figure(); hold on
+plot((expl_mat(:,1:20) ./ sum(expl_mat,2))','k--')
+plot(nanmean((expl_mat(:,1:20) ./ sum(expl_mat,2))',2),'b','linewidth',2) 
+xline(10,'k--','linewidth',2) 
+ylabel("Proportion Variance Explained") 
+xlabel("PC#") 
+title("Cross-Session Variance Explained Decay")
+
 
 %% Generate "reward barcodes" to average firing rates  
 rew_barcodes = cell(numel(sessions),1);
-for sIdx = 1:25
+for sIdx = 8
     session = sessions{sIdx}(1:end-4);
-    data = load(fullfile(paths.data,session)); 
+    data = load(fullfile(paths.data,session));
     
-    % reinitialize ms vectors
+    % Trial data
     patchstop_ms = data.patchCSL(:,2);
     patchleave_ms = data.patchCSL(:,3);
     rew_ms = data.rew_ts;
-    
-    sec1ix = 1000/tbin_ms;
-    sec2ix = 2000/tbin_ms;
-    times = -1000:tbin_ms:1000;
-    
-    % Trial level features
     patches = data.patches;
     patchCSL = data.patchCSL;
     prts = patchCSL(:,3) - patchCSL(:,2);
     floor_prts = floor(prts);
     rewsize = mod(patches(:,2),10);
     
-    % make barcode matrices
+    % make barcode matrices also want to know where we have no more rewards
     nTimesteps = 15;
     rew_barcode = zeros(length(patchCSL) , nTimesteps);
     for iTrial = 1:length(patchCSL)
         rew_indices = round(rew_ms(rew_ms >= patchstop_ms(iTrial) & rew_ms < patchleave_ms(iTrial)) - patchstop_ms(iTrial)) + 1;
-        rew_barcode(iTrial , (floor_prts(iTrial) + 1):end) = -1; % set part of patch after leave = -1
+        last_rew_ix = max(rew_indices);
+        rew_barcode(iTrial , (last_rew_ix + 1):end) = -1; % set part of patch after last rew_ix = -1
+        rew_barcode(iTrial , (floor_prts(iTrial) + 1):end) = -2; % set part of patch after leave = -2
         rew_barcode(iTrial , rew_indices) = rewsize(iTrial);
-    end 
+    end
     rew_barcodes{sIdx} = rew_barcode;
 end
 
 %% Visualize the classification problem on a few single trials  
 close all
-for sIdx = 25
+for sIdx = 8
+    session_title = sessions{sIdx}([1:2 end-6:end-4]);
     test_trials = 1:9;  
     sp_counter = 1;
-    figure()
-    for iTrial = test_trials 
-        subplot(3,3,sp_counter) 
-        gscatter(classification_struct(sIdx).PCs{iTrial}(1,:), ...
-                 classification_struct(sIdx).PCs{iTrial}(3,:), ...
-                 classification_struct(sIdx).labels{iTrial}, ... 
-                 [],[],5)  
-%         grid()
-        title(sprintf("Trial %i",iTrial)) 
-        xlabel("PC1"); ylabel("PC3")  
-        xlim([-10 10]); ylim([-10 10])
-%         legend("Stay","Leave in 500-1000 msec") 
-        sp_counter = sp_counter + 1; 
-        b = gca; legend(b,'off');
-    end 
-    
+%     figure()
+%     for iTrial = test_trials 
+%         subplot(3,3,sp_counter) 
+%         gscatter(classification_struct(sIdx).PCs{iTrial}(1,:), ...
+%                  classification_struct(sIdx).PCs{iTrial}(3,:), ...
+%                  classification_struct(sIdx).labels{iTrial}, ... 
+%                  [],[],5)  
+% %         grid()
+%         title(sprintf("Trial %i",iTrial)) 
+%         xlabel("PC1"); ylabel("PC3")  
+%         xlim([-10 10]); ylim([-10 10])
+% %         legend("Stay","Leave in 500-1000 msec") 
+%         sp_counter = sp_counter + 1; 
+%         b = gca; legend(b,'off');
+%     end 
+
     % concatenate to show cross trial data
-    concat_PCs = classification_struct(sIdx).PCs_noPreRew(test_trials);
-    concat_PCs = horzcat(concat_PCs{:}); 
-    concat_labels = classification_struct(sIdx).labels_noPreRew(test_trials); 
-    concat_labels = horzcat(concat_labels{:}); 
-    figure() 
-    gscatter(concat_PCs(1,:),concat_PCs(3,:),concat_labels) 
-    xlabel("PC1"); ylabel("PC3") 
-    title("Labeled Points in PC Space") 
-    legend("Stay","Leave in 500-1500 msec") 
+%     concat_PCs = classification_struct(sIdx).PCs_noPreRew(test_trials);
+%     concat_PCs = horzcat(concat_PCs{:}); 
+%     concat_labels = classification_struct(sIdx).labels_noPreRew(test_trials); 
+%     concat_labels = horzcat(concat_labels{:}); 
+%     figure() 
+%     gscatter(concat_PCs(1,:),concat_PCs(3,:),concat_labels,[0 0 0; 1 0 0]) 
+%     xlabel("PC1"); ylabel("PC2") 
+%     title("Labeled Points in PC Space") 
+%     legend("Stay","Leave in 500-1500 msec") 
     
     % total concat pca 
     all_concat_PCs = horzcat(classification_struct(sIdx).PCs_noPreRew{:}); 
     all_concat_labels = horzcat(classification_struct(sIdx).labels_noPreRew{:});  
     figure() 
-    gscatter(all_concat_PCs(1,:),all_concat_PCs(3,:),all_concat_labels,[],[],2)  
-    xlabel("PC1"); ylabel("PC3") 
-    title("Labeled Points in PC Space") 
+    gscatter(all_concat_PCs(1,:),all_concat_PCs(2,:),all_concat_labels,[0 0 0; 1 0 0],[],2)  
+    xlabel("PC1"); ylabel("PC2") 
+    title(sprintf("%s Labeled Points in PC Space",session_title)) 
     legend("Stay","Leave in 500-1500 msec")  
     
-    figure() 
-    % now look at velocity  
-    sp_counter = 1;
-    for iTrial = test_trials 
-        subplot(3,3,sp_counter) 
-        t_len = numel(classification_struct(sIdx).vel{iTrial});
-        gscatter(1:t_len,classification_struct(sIdx).vel{iTrial},classification_struct(sIdx).labels{iTrial},[],[],2)   
-        title(sprintf("Trial %i",iTrial)) 
-        xlabel("Time"); 
-        ylabel("Velocity")
-        sp_counter = sp_counter + 1; 
-        b = gca; legend(b,'off');
-    end 
-    
-    figure() 
-    % now look at mean ramp
-    sp_counter = 1;
-    for iTrial = test_trials 
-        subplot(3,3,sp_counter) 
-        t_len = numel(classification_struct(sIdx).meanRamp_upAll{iTrial});
-        gscatter(1:t_len,classification_struct(sIdx).meanRamp_upAll{iTrial},classification_struct(sIdx).labels{iTrial},[],[],2)   
-        title(sprintf("Trial %i",iTrial)) 
-        xlabel("Time"); 
-        ylabel("Mean Ramping Activity")
-        sp_counter = sp_counter + 1; 
-        b = gca; legend(b,'off');
-    end  
-    
-    figure() 
-    % now look at mean ramp point cloud for all trials
-    all_concat_meanRamp_upAll_noPreRew = horzcat(classification_struct(sIdx).meanRamp_upAll_noPreRew{:});  
-    all_concat_labels_noPreRew = horzcat(classification_struct(sIdx).labels_noPreRew{:}) + 1; 
-    session_len = numel(all_concat_meanRamp_upAll_noPreRew);
-    gscatter(1:session_len,all_concat_meanRamp_upAll_noPreRew,all_concat_labels_noPreRew,[],[],2)   
-    xlabel("Time"); 
-    ylabel("Mean Ramping Activity")
-    b = gca; legend(b,'off'); 
-    
-    figure() 
-    % now look at PC1 point cloud for all trials
-    gscatter(1:session_len,all_concat_PCs(1,:),all_concat_labels_noPreRew,[],[],2)   
-    xlabel("Time"); 
-    ylabel("PC1 Activity Activity")
-    b = gca; legend(b,'off');
-end 
-
-%% Perform logistic regression on labelled PCs
-close all
-for sIdx = 25
-    all_concat_PCs_noPreRew = horzcat(classification_struct(sIdx).PCs_noPreRew{:})';   
-    all_concat_PCs = horzcat(classification_struct(sIdx).PCs{:})';  
-    session_len = size(all_concat_PCs,1);
-    all_concat_labels_noPreRew = horzcat(classification_struct(sIdx).labels_noPreRew{:}) + 1;  
-    [B,dev,stats] = mnrfit(all_concat_PCs_noPreRew,all_concat_labels_noPreRew);   
-    [~,pc_sort_by_logW] = sort(abs(B(2:end)),'descend');
-    pi_hat = mnrval(B,all_concat_PCs);    
-    
-    decode_pc1 = pc_sort_by_logW(1); 
-    decode_pc2 = pc_sort_by_logW(2);  
-    decode_pc3 = pc_sort_by_logW(3); 
-    
-    figure();colormap('hot')
-    scatter(all_concat_PCs(:,decode_pc1),all_concat_PCs(:,decode_pc2),3,pi_hat(:,2)','.');  
-    colorbar()
-    xlabel(sprintf("PC%i",decode_pc1));
-    ylabel(sprintf("PC%i",decode_pc2));  
-    title("P(leave in .5-1.5 sec | PC1:10)")  
-    xl = xlim;
-    yl = ylim;
-    
-    % now just show where P(leave) > .1 
-%     ix = find(pi_hat(:,2) > .1); 
-%     figure();colormap('hot')
-%     scatter(all_concat_PCs(ix,decode_pc1),all_concat_PCs(ix,decode_pc2),3,pi_hat(ix,2)','.');  
-%     colorbar()
-%     xlabel(sprintf("PC%i",decode_pc1));ylabel(sprintf("PC%i",decode_pc2))  
-%     title("P(leave in .5-1 sec | PC1:10)")   
-    
-%     figure();colormap('hot')
-%     scatter3(all_concat_PCs(ix,decode_pc1),all_concat_PCs(ix,decode_pc2),all_concat_PCs(ix,decode_pc3),3,pi_hat(ix,2)','.') 
-%     colorbar() 
-%     xlabel(sprintf("PC%i",decode_pc1)) 
-%     ylabel(sprintf("PC%i",decode_pc2)) 
-%     zlabel(sprintf("PC%i",decode_pc3)) 
-    
-%     figure()
-%     bar(B(2:end)) 
-%     xlabel("PC") 
-%     ylabel("Logistic Regression Weight") 
-%     title("PC Logistic Regression Results") 
+%     figure() 
+%     % now look at velocity  
+%     sp_counter = 1;
+%     for iTrial = test_trials 
+%         subplot(3,3,sp_counter) 
+%         t_len = numel(classification_struct(sIdx).vel{iTrial});
+%         gscatter(1:t_len,classification_struct(sIdx).vel{iTrial},classification_struct(sIdx).labels{iTrial},[],[],2)   
+%         title(sprintf("Trial %i",iTrial)) 
+%         xlabel("Time"); 
+%         ylabel("Velocity")
+%         sp_counter = sp_counter + 1; 
+%         b = gca; legend(b,'off');
+%     end 
 %     
-%     % show results using meshgrid
-%     [x,y] = meshgrid(xl(1):.1:xl(2),yl(1):.1:yl(2)); 
-%     x = x(:);
-%     y = y(:); 
-%     pihat_mesh = mnrval(B,[x zeros(size(x,1),1) y zeros(size(x,1),7)]); 
-%     figure();colormap("hot")
-%     scatter(x,y,[],pihat_mesh(:,1),'.');colorbar() 
-%     xlabel(sprintf("PC%i",decode_pc1));ylabel(sprintf("PC%i",decode_pc2)) 
-%     title("Logistic Regression Results Tiled Across PC Space") 
+%     figure() 
+%     % now look at mean ramp
+%     sp_counter = 1;
+%     for iTrial = test_trials 
+%         subplot(3,3,sp_counter) 
+%         t_len = numel(classification_struct(sIdx).meanRamp_upAll{iTrial});
+%         gscatter(1:t_len,classification_struct(sIdx).meanRamp_upAll{iTrial},classification_struct(sIdx).labels{iTrial},[],[],2)   
+%         title(sprintf("Trial %i",iTrial)) 
+%         xlabel("Time"); 
+%         ylabel("Mean Ramping Activity")
+%         sp_counter = sp_counter + 1; 
+%         b = gca; legend(b,'off');
+%     end  
     
-    % now add p_leave to our classification struct 
-    t_lens = cellfun(@(x) size(x,2),classification_struct(sIdx).fr_mat_raw); 
-    patchleave_ix = cumsum(t_lens);
-    patchstop_ix = patchleave_ix - t_lens + 1;  
-    for iTrial = 1:numel(t_lens)
-        classification_struct(sIdx).p_leave{iTrial} = pi_hat(patchstop_ix(iTrial):patchleave_ix(iTrial),2);
-    end
-end    
+%     figure() 
+%     % now look at mean ramp point cloud for all trials
+%     all_concat_meanRamp_upAll_noPreRew = horzcat(classification_struct(sIdx).meanRamp_upAll_noPreRew{:});  
+%     all_concat_labels_noPreRew = horzcat(classification_struct(sIdx).labels_noPreRew{:}) + 1; 
+%     session_len = numel(all_concat_meanRamp_upAll_noPreRew);
+%     gscatter(1:session_len,all_concat_meanRamp_upAll_noPreRew,all_concat_labels_noPreRew,[],[],2)   
+%     xlabel("Time"); 
+%     ylabel("Mean Ramping Activity")
+%     b = gca; legend(b,'off'); 
+%     
+%     figure() 
+%     % now look at PC1 point cloud for all trials
+%     gscatter(1:session_len,all_concat_PCs(1,:),all_concat_labels_noPreRew,[],[],2)   
+%     xlabel("Time"); 
+%     ylabel("PC1 Activity Activity")
+%     b = gca; legend(b,'off'); 
+    
+end  
 
 %% Perform logistic regression on mean ramping activity
 close all
@@ -363,306 +323,43 @@ for sIdx = 25
     yl = ylim;
 end   
 
-%% Now perform classification with logistic regression, using k-fold x-val  
-% add velocity classification as a control
-close all 
-figcounter = 1;
-for sIdx = 25
-    session = sessions{sIdx}(1:end-4); 
-    session_title = sessions{sIdx}([1:2 end-6:end-4]);
-    data = load(fullfile(paths.data,session)); 
-    patches = data.patches;
-    patchCSL = data.patchCSL;
-    prts = patchCSL(:,3) - patchCSL(:,2);
-    patchType = patches(:,2);
-    rewsize = mod(patchType,10);  
-    
-    all_concat_PCs_noPreRew = horzcat(classification_struct(sIdx).PCs_noPreRew{:});   
-    all_concat_labels_noPreRew = horzcat(classification_struct(sIdx).labels_noPreRew{:}) + 1;  
-    all_concat_rewsize_noPrewRew = vertcat(classification_struct(sIdx).rewsize_noPreRew{:})'; 
-    all_concat_vel_noPreRew = horzcat(classification_struct(sIdx).vel_noPreRew{:});  
-    all_concat_meanRamp_upAll_noPreRew = horzcat(classification_struct(sIdx).meanRamp_upAll_noPreRew{:});
-    all_concat_meanRamp_upCommon_noPreRew = horzcat(classification_struct(sIdx).meanRamp_upCommon_noPreRew{:});
-    
-    % folds are going to be over points that did not directly precede reward
-    points = 1:numel(all_concat_rewsize_noPrewRew);
-    
-    % make folds
-    xval_opt = struct;
-    xval_opt.numFolds = 10;
-    xval_opt.rew_size = [1,2,4];
-    % split trials into groups (num groups = opt.numFolds)
-    [points,~,IC] = unique(points); 
-    data_grp = nan(size(points));
-    shift_by = 0; % to make sure equal numbers of trials end up in each fold
-    % make sure all folds have roughly equal numbers of points from every rewsize
-    for i = 1:numel(xval_opt.rew_size)
-        keep_this = all_concat_rewsize_noPrewRew == xval_opt.rew_size(i);
-        data_grp_this = repmat(circshift(1:xval_opt.numFolds,shift_by),1,ceil(sum(keep_this)/xval_opt.numFolds)*xval_opt.numFolds);
-        data_grp(keep_this) = data_grp_this(1:sum(keep_this)); % assign folds 1:10
-        shift_by = shift_by - mod(sum(keep_this),xval_opt.numFolds); % shift which fold is getting fewer trials
-    end
-    
-    foldid = data_grp(IC)';  
-    threshold_step = .05;
-    thresholds = 0:threshold_step:1; 
-    pc_ranges = 1:10;
-    
-    new_xval = true;
-    if new_xval == true 
-%         set up datastructures to measure classification fidelity
-        accuracies = nan(numel(pc_ranges),xval_opt.numFolds,numel(thresholds));
-        precisions = nan(numel(pc_ranges),xval_opt.numFolds,numel(thresholds));
-        TP_rates = nan(numel(pc_ranges),xval_opt.numFolds,numel(thresholds));
-        FP_rates = nan(numel(pc_ranges),xval_opt.numFolds,numel(thresholds)); 
-        ROC_AUC = nan(numel(pc_ranges),xval_opt.numFolds); 
-        PR_AUC = nan(numel(pc_ranges),xval_opt.numFolds);
-        
-        for pcIdx = 1:numel(pc_ranges) 
-            last_pc = pc_ranges(pcIdx);
-            
-            % Iterate over folds to use as test data
-            for fIdx = 1:xval_opt.numFolds
-                % separate training and test data
-                data_train = all_concat_PCs_noPreRew(1:last_pc,foldid~=fIdx);
-                labels_train = all_concat_labels_noPreRew(foldid~=fIdx);
-                labels_test = all_concat_labels_noPreRew(foldid==fIdx);
-                data_test = all_concat_PCs_noPreRew(1:last_pc,foldid==fIdx);
-                
-                % now fit logistic regression to our training data
-                [B,~,~] = mnrfit(data_train',labels_train);
-                pi_test = mnrval(B,data_test');
-                
-                for tIdx = 1:numel(thresholds)
-                    threshold = thresholds(tIdx);
-                    model_labels = double(pi_test(:,2) > threshold);
-                    cm = confusionmat(labels_test' - 1,model_labels);
-                    TN = cm(1,1);
-                    FN = cm(2,1);
-                    TP = cm(2,2);
-                    FP = cm(1,2);
-                    
-                    % classification performance metrics
-                    accuracy = (TP + TN) / sum(cm(:));
-                    precision = TP / (TP + FP); % precision: P(Yhat = 1 | Y = 1)
-                    TP_rate = TP / (TP + FN); % sensitivity or recall:  P(Yhat = 1 | Y = 1)
-                    FP_rate = FP / (TN + FP); % 1 - sensitivity: P(Yhat = 1 | Y = 0)
-                    
-                    % log metrics
-                    accuracies(pcIdx,fIdx,tIdx) = accuracy;
-                    precisions(pcIdx,fIdx,tIdx) = precision;
-                    TP_rates(pcIdx,fIdx,tIdx) = TP_rate;
-                    FP_rates(pcIdx,fIdx,tIdx) = FP_rate;
-                end 
-                
-                ROC_AUC_dx = -squeeze(diff(FP_rates(pcIdx,fIdx,:)));
-                ROC_AUC(pcIdx,fIdx) = sum(ROC_AUC_dx .* squeeze(TP_rates(pcIdx,fIdx,1:end-1))); 
-                PR_AUC_dx = -squeeze(diff(TP_rates(pcIdx,fIdx,:)));
-                PR_AUC(pcIdx,fIdx) = sum(PR_AUC_dx(~isnan(precisions(pcIdx,fIdx,1:end-1))) .* squeeze(precisions(pcIdx,fIdx,~isnan(precisions(pcIdx,fIdx,1:end-1)))));
-            end 
-            if mod(pcIdx,2) == 0
-                fprintf("PC 1:%i Complete \n",pcIdx) 
-            end
-        end 
-        
-        % Now repeat for velocity to have comparison
-        accuracies_vel = nan(xval_opt.numFolds,numel(thresholds));
-        precisions_vel = nan(xval_opt.numFolds,numel(thresholds));
-        TP_rates_vel = nan(xval_opt.numFolds,numel(thresholds));
-        FP_rates_vel = nan(xval_opt.numFolds,numel(thresholds));
-        ROC_AUC_vel = nan(xval_opt.numFolds,1); 
-        PR_AUC_vel = nan(xval_opt.numFolds,1);
-        for fIdx = 1:xval_opt.numFolds
-            % separate training and test data
-            data_train = all_concat_vel_noPreRew(foldid~=fIdx);
-            labels_train = all_concat_labels_noPreRew(foldid~=fIdx);
-            data_test = all_concat_vel_noPreRew(foldid==fIdx);  
-            labels_test = all_concat_labels_noPreRew(foldid==fIdx);
-            
-            % now fit logistic regression to our training data
-            [B,~,~] = mnrfit(data_train',labels_train);
-            pi_test = mnrval(B,data_test');
-            
-            for tIdx = 1:numel(thresholds)
-                threshold = thresholds(tIdx);
-                model_labels = double(pi_test(:,2) > threshold);
-                cm = confusionmat(labels_test' - 1,model_labels);
-                TN = cm(1,1);
-                FN = cm(2,1);
-                TP = cm(2,2);
-                FP = cm(1,2);
-                
-                % classification performance metrics
-                accuracy = (TP + TN) / sum(cm(:));
-                precision = TP / (TP + FP); % precision: P(Yhat = 1 | Y = 1)
-                TP_rate = TP / (TP + FN); % sensitivity or recall:  P(Yhat = 1 | Y = 1)
-                FP_rate = FP / (TN + FP); % 1 - sensitivity: P(Yhat = 1 | Y = 0)
-                
-                % log metrics
-                accuracies_vel(fIdx,tIdx) = accuracy;
-                precisions_vel(fIdx,tIdx) = precision;
-                TP_rates_vel(fIdx,tIdx) = TP_rate;
-                FP_rates_vel(fIdx,tIdx) = FP_rate;
-            end 
-            
-            ROC_AUC_dx_vel = -squeeze(diff(FP_rates_vel(fIdx,:)));
-            ROC_AUC_vel(fIdx) = sum(ROC_AUC_dx_vel .* TP_rates_vel(fIdx,1:end-1)); 
-            PR_AUC_dx_vel = -squeeze(diff(TP_rates_vel(fIdx,:)));
-            PR_AUC_vel(fIdx) = sum(PR_AUC_dx_vel(~isnan(precisions_vel(fIdx,1:end-1))) .* precisions_vel(fIdx,~isnan(precisions_vel(fIdx,1:end-1))));
-        end 
-        
-        % Repeat for mean ramp up neurons
-        accuracies_ramp = nan(xval_opt.numFolds,numel(thresholds));
-        precisions_ramp = nan(xval_opt.numFolds,numel(thresholds));
-        TP_rates_ramp = nan(xval_opt.numFolds,numel(thresholds));
-        FP_rates_ramp = nan(xval_opt.numFolds,numel(thresholds));
-        ROC_AUC_ramp = nan(xval_opt.numFolds,1); 
-        PR_AUC_ramp = nan(xval_opt.numFolds,1);
-        for fIdx = 1:xval_opt.numFolds
-            % separate training and test data
-            data_train = all_concat_meanRamp_upAll_noPreRew(foldid~=fIdx);
-            labels_train = all_concat_labels_noPreRew(foldid~=fIdx);
-            data_test = all_concat_meanRamp_upAll_noPreRew(foldid==fIdx);  
-            labels_test = all_concat_labels_noPreRew(foldid==fIdx);
-            
-            % now fit logistic regression to our training data
-            [B,~,~] = mnrfit(data_train',labels_train);
-            pi_test = mnrval(B,data_test');
-            
-            for tIdx = 1:numel(thresholds)
-                threshold = thresholds(tIdx);
-                model_labels = double(pi_test(:,2) > threshold);
-                cm = confusionmat(labels_test' - 1,model_labels);
-                TN = cm(1,1);
-                FN = cm(2,1);
-                TP = cm(2,2);
-                FP = cm(1,2);
-                
-                % classification performance metrics
-                accuracy = (TP + TN) / sum(cm(:));
-                precision = TP / (TP + FP); % precision: P(Yhat = 1 | Y = 1)
-                TP_rate = TP / (TP + FN); % sensitivity or recall:  P(Yhat = 1 | Y = 1)
-                FP_rate = FP / (TN + FP); % 1 - sensitivity: P(Yhat = 1 | Y = 0)
-                
-                % log metrics
-                accuracies_ramp(fIdx,tIdx) = accuracy;
-                precisions_ramp(fIdx,tIdx) = precision;
-                TP_rates_ramp(fIdx,tIdx) = TP_rate;
-                FP_rates_ramp(fIdx,tIdx) = FP_rate;
-            end 
-            
-            ROC_AUC_dx_ramp = -squeeze(diff(FP_rates_ramp(fIdx,:)));
-            ROC_AUC_ramp(fIdx) = sum(ROC_AUC_dx_ramp .* TP_rates_ramp(fIdx,1:end-1)); 
-            PR_AUC_dx_ramp = -squeeze(diff(TP_rates_ramp(fIdx,:)));
-            PR_AUC_ramp(fIdx) = sum(PR_AUC_dx_ramp(~isnan(precisions_ramp(fIdx,1:end-1))) .* precisions_ramp(fIdx,~isnan(precisions_ramp(fIdx,1:end-1))));
-        end 
-    end
-    
-    % visualize results with AUROC and Precision-Recall Curve
-    for pcIdx = [1,5,10]
-%         figure(figcounter)
-%         last_pc = pc_ranges(pcIdx);
-%         errorbar(thresholds,squeeze(mean(accuracies(pcIdx,:,:))),1.96 * squeeze(std(accuracies(pcIdx,:,:))),'linewidth',1.5) 
-%         hold on
-%         xlabel("Threshold")
-%         ylabel("Mean Test Set Accuracy")
-%         title("10-fold Test Accuracy Across Thresholds")
-        figure(figcounter)
-        subplot(1,2,1)
-        errorbar(squeeze(mean(FP_rates(pcIdx,:,:))),squeeze(mean(TP_rates(pcIdx,:,:))),1.96 * squeeze(std(TP_rates(pcIdx,:,:))),'linewidth',1.5)
-        hold on
-        xlabel("Mean False Positive Rate Across Folds")
-        ylabel("Mean True Positive Rate Across Folds")
-        title(sprintf("%s Receiver Operator Characteristic Curve",session_title))
-        subplot(1,2,2)
-        errorbar(squeeze(mean(TP_rates(pcIdx,:,:))),squeeze(mean(precisions(pcIdx,:,:))),1.96 * squeeze(std(precisions(pcIdx,:,:))),'linewidth',1.5)
-        hold on
-        xlabel("Mean True Positive Rate Across Folds")
-        ylabel("Mean Precision Across Folds")
-        title(sprintf("%s Precision Recall Curve",session_title))
-    end 
-    
-    figure(figcounter)  
-    subplot(1,2,1)
-    errorbar(mean(FP_rates_vel),mean(TP_rates_vel),1.96 * std(TP_rates_vel),'linewidth',1.5)  
-    errorbar(mean(FP_rates_ramp),mean(TP_rates_ramp),1.96 * std(TP_rates_ramp),'linewidth',1.5)  
-    plot([0,1],[0,1],'k--','linewidth',1.5) 
-    ylim([0,1])
-    legend("PC 1:1","PC 1:5","PC 1:10","Velocity","Naive Performance") 
-    subplot(1,2,2) 
-    errorbar(mean(TP_rates_vel),mean(precisions_vel),1.96 * std(precisions_vel),'linewidth',1.5) 
-    errorbar(mean(TP_rates_ramp),mean(precisions_ramp),1.96 * std(precisions_ramp),'linewidth',1.5)  
-    yline(.5,'k--','linewidth',1.5)
-    legend("PC 1:1","PC 1:5","PC 1:10","Velocity","Mean Ramping Activity","Naive Performance") 
-    ylim([0,1])
-    
-    % Now plot AUC 
-    figure(figcounter + 1) 
-    subplot(1,2,1)
-    errorbar(pc_ranges,mean(ROC_AUC,2),1.96 * std(ROC_AUC,[],2),'linewidth',1.5)
-    hold on 
-    yline(mean(ROC_AUC_vel),'k--','linewidth',1.5)   
-    yline(mean(ROC_AUC_vel) + 1.95 * std(ROC_AUC_vel),'k:','linewidth',1.5) 
-    yline(mean(ROC_AUC_vel) - 1.95 * std(ROC_AUC_vel),'k:','linewidth',1.5) 
-    title(sprintf("%s AUROC Forward Search",session_title)) 
-    legend("AUROC for PCs","AUROC for Velocity") 
-    xlabel("PCs Used In Logistic Regression") 
-    ylabel("AUROC") 
-    ylim([0,1])
-    subplot(1,2,2)
-    errorbar(pc_ranges,mean(PR_AUC,2),1.96 * std(PR_AUC,[],2),'linewidth',1.5) 
-    hold on 
-    yline(mean(PR_AUC_vel),'k--','linewidth',1.5) 
-    yline(mean(PR_AUC_vel) + 1.95 * std(PR_AUC_vel),'k:','linewidth',1.5) 
-    yline(mean(PR_AUC_vel) - 1.95 * std(PR_AUC_vel),'k:','linewidth',1.5) 
-    title(sprintf("%s AUPR Forward Search",session_title)) 
-    legend("AUPR for PCs","AUPR for Velocity") 
-    xlabel("PCs Used In Logistic Regression")
-    ylabel("AUPR") 
-    ylim([0,1]) 
-    
-    fprintf("Session %s Complete \n",session_title)
-    
-    figcounter = figcounter + 2;
-end 
-
 %% Now perform true forward search protocol 
 %  question: even in seemingly messy/high-dimensional sessions, do we have
 %  predictability in just a few dimensions if we look at the right ones? 
 close all  
 forward_search = struct;
-for sIdx = 1:25  
+for sIdx = 8
     if ~isempty(classification_struct(sIdx).fr_mat_raw)
         session = sessions{sIdx}(1:end-4); 
         session_title = sessions{sIdx}([1:2 end-6:end-4]);  
         fprintf("Starting %s \n",session_title)
         data = load(fullfile(paths.data,session)); 
         patches = data.patches;
-        patchCSL = data.patchCSL;
-        prts = patchCSL(:,3) - patchCSL(:,2);
+        patchCSL = data.patchCSL; 
+        prts = patchCSL(:,3) - patchCSL(:,2); 
+        nTrials = length(prts);
         patchType = patches(:,2);
         rewsize = mod(patchType,10);  
 
-        all_concat_PCs_noPreRew = horzcat(classification_struct(sIdx).PCs_noPreRew{:});   
-        all_concat_labels_noPreRew = horzcat(classification_struct(sIdx).labels_noPreRew{:}) + 1;  
-        all_concat_rewsize_noPrewRew = vertcat(classification_struct(sIdx).rewsize_noPreRew{:})'; 
-        all_concat_vel_noPreRew = horzcat(classification_struct(sIdx).vel_noPreRew{:}); 
+%         all_concat_PCs_noPreRew = horzcat(classification_struct(sIdx).PCs_noPreRew{:});   
+%         all_concat_labels_noPreRew = horzcat(classification_struct(sIdx).labels_noPreRew{:}) + 1;  
+%         all_concat_rewsize_noPrewRew = vertcat(classification_struct(sIdx).rewsize_noPreRew{:})'; 
+%         all_concat_vel_noPreRew = horzcat(classification_struct(sIdx).vel_noPreRew{:}); 
 
-        % folds are going to be over points that did not directly precede
-        % reward
-        points = 1:numel(all_concat_rewsize_noPrewRew);
+        % folds are over trials
+%         points = 1:numel(all_concat_rewsize_noPrewRew); 
+        trials = 1:nTrials;
 
         % make folds
         xval_opt = struct;
         xval_opt.numFolds = 10;
         xval_opt.rew_size = [1,2,4];
         % split trials into groups (num groups = opt.numFolds)
-        [points,~,IC] = unique(points); % don't reeeeally know what's going on here
-        data_grp = nan(size(points));
+        [trials,~,IC] = unique(trials);
+        data_grp = nan(size(trials));
         shift_by = 0; % to make sure equal numbers of trials end up in each fold
-        % make sure all folds have roughly equal numbers of points from every rewsize
         for i = 1:numel(xval_opt.rew_size)
-            keep_this = all_concat_rewsize_noPrewRew == xval_opt.rew_size(i);
+            keep_this = rewsize == xval_opt.rew_size(i);
             data_grp_this = repmat(circshift(1:xval_opt.numFolds,shift_by),1,ceil(sum(keep_this)/xval_opt.numFolds)*xval_opt.numFolds);
             data_grp(keep_this) = data_grp_this(1:sum(keep_this)); % assign folds 1:10
             shift_by = shift_by - mod(sum(keep_this),xval_opt.numFolds); % shift which fold is getting fewer trials
@@ -683,20 +380,25 @@ for sIdx = 1:25
             PR_AUC_vel = nan(xval_opt.numFolds,1);
             % Velocity classification to have comparison
             for fIdx = 1:xval_opt.numFolds
-                % separate training and test data
-                data_train = all_concat_vel_noPreRew(foldid~=fIdx);
-                labels_train = all_concat_labels_noPreRew(foldid~=fIdx);
-                labels_test = all_concat_labels_noPreRew(foldid==fIdx);
-                data_test = all_concat_vel_noPreRew(foldid==fIdx); 
+                %%%% separate training and test data %%%
+                X_train = classification_struct(sIdx).vel_noPreRew(foldid~=fIdx);  
+                X_train = cat(2,X_train{:})';
+                y_train = classification_struct(sIdx).labels_noPreRew(foldid~=fIdx); 
+                y_train = cat(2,y_train{:})' + 1; 
+                
+                X_test = classification_struct(sIdx).vel_noPreRew(foldid==fIdx);  
+                X_test = cat(2,X_test{:})';
+                y_test = classification_struct(sIdx).labels_noPreRew(foldid==fIdx); 
+                y_test = cat(2,y_test{:})' + 1;
 
                 % now fit logistic regression to our training data
-                [B,~,~] = mnrfit(data_train',labels_train);
-                pi_test = mnrval(B,data_test');
+                [B,~,~] = mnrfit(X_train,y_train);
+                pi_test = mnrval(B,X_test);
 
                 for tIdx = 1:numel(thresholds)
                     threshold = thresholds(tIdx);
                     model_labels = double(pi_test(:,2) > threshold);
-                    cm = confusionmat(labels_test' - 1,model_labels);
+                    cm = confusionmat(y_test - 1,model_labels);
                     TN = cm(1,1);
                     FN = cm(2,1);
                     TP = cm(2,2);
@@ -763,19 +465,31 @@ for sIdx = 1:25
                     % Iterate over folds to use as test data
                     for fIdx = 1:xval_opt.numFolds
                         % separate training and test data
-                        data_train = all_concat_PCs_noPreRew(pcs_picked_tmp,foldid~=fIdx);
-                        labels_train = all_concat_labels_noPreRew(foldid~=fIdx);
-                        data_test = all_concat_PCs_noPreRew(pcs_picked_tmp,foldid==fIdx);
-                        labels_test = all_concat_labels_noPreRew(foldid==fIdx);
+%                         data_train = all_concat_PCs_noPreRew(pcs_picked_tmp,foldid~=fIdx);
+%                         labels_train = all_concat_labels_noPreRew(foldid~=fIdx);
+%                         data_test = all_concat_PCs_noPreRew(pcs_picked_tmp,foldid==fIdx);
+%                         labels_test = all_concat_labels_noPreRew(foldid==fIdx); 
+                        
+                        X_train = classification_struct(sIdx).PCs_noPreRew(foldid~=fIdx);  
+                        X_train = cat(2,X_train{:})'; 
+                        X_train = X_train(:,pcs_picked_tmp);
+                        y_train = classification_struct(sIdx).labels_noPreRew(foldid~=fIdx); 
+                        y_train = cat(2,y_train{:})' + 1; 
+
+                        X_test = classification_struct(sIdx).PCs_noPreRew(foldid==fIdx);  
+                        X_test = cat(2,X_test{:})'; 
+                        X_test = X_test(:,pcs_picked_tmp);
+                        y_test = classification_struct(sIdx).labels_noPreRew(foldid==fIdx); 
+                        y_test = cat(2,y_test{:})' + 1;
 
                         % now fit logistic regression to our training data
-                        [B,~,~] = mnrfit(data_train',labels_train);
-                        pi_test = mnrval(B,data_test');
+                        [B,~,~] = mnrfit(X_train,y_train);
+                        pi_test = mnrval(B,X_test);
 
                         for tIdx = 1:numel(thresholds)
                             threshold = thresholds(tIdx);
                             model_labels = double(pi_test(:,2) > threshold);
-                            cm = confusionmat(labels_test' - 1,model_labels);
+                            cm = confusionmat(y_test' - 1,model_labels);
                             TN = cm(1,1);
                             FN = cm(2,1);
                             TP = cm(2,2);
@@ -846,113 +560,139 @@ end
 close all  
 figcounter = 1;
 pc_ranges = 1:10;
-for sIdx = 25
+for sIdx = 8
     session = sessions{sIdx}(1:end-4); 
-    session_title = sessions{sIdx}([1:2 end-6:end-4]);
-    precisions = forward_search(sIdx).precisions;
-    TP_rates = forward_search(sIdx).TP_rates;
-    FP_rates = forward_search(sIdx).FP_rates;   
-    ROC_AUC = forward_search(sIdx).ROC_AUC; 
-    PR_AUC = forward_search(sIdx).PR_AUC;   
+    session_title = sessions{sIdx}([1:2 end-6:end-4]); 
     
-    all_concat_labels_noPreRew = horzcat(classification_struct(sIdx).labels_noPreRew{:}) + 1; 
-    naive_pr = length(find(all_concat_labels_noPreRew == 1)) / length(all_concat_labels_noPreRew);
-    
-    precisions_vel = forward_search(sIdx).precisions_vel;
-    TP_rates_vel = forward_search(sIdx).TP_rates_vel;
-    FP_rates_vel = forward_search(sIdx).FP_rates_vel;
-    ROC_AUC_vel = forward_search(sIdx).ROC_AUC_vel;
-    PR_AUC_vel = forward_search(sIdx).PR_AUC_vel;
-    
-    if isnan(forward_search(sIdx).surpass_vel_nPCs) 
-        pcs_to_plot = [1,5,10];
-    elseif forward_search(sIdx).surpass_vel_nPCs > 3
-        pcs_to_plot = [1,2,forward_search(sIdx).surpass_vel_nPCs]; 
-    elseif forward_search(sIdx).surpass_vel_nPCs <= 3
-        pcs_to_plot = 1:3;
-    end 
-
-    curves_legend = {numel(pcs_to_plot)};
-    % visualize results with AUROC and Precision-Recall Curve
-    for i = 1:numel(pcs_to_plot) 
-        pcIdx = pcs_to_plot(i);
-        figure(figcounter)
-        subplot(1,2,1)
-        errorbar(squeeze(mean(FP_rates(pcIdx,:,:))),squeeze(mean(TP_rates(pcIdx,:,:))),1.96 * squeeze(std(TP_rates(pcIdx,:,:))),'linewidth',1.5)
-        hold on
-        xlabel("Mean False Positive Rate Across Folds")
-        ylabel("Mean True Positive Rate Across Folds")
-        title(sprintf("%s Receiver Operator Characteristic Curve",session_title))
-        subplot(1,2,2)
-        errorbar(squeeze(mean(TP_rates(pcIdx,:,:))),squeeze(mean(precisions(pcIdx,:,:))),1.96 * squeeze(std(precisions(pcIdx,:,:))),'linewidth',1.5)
-        hold on
-        xlabel("Mean True Positive Rate Across Folds")
-        ylabel("Mean Precision Across Folds")
-        title(sprintf("%s Precision Recall Curve",session_title)) 
-        curves_legend{i} = sprintf("Top Decoding PCs 1:%i",pcIdx);
-    end  
-    
-    curves_legend{4} = "Velocity"; 
-    curves_legend{5} = "Naive Performance";
-    
-    % AUC and PR curves
-    figure(figcounter)  
-    subplot(1,2,1)
-    errorbar(mean(FP_rates_vel),mean(TP_rates_vel),1.96 * std(TP_rates_vel),'linewidth',1.5)  
-    plot([0,1],[0,1],'k--','linewidth',1.5) 
-    ylim([0,1])
-    legend(curves_legend) 
-    subplot(1,2,2) 
-    errorbar(mean(TP_rates_vel),mean(precisions_vel),1.96 * std(precisions_vel),'linewidth',1.5)
-    yline(naive_pr,'k--','linewidth',1.5)
-    legend(curves_legend) 
-    ylim([0,1]) 
-    
-    str_decoding_order = num2str(reshape(sprintf('%2d',forward_search(sIdx).pc_decodingOrder),2,[])');
-    
-    % Now plot AUC increase as we add PCs
-    figure(figcounter + 1) 
-    subplot(1,2,1)
-    errorbar(pc_ranges,mean(ROC_AUC,2),1.96 * std(ROC_AUC,[],2),'linewidth',1.5)
-    hold on 
-    yline(mean(ROC_AUC_vel),'k--','linewidth',1.5)   
-    yline(mean(ROC_AUC_vel) + 1.95 * std(ROC_AUC_vel),'k:','linewidth',1.5) 
-    yline(mean(ROC_AUC_vel) - 1.95 * std(ROC_AUC_vel),'k:','linewidth',1.5) 
-    title(sprintf("%s AUCROC Forward Search",session_title)) 
-    legend("AUCROC for PCs","AUCROC for Velocity") 
-    xlabel("PCs Used In Logistic Regression")  
-    xticks(1:numel(ROC_AUC_vel))
-    xticklabels(str_decoding_order)
-    ylabel("AUROC") 
-    ylim([0,1])
-    subplot(1,2,2)
-    errorbar(pc_ranges,mean(PR_AUC,2),1.96 * std(PR_AUC,[],2),'linewidth',1.5) 
-    hold on 
-    yline(mean(PR_AUC_vel),'k--','linewidth',1.5) 
-    yline(mean(PR_AUC_vel) + 1.95 * std(PR_AUC_vel),'k:','linewidth',1.5) 
-    yline(mean(PR_AUC_vel) - 1.95 * std(PR_AUC_vel),'k:','linewidth',1.5) 
-    title(sprintf("%s AUCPR Forward Search",session_title)) 
-    legend("AUCPR for PCs","AUCPR for Velocity") 
-    xlabel("PCs Used In Logistic Regression") 
-    xticks(1:numel(ROC_AUC_vel))
-    xticklabels(str_decoding_order)
-    ylabel("AUCPR")  
-    ylim([0,1]) 
-    
-    fprintf("Session %s Complete \n",session_title)
+    forwardSearchVis(forward_search,classification_struct,sIdx,session_title,figcounter)
     
     figcounter = figcounter + 2; 
-      
-end  
+end   
+
+%% Visualize forward search results across sessions 
+close all
+forward_search_cell = squeeze(struct2cell(forward_search))';
+pcs_to_surpass = cat(1,forward_search_cell{:,12});   
+best_auROC = cat(1,forward_search_cell{:,13});   
+best_auPR = cat(1,forward_search_cell{:,14});   
+mean_auROC_vel = mean(cat(2,forward_search_cell{:,4}));
+mean_auPR_vel = mean(cat(2,forward_search_cell{:,5}));
+
+figure() 
+histogram(pcs_to_surpass) 
+xlim([0 10]) 
+ylim([0 10]) 
+title("Distribution of PCs Needed to Surpass Velocity auROC and auPR") 
+xlabel("#PCs Needed to Surpass Velocity auROC and auPR") 
+ylabel("Session Density") 
+
+% mouse_groups = {1:2,3:8,9:12,13:16,17:18}; % {1:2,3:8,10:13,15:18,[23 25]};   
+mouse_groups = {1:2,3,[5 7],[4 6 8:9]}; % for malcolm
+mean_mouse_auROC_vel = nan(numel(mouse_groups),1); 
+mean_mouse_auROC_best = nan(numel(mouse_groups),1);
+mean_mouse_auPR_vel = nan(numel(mouse_groups),1); 
+mean_mouse_auPR_best = nan(numel(mouse_groups),1); 
+for m = 1:numel(mouse_groups) 
+    mean_mouse_auROC_vel(m) = mean(mean_auROC_vel(mouse_groups{m}));
+    mean_mouse_auPR_vel(m) = mean(mean_auPR_vel(mouse_groups{m}));
+    mean_mouse_auROC_best(m) = mean(best_auROC(mouse_groups{m}));
+    mean_mouse_auPR_best(m) = mean(best_auPR(mouse_groups{m}));
+end 
+
+% mouse_names = ["m75","m76","m78","m79","m80"]; 
+mouse_names = ["mc2 PFC","mc2 STR","mc4 PFC","mc4 STR"];  
+figure()  
+subplot(1,2,1);hold on
+b = bar([mean_mouse_auROC_vel mean_mouse_auROC_best],'FaceColor','flat'); 
+b(1).CData = [.5 .5 .5];  
+b(2).CData = [0.8500    0.3250    0.2] + .1; 
+ylim([.65,1]) 
+x_vel = b(1).XEndPoints;
+x_best = b(2).XEndPoints;  
+for m = 1:numel(mouse_groups)  
+    scatter(x_vel(m) + zeros(numel(mouse_groups{m}),1),mean_auROC_vel(mouse_groups{m}),20,'filled','d','MarkerFaceColor','k','MarkerEdgeColor','w')
+    scatter(x_best(m) + zeros(numel(mouse_groups{m}),1),best_auROC(mouse_groups{m}),20,'filled','d','MarkerFaceColor','r','MarkerEdgeColor','k')
+end 
+xticklabels(mouse_names)  
+ylabel("auROC")
+legend(b(1:2),["Velocity","Best PC Classifier"]) 
+title("Velocity vs Best PC Classifier auROC")
+
+subplot(1,2,2);hold on
+b = bar([mean_mouse_auPR_vel mean_mouse_auPR_best],'FaceColor','flat');
+b(1).CData = [.5 .5 .5]; 
+b(2).CData = [0.8500    0.3250    0.2] + .1; 
+ylim([.45,1]) 
+x_vel = b(1).XEndPoints;
+x_best = b(2).XEndPoints;  
+for m = 1:numel(mouse_groups)  
+    scatter(x_vel(m) + zeros(numel(mouse_groups{m}),1),mean_auPR_vel(mouse_groups{m}),20,'filled','d','MarkerFaceColor','k','MarkerEdgeColor','w')
+    scatter(x_best(m) + zeros(numel(mouse_groups{m}),1),best_auPR(mouse_groups{m}),20,'filled','d','MarkerFaceColor','r','MarkerEdgeColor','k')
+end
+xticklabels(mouse_names) 
+ylabel("auPR")
+legend(b(1:2),["Velocity","Best PC Classifier"]) 
+title("Velocity vs Best PC Classifier auPR") 
+
+%% Perform logistic regression on labelled PCs from forward search 
+close all
+for i = 1:8
+    sIdx = mPFC_sessions(i);
+    all_concat_PCs_noPreRew = horzcat(classification_struct(sIdx).PCs_noPreRew{:})';   
+    all_concat_PCs = horzcat(classification_struct(sIdx).PCs{:})';  
+    session_len = size(all_concat_PCs,1);
+    all_concat_labels_noPreRew = horzcat(classification_struct(sIdx).labels_noPreRew{:}) + 1; 
+    if exist('forward_search','var') 
+        if ~isnan(forward_search(sIdx).surpass_vel_nPCs) 
+            pcs_to_use = forward_search(sIdx).pc_decodingOrder(1:max(2,forward_search(sIdx).surpass_vel_nPCs));
+        else 
+            pcs_to_use = 1:10; 
+            disp("We didn't surpass velocity decoding")
+        end
+    else
+        pcs_to_use = 1:10;
+    end
+    
+    [B,dev,stats] = mnrfit(all_concat_PCs_noPreRew(:,pcs_to_use),all_concat_labels_noPreRew);   
+    [~,pc_sort_by_logW] = sort(abs(B(2:end)),'descend');
+    pi_hat = mnrval(B,all_concat_PCs(:,pcs_to_use));    
+    
+    if isequal(pcs_to_use,1:10)
+        decode_pc1 = pc_sort_by_logW(1); 
+        decode_pc2 = pc_sort_by_logW(2);  
+        decode_pc3 = pc_sort_by_logW(3);  
+    else
+        decode_pc1 = pcs_to_use(1); 
+        decode_pc2 = pcs_to_use(2); 
+    end
+    
+    figure();colormap('hot')
+    scatter(all_concat_PCs(:,decode_pc1),all_concat_PCs(:,decode_pc2),3,pi_hat(:,2)','.');  
+    colorbar()
+    xlabel(sprintf("PC%i",decode_pc1));
+    ylabel(sprintf("PC%i",decode_pc2));  
+    title("P(leave in .5-1.5 sec | PC1:10)")  
+    xl = xlim;
+    yl = ylim;  
+    
+    % now add p_leave to our classification struct 
+    t_lens = cellfun(@(x) size(x,2),classification_struct(sIdx).fr_mat_raw); 
+    patchleave_ix = cumsum(t_lens);
+    patchstop_ix = patchleave_ix - t_lens + 1;  
+    for iTrial = 1:numel(t_lens)
+        classification_struct(sIdx).p_leave{iTrial} = pi_hat(patchstop_ix(iTrial):patchleave_ix(iTrial),2);
+    end
+end   
 
 %% Visualize forward search PCs using HGK plot_timecourse 
 close all
-mPFC_sessions = [1:8 10:13 15:18 23 25];
-for i = 1:numel(mPFC_sessions)
-    sIdx = mPFC_sessions(i); 
+% mPFC_sessions = [1:8 10:13 15:18 23 25];
+for sIdx = 1:numel(sessions)
+%     sIdx = mPFC_sessions(i); 
     rew_barcode = rew_barcodes{sIdx};
     session = sessions{sIdx}(1:end-4); 
-    session_title = ['m' session(1:2) ' ' session(end-2) '/' session([end-1:end])]; 
+%     session_title = ['m' session(1:2) ' ' session(end-2) '/' session([end-1:end])];  
+    session_title = [session(1:3) ' ' session(end-3:end-2) '/' session(end-1:end)]; % malcolm mice
     figpath = [paths.figs '/logRegPCs/m' session([1:2 end-2:end]) '_PCs.png']; 
     data = load(fullfile(paths.data,session)); 
     
@@ -1094,34 +834,20 @@ end
 
 %% P(leave) on RXX trials 
 close all
-for sIdx = 22:24
-    session = sessions{sIdx}(1:end-4);
+for sIdx = 17
+    session = sessions{sIdx}(1:end-4); 
+    session_title = ['m' sessions{sIdx}([1:2]) ' ' sessions{sIdx}(end-6:end-4)];
     data = load(fullfile(paths.data,session));
     
     % reinitialize ms vectors
     patchstop_ms = data.patchCSL(:,2);
-    patchleave_ms = data.patchCSL(:,3);
+    patchleave_ms = data.patchCSL(:,3); 
+    prts = patchleave_ms - patchstop_ms;
     rew_ms = data.rew_ts;
 
     sec3ix = 3000/tbin_ms;
     
-    % Trial level features
-    patches = data.patches;
-    patchCSL = data.patchCSL;
-    prts = patchCSL(:,3) - patchCSL(:,2);
-    floor_prts = floor(prts);
-    patchType = patches(:,2);
-    rewsize = mod(patchType,10);
-    nTrials = length(prts);
-    
-    % make barcode matrices
-    nTimesteps = 15;
-    rew_barcode = zeros(length(patchCSL) , nTimesteps);
-    for iTrial = 1:length(patchCSL)
-        rew_indices = round(rew_ms(rew_ms >= patchstop_ms(iTrial) & rew_ms < patchleave_ms(iTrial)) - patchstop_ms(iTrial)) + 1;
-        rew_barcode(iTrial , (floor_prts(iTrial) + 1):end) = -1; % set part of patch after leave = -1
-        rew_barcode(iTrial , rew_indices) = rewsize(iTrial);
-    end
+    rew_barcode = rew_barcodes{sIdx};
   
     rew_counter = 1;
 
@@ -1208,7 +934,8 @@ for sIdx = 22:24
     xticklabels(((1:(1/tbin_ms * 1000):sec3ix) - 1) * tbin_ms)
     ylim([0,1])
     xlabel("Time (msec)") 
-    ylabel("P(Leave)")
+    ylabel("P(Leave)") 
+    suptitle(session_title)
     
 end 
 

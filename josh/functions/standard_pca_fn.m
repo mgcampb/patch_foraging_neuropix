@@ -11,13 +11,23 @@ function [coeffs,fr_mat,good_cells,score,score_full,expl] = standard_pca_fn(path
     cortex_only = true; 
     if exist('opt', 'var') && isfield(opt,'cortex_only')
         cortex_only = opt.cortex_only;
-    end  
+    end   
+    
+    region_selection = []; 
+    if exist('opt','var') && isfield(opt,'region_selection') 
+        region_selection = opt.region_selection;  
+    end 
 
     %% Load in data
     dat = load(fullfile(paths.data,opt.session));
     good_cells_all = dat.sp.cids(dat.sp.cgs==2);  
     if cortex_only == true
         good_cells_all = good_cells_all(dat.anatomy.cell_labels.Cortex); 
+    end  
+    
+    % subselect w/ rough brain region
+    if ~isempty(region_selection) 
+        good_cells_all = good_cells_all(dat.brain_region_rough == region_selection);
     end
 
     % time bins

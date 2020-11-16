@@ -211,14 +211,13 @@ for sIdx = flipud(1:24)
     suptitle(sprintf("Session %s PCs Needed to surpass velocity classification fidelity: %i \n",session_title,forward_search(sIdx).surpass_vel_nPCs))
 end
 
-%% 
-RX_data = {}; 
-RXX_data = {};
-%% Make RX and RXX data structs 
+%% Make RX data structs
+RX_data = cell(numel(sessions),1); 
+RXNil_data = cell(numel(sessions),6);
 
-for sIdx = 24
+for i = 1:numel(mPFC_sessions) 
+    sIdx = mPFC_sessions(i);
     RX_data{sIdx} = struct; 
-    RXX_data{sIdx} = struct;
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
     session = erase(sessions{sIdx}(1:end-4),'_'); % latex thing
@@ -226,29 +225,13 @@ for sIdx = 24
     % reinitialize ms vectors
     patchstop_ms = data.patchCSL(:,2);
     patchleave_ms = data.patchCSL(:,3);
-    rew_ms = data.rew_ts;
+    prts = patchleave_ms - patchstop_ms;
     
     sec1ix = 1000/tbin_ms;
     sec2ix = 2000/tbin_ms; 
     sec3ix = 3000/tbin_ms;
-    times = -1000:tbin_ms:1000;
     
-    % Trial level features
-    patches = data.patches;
-    patchCSL = data.patchCSL;
-    prts = patchCSL(:,3) - patchCSL(:,2);
-    floor_prts = floor(prts);
-    patchType = patches(:,2);
-    rewsize = mod(patchType,10);
-    
-    % make barcode matrices
-    nTimesteps = 15;
-    rew_barcode = zeros(length(patchCSL) , nTimesteps);
-    for iTrial = 1:length(patchCSL)
-        rew_indices = round(rew_ms(rew_ms >= patchstop_ms(iTrial) & rew_ms < patchleave_ms(iTrial)) - patchstop_ms(iTrial)) + 1;
-        rew_barcode(iTrial , (floor_prts(iTrial) + 1):end) = -1; % set part of patch after leave = -1
-        rew_barcode(iTrial , rew_indices) = rewsize(iTrial);
-    end
+    rew_barcode = rew_barcodes{sIdx};
   
     % RX: get that money
     rew_counter = 1;
@@ -256,18 +239,20 @@ for sIdx = 24
         trials10x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == 0 & prts > 2.55);
         trials11x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & prts > 2.55);
         
-        if ~isempty(trials10x)
-            tmp_fr_mat = {length(trials10x)};
-            tmp_pc_mat = {length(trials10x)};
-            for j = 1:numel(trials10x)
-                iTrial = trials10x(j);
-                stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
-                tmp_fr_mat{j} = FRandTimes(sIdx).fr_mat(:,(stop_ix):stop_ix + sec2ix-1);
-                tmp_pc_mat{j} = FR_decVar(sIdx).pca{iTrial}(:,1:sec2ix);
-            end
-            mean_condition_fr = mean(cat(3,tmp_fr_mat{:}),3); % concatenate in third dimension, average over it
-            RX_data{sIdx}(rew_counter).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2);
-            RX_data{sIdx}(rew_counter).pc_mat = mean(cat(3,tmp_pc_mat{:}),3);
+        if ~isempty(trials10x) 
+            tmp_trialsVis_cell = cellfun(@(x) x(:,1:sec2ix),classification_struct(sIdx).PCs(trials10x),'UniformOutput',false);
+            RX_data{sIdx}(rew_counter).pc_mat = mean(cat(3,tmp_trialsVis_cell{:}),3);  
+%             
+% %             tmp_fr_mat = {length(trials10x)};
+%             tmp_pc_mat = {length(trials10x)};
+%             for j = 1:numel(trials10x)
+%                 iTrial = trials10x(j);
+% %                 stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
+%                 tmp_pc_mat{j} = classification_struct(sIdx).PCs{iTrial}(:,1:sec2ix);
+%             end
+% %             mean_condition_fr = mean(cat(3,tmp_fr_mat{:}),3); % concatenate in third dimension, average over it
+% %             RX_data{sIdx}(rew_counter).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2);
+%             RX_data{sIdx}(rew_counter).pc_mat = mean(cat(3,tmp_pc_mat{:}),3);
         end
         
         if ~isempty(trials11x)
@@ -275,75 +260,36 @@ for sIdx = 24
             tmp_pc_mat = {length(trials11x)};
             for j = 1:numel(trials11x)
                 iTrial = trials11x(j);
-                stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
-                tmp_fr_mat{j} = FRandTimes(sIdx).fr_mat(:,stop_ix:(stop_ix + sec2ix-1));
-                tmp_pc_mat{j} = FR_decVar(sIdx).pca{iTrial}(:,1:sec2ix);
+%                 stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
+%                 tmp_fr_mat{j} = FRandTimes(sIdx).fr_mat(:,stop_ix:(stop_ix + sec2ix-1));
+                tmp_pc_mat{j} = classification_struct(sIdx).PCs{iTrial}(:,1:sec2ix);
             end
-            mean_condition_fr = mean(cat(3,tmp_fr_mat{:}),3); % concatenate in third dimension, average over it
-            RX_data{sIdx}(rew_counter+3).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); % 3 reward sizes
-            RX_data{sIdx}(rew_counter+3).pc_mat = mean(cat(3,tmp_pc_mat{:}),3);
+%             mean_condition_fr = mean(cat(3,tmp_fr_mat{:}),3); % concatenate in third dimension, average over it
+%             RX_data{sIdx}(rew_counter+3).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); % 3 reward sizes
+            RX_data{sIdx}(rew_counter+3).pc_mat = mean(cat(3,tmp_pc_mat{:}),3); 
+            
         end
-        rew_counter = rew_counter + 1;
+        
+        % now do Nil Trials %%%
+        trialsR0Nil = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) < 0 & prts > 1.55);
+        trialsRRNil = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) < 0 & prts > 1.55);
+        
+        % Get median PRTs - 1 to stretch to 
+        medianPRT_R0Nil_ix = round((1000 * median(prts(trialsR0Nil) - 1) / tbin_ms)); 
+        medianPostRewRT_RRNil_ix = round((1000 * (median(prts(trialsRRNil) - 1)) / tbin_ms)); 
+        
+        % collect stretched firing rates in cell 
+        % note fancy stuff: only stretch following last rew reception 
+        % also do this for R0Nil to match part of trial that is stretched
+%         R0Nil_tmpCell = cellfun(@(x) imresize(x,[nNeurons,medianPRT_R0Nil_ix]),FR_decVar(sIdx).fr_mat(trialsR0Nil),'UniformOutput',false);
+        R0Nil_tmpCell = cellfun(@(x) cat(2,x(:,1:sec1ix),imresize(x(:,sec1ix:end),[10,medianPRT_R0Nil_ix])) ... 
+                                                            ,classification_struct(sIdx).PCs(trialsR0Nil),'UniformOutput',false);
+        RRNil_tmpCell = cellfun(@(x) cat(2,x(:,1:sec1ix),imresize(x(:,sec1ix:end),[10,medianPostRewRT_RRNil_ix])) ... 
+                                                            ,classification_struct(sIdx).PCs(trialsRRNil),'UniformOutput',false);
+        RXNil_data{sIdx,rew_counter} = mean(cat(3,R0Nil_tmpCell{:}),3); 
+        RXNil_data{sIdx,rew_counter + 3} = mean(cat(3,RRNil_tmpCell{:}),3);                                       
+        rew_counter = rew_counter + 1; 
     end
-    
-%     % Now do the same for RXX 
-%     rew_counter = 1;
-%     for iRewsize = [2,4]
-%         trials100x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == 0 & rew_barcode(:,3) == 0 & prts > 3.5);
-%         trials110x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) == 0 & prts > 3.5);
-%         trials101x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == 0 & rew_barcode(:,3) == iRewsize & prts > 3.5);
-%         trials111x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) == iRewsize & prts > 3.5);
-% 
-%         tmp_fr_mat = {length(trials100x)}; 
-%         tmp_pc_mat = {length(trials100x)};
-%         for j = 1:numel(trials100x)
-%             iTrial = trials100x(j);
-%             stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
-%             tmp_fr_mat{j} = FRandTimes(sIdx).fr_mat(:,(stop_ix):stop_ix + sec2ix-1);
-%             tmp_pc_mat{j} = FR_decVar(sIdx).pca{iTrial}(:,1:sec2ix);
-%         end
-%         mean_condition_fr = mean(cat(3,tmp_fr_mat{:}),3); % concatenate in third dimension, average over it
-%         RXX_data{sIdx}(rew_counter).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); 
-%         RXX_data{sIdx}(rew_counter).pc_mat = mean(cat(3,tmp_pc_mat{:}),3);
-%         
-%         tmp_fr_mat = {length(trials110x)}; 
-%         tmp_pc_mat = {length(trials110x)};
-%         for j = 1:numel(trials110x)
-%             iTrial = trials110x(j);
-%             stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
-%             tmp_fr_mat{j} = FRandTimes(sIdx).fr_mat(:,(stop_ix):stop_ix + sec2ix-1);
-%             tmp_pc_mat{j} = FR_decVar(sIdx).pca{iTrial}(:,1:sec2ix);
-%         end
-%         mean_condition_fr = mean(cat(3,tmp_fr_mat{:}),3); % concatenate in third dimension, average over it
-%         RXX_data{sIdx}(rew_counter+1).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); 
-%         RXX_data{sIdx}(rew_counter+1).pc_mat = mean(cat(3,tmp_pc_mat{:}),3);
-%         
-%         tmp_fr_mat = {length(trials101x)}; 
-%         tmp_pc_mat = {length(trials101x)};
-%         for j = 1:numel(trials101x)
-%             iTrial = trials101x(j);
-%             stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
-%             tmp_fr_mat{j} = FRandTimes(sIdx).fr_mat(:,(stop_ix):stop_ix + sec2ix-1);
-%             tmp_pc_mat{j} = FR_decVar(sIdx).pca{iTrial}(:,1:sec2ix);
-%         end
-%         mean_condition_fr = mean(cat(3,tmp_fr_mat{:}),3); % concatenate in third dimension, average over it
-%         RXX_data{sIdx}(rew_counter+2).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); 
-%         RXX_data{sIdx}(rew_counter+2).pc_mat = mean(cat(3,tmp_pc_mat{:}),3);
-%         
-%         tmp_fr_mat = {length(trials111x)}; 
-%         tmp_pc_mat = {length(trials111x)};
-%         for j = 1:numel(trials111x)
-%             iTrial = trials111x(j);
-%             stop_ix = FRandTimes(sIdx).stop_leave_ix(iTrial,1);
-%             tmp_fr_mat{j} = FRandTimes(sIdx).fr_mat(:,(stop_ix):stop_ix + sec2ix-1);
-%             tmp_pc_mat{j} = FR_decVar(sIdx).pca{iTrial}(:,1:sec2ix);
-%         end
-%         mean_condition_fr = mean(cat(3,tmp_fr_mat{:}),3); % concatenate in third dimension, average over it
-%         RXX_data{sIdx}(rew_counter+3).fr_mat = zscore(mean_condition_fr(index_sort_all{sIdx},:),[],2); 
-%         RXX_data{sIdx}(rew_counter+3).pc_mat = mean(cat(3,tmp_pc_mat{:}),3);
-%         
-%         rew_counter = rew_counter + 4; 
-%     end
 end
 
 %% Check out RX PC trajectories / PETHs   
@@ -352,7 +298,7 @@ end
 close all
 labels = {"10","20","40","11","22","44"};
 
-for sIdx = 18:22
+for sIdx = 25
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session));
     
@@ -395,13 +341,17 @@ end
 close all
 % colors = [.5 .5 .5;.75 .75 1;.5 .5 1;0 0 0; 1 .5 1 ;1 0 1];
 colors = {[.5 1 1],[.75 .75 1],[1 .5 1],[0 1 1],[.5 .5 1],[1 0 1]}; 
-conds = [2,3,5,6];
+conds = 4:6;
 % run PCA logreg beforehand to get meshgrid data
-for sIdx = 24:24
-    disp(sessions(sIdx))
+for sIdx = 15:18
+%     disp(sessions(sIdx))  
+    session = sessions{sIdx}(1:end-4); 
+    session_title = ['m' session(1:2) ' ' session(end-2) '/' session([end-1:end])]; 
     decoding_order = forward_search(sIdx).pc_decodingOrder;
-    all_concat_PCs_noPreRew = horzcat(classification_struct(sIdx).PCs_noPreRew{:})';
-    all_concat_PCs = horzcat(classification_struct(sIdx).PCs{:})';
+    all_concat_PCs_noPreRew = horzcat(classification_struct(sIdx).PCs_noPreRew{:})'; 
+    all_concat_PCs_noPreRew = all_concat_PCs_noPreRew(:,decoding_order(1:2));
+    all_concat_PCs = horzcat(classification_struct(sIdx).PCs{:})'; 
+    all_concat_PCs = all_concat_PCs(:,decoding_order(1:2));
     session_len = size(all_concat_PCs,1);
     all_concat_labels_noPreRew = horzcat(classification_struct(sIdx).labels_noPreRew{:}) + 1;
     [B,dev,stats] = mnrfit(all_concat_PCs_noPreRew,all_concat_labels_noPreRew);
@@ -428,13 +378,10 @@ for sIdx = 24:24
     [x,y] = meshgrid(xl(1):.05:xl(2),yl(1):.05:yl(2));
     x = x(:);
     y = y(:);
-    % this is currently not programatic! 
-    pihat_mesh = mnrval(B,[y zeros(size(x,1),2) x zeros(size(x,1),6)]);
-%     pihat_mesh = mnrval(B,[x zeros(size(x,1),6) y zeros(size(x,1),2)]);
+    pihat_mesh = mnrval(B,[x y]);
     figure();colormap("gray")
     scatter(x,y,[],pihat_mesh(:,2),'.');colorbar()
-    %     xlabel(sprintf("PC%i",decode_pc1));ylabel(sprintf("PC%i",decode_pc2))
-    title("Logistic Regression Results as Meshgrid")
+    title(sprintf("%s Top Decoding PC Dynamics over Regression Results",session_title))
     
     hold on 
     arrowSize = 5; 
@@ -443,7 +390,8 @@ for sIdx = 24:24
     % plot mean condition trajectories w.r.t. logistic regression meshgrid
     for condIdx = conds
         plot(RX_data{sIdx}(condIdx).pc_mat(decoding_order(1),:),RX_data{sIdx}(condIdx).pc_mat(decoding_order(2),:),'color',colors{condIdx},'linewidth',1.5)
-        
+%         sec_ticks = 50;  
+        plot(RX_data{sIdx}(condIdx).pc_mat(decoding_order(1),50),RX_data{sIdx}(condIdx).pc_mat(decoding_order(2),50), 'kd', 'markerSize', 6, 'markerFaceColor',colors{condIdx});
         plot(RX_data{sIdx}(condIdx).pc_mat(decoding_order(1),1), RX_data{sIdx}(condIdx).pc_mat(decoding_order(2),1), 'ko', 'markerSize', 6, 'markerFaceColor',colors{condIdx});
         % for arrow, figure out last two points, and (if asked) supress the arrow if velocity is
         % below a threshold.
@@ -454,24 +402,28 @@ for sIdx = 24:24
         axLim = [xl yl];
         aSize = arrowSize + arrowGain * vel;  % if asked (e.g. for movies) arrow size may grow with vel
         arrowMMC(penultimatePoint, lastPoint, [], aSize, axLim, colors{condIdx}, arrowEdgeColor);
-        
     end
     xlim(xl)
     ylim(yl) 
     xlabel(sprintf("PC %i",decoding_order(1)))
     ylabel(sprintf("PC %i",decoding_order(2)))
-end
+end 
 
-%% Same for RXX
+%% Plot RX **stretched** trajectories on top of logistic regression meshgrid
 close all
 % colors = [.5 .5 .5;.75 .75 1;.5 .5 1;0 0 0; 1 .5 1 ;1 0 1];
 colors = {[.5 1 1],[.75 .75 1],[1 .5 1],[0 1 1],[.5 .5 1],[1 0 1]}; 
-conds = [2,3,5,6];
+conds = 1:3;
 % run PCA logreg beforehand to get meshgrid data
-for sIdx = 24:24
-    
-    all_concat_PCs_noPreRew = horzcat(classification_struct(sIdx).PCs_noPreRew{:})';
-    all_concat_PCs = horzcat(classification_struct(sIdx).PCs{:})';
+for sIdx = 8 
+%     disp(sessions(sIdx))  
+    session = sessions{sIdx}(1:end-4); 
+    session_title = ['m' session(1:2) ' ' session(end-2) '/' session([end-1:end])]; 
+    decoding_order = forward_search(sIdx).pc_decodingOrder;
+    all_concat_PCs_noPreRew = horzcat(classification_struct(sIdx).PCs_noPreRew{:})'; 
+    all_concat_PCs_noPreRew = all_concat_PCs_noPreRew(:,decoding_order(1:2));
+    all_concat_PCs = horzcat(classification_struct(sIdx).PCs{:})'; 
+    all_concat_PCs = all_concat_PCs(:,decoding_order(1:2));
     session_len = size(all_concat_PCs,1);
     all_concat_labels_noPreRew = horzcat(classification_struct(sIdx).labels_noPreRew{:}) + 1;
     [B,dev,stats] = mnrfit(all_concat_PCs_noPreRew,all_concat_labels_noPreRew);
@@ -481,11 +433,11 @@ for sIdx = 24:24
     max_x = -inf; 
     max_y = -inf;
     for condIdx = conds 
-        if max(abs(RX_data{sIdx}(condIdx).pc_mat(decoding_order(1),:))) > max_x
-            max_x = max(abs(RX_data{sIdx}(condIdx).pc_mat(decoding_order(1),:)));  
+        if max(abs(RXNil_data{sIdx,condIdx}(decoding_order(1),:))) > max_x
+            max_x = max(abs(RXNil_data{sIdx,condIdx}(:)));  
         end
-        if max(abs(RX_data{sIdx}(condIdx).pc_mat(decoding_order(2),:))) > max_y
-            max_y = max(abs(RX_data{sIdx}(condIdx).pc_mat(decoding_order(2),:))); 
+        if max(abs(RXNil_data{sIdx,condIdx}(decoding_order(2),:))) > max_y
+            max_y = max(abs(RXNil_data{sIdx,condIdx}(:))); 
         end
     end    
     pad = 3; 
@@ -498,33 +450,36 @@ for sIdx = 24:24
     [x,y] = meshgrid(xl(1):.05:xl(2),yl(1):.05:yl(2));
     x = x(:);
     y = y(:);
-    % this is currently not programatic!
-    pihat_mesh = mnrval(B,[x zeros(size(x,1),6) y zeros(size(x,1),2)]);
-    figure();colormap("hot")
+    pihat_mesh = mnrval(B,[x y]);
+    figure();colormap("gray")
     scatter(x,y,[],pihat_mesh(:,2),'.');colorbar()
-    %     xlabel(sprintf("PC%i",decode_pc1));ylabel(sprintf("PC%i",decode_pc2))
-    title("Logistic Regression Results as Meshgrid")
+    title(sprintf("%s Top Decoding PC Dynamics over Regression Results",session_title))
     
     hold on 
+    % add arrows
     arrowSize = 5; 
     arrowGain = 0;
-    arrowEdgeColor = 'k';
-    % plot mean condition trajectories w.r.t. logistic regression meshgrid
-    for condIdx = conds
-        plot(RX_data{sIdx}(condIdx).pc_mat(decoding_order(1),:),RX_data{sIdx}(condIdx).pc_mat(decoding_order(2),:),'color',colors{condIdx},'linewidth',1.5)
+    arrowEdgeColor = 'k'; 
+    for cIdx = conds
+        plot(RXNil_data{sIdx,cIdx}(decoding_order(1),:),RXNil_data{sIdx,cIdx}(decoding_order(2),:),'linewidth',2,'color',colors{cIdx}) 
+        % plot x's at second marks
+        sec_ticks = 50:50:size(RXNil_data{sIdx,cIdx},2);  
+        plot(RXNil_data{sIdx,cIdx}(decoding_order(1),sec_ticks),RXNil_data{sIdx,cIdx}(decoding_order(2),sec_ticks), 'kd', 'markerSize', 6, 'markerFaceColor',colors{cIdx});
         
-        plot(RX_data{sIdx}(condIdx).pc_mat(decoding_order(1),1), RX_data{sIdx}(condIdx).pc_mat(decoding_order(2),1), 'ko', 'markerSize', 6, 'markerFaceColor',colors{condIdx});
-        % for arrow, figure out last two points, and (if asked) supress the arrow if velocity is
-        % below a threshold.
-        penultimatePoint = [RX_data{sIdx}(condIdx).pc_mat(decoding_order(1),end-1), RX_data{sIdx}(condIdx).pc_mat(decoding_order(2),end-1)];
-        lastPoint = [RX_data{sIdx}(condIdx).pc_mat(decoding_order(1),end), RX_data{sIdx}(condIdx).pc_mat(decoding_order(2),end)];
+        % plot first point as dot
+        plot(RXNil_data{sIdx,cIdx}(decoding_order(1),1),RXNil_data{sIdx,cIdx}(decoding_order(2),1), 'ko', 'markerSize', 6, 'markerFaceColor',colors{cIdx});
+        % last point as arrow
+        penultimatePoint = [RXNil_data{sIdx,cIdx}(decoding_order(1),end-1), RXNil_data{sIdx,cIdx}(decoding_order(2),end-1)];
+        lastPoint = [RXNil_data{sIdx,cIdx}(decoding_order(1),end), RXNil_data{sIdx,cIdx}(decoding_order(2),end)];
         vel = norm(lastPoint - penultimatePoint);
-        
+%         xl = xlim();
+%         yl = ylim();
         axLim = [xl yl];
         aSize = arrowSize + arrowGain * vel;  % if asked (e.g. for movies) arrow size may grow with vel
-        arrowMMC(penultimatePoint, lastPoint, [], aSize, axLim, colors{condIdx}, arrowEdgeColor);
-        
-    end
+        arrowMMC(penultimatePoint, lastPoint, [], aSize, axLim, colors{cIdx}, arrowEdgeColor);
+    end 
+    xlabel(sprintf("PC %i",decoding_order(1)))
+    ylabel(sprintf("PC %i",decoding_order(2))) 
     xlim(xl)
     ylim(yl)
 end
