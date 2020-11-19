@@ -74,27 +74,22 @@ for sIdx = 1:numel(sessions)
     session = sessions{sIdx}(1:end-4);
     data = load(fullfile(paths.data,session)); 
     
-    % reinitialize ms vectors
-    patchstop_ms = data.patchCSL(:,2);
-    patchleave_ms = data.patchCSL(:,3);
+    % reinitialize patch timing vectors
+    patchstop_sec = data.patchCSL(:,2);
+    patchleave_sec = data.patchCSL(:,3);
     rew_ms = data.rew_ts;
     
-    sec1ix = 1000/tbin_ms;
-    sec2ix = 2000/tbin_ms;
-    times = -1000:tbin_ms:1000;
-    
     % Trial level features
-    patches = data.patches;
     patchCSL = data.patchCSL;
     prts = patchCSL(:,3) - patchCSL(:,2);
     floor_prts = floor(prts);
-    rewsize = mod(patches(:,2),10);
+    rewsize = mod(data.patches(:,2),10);
     
     % make barcode matrices
     nTimesteps = 15;
     rew_barcode = zeros(length(patchCSL) , nTimesteps);
     for iTrial = 1:length(patchCSL)
-        rew_indices = round(rew_ms(rew_ms >= patchstop_ms(iTrial) & rew_ms < patchleave_ms(iTrial)) - patchstop_ms(iTrial)) + 1;
+        rew_indices = round(rew_ms(rew_ms >= patchstop_sec(iTrial) & rew_ms < patchleave_sec(iTrial)) - patchstop_sec(iTrial)) + 1;
         rew_barcode(iTrial , (floor_prts(iTrial) + 1):end) = -1; % set part of patch after leave = -1
         rew_barcode(iTrial , rew_indices) = rewsize(iTrial);
     end 
