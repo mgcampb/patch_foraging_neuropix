@@ -28,7 +28,7 @@ function [coeffs,fr_mat,good_cells,score,score_full,expl] = standard_pca_fn(path
     % subselect w/ rough brain region
     if ~isempty(region_selection) 
         good_cells_all = good_cells_all(dat.brain_region_rough == region_selection);
-    end
+    end 
 
     % time bins
     opt.tstart = 0;
@@ -42,8 +42,9 @@ function [coeffs,fr_mat,good_cells,score,score_full,expl] = standard_pca_fn(path
     for i = 1:size(dat.patchCSL,1)
         in_patch(tbincent>=dat.patchCSL(i,2) & tbincent<=dat.patchCSL(i,3)) = true;
         in_patch_buff(tbincent>=dat.patchCSL(i,2) & tbincent<=dat.patchCSL(i,3)-opt.patch_leave_buffer) = true;
-    end
-    tbincent = tbincent(in_patch);
+    end 
+    tbincent = tbincent(in_patch);  
+    
 
     %% remove cells that don't pass minimum firing rate cutoff
 
@@ -59,10 +60,10 @@ function [coeffs,fr_mat,good_cells,score,score_full,expl] = standard_pca_fn(path
     spikecounts = spikecounts_whole_session(in_patch_buff,:);
 
     % apply firing rate cutoff
-    T = size(spikecounts,1)*opt.tbin;
+    T = size(spikecounts,1)*opt.tbin; 
     N = sum(spikecounts);
     fr = N/T;
-    good_cells = good_cells_all(fr>=opt.min_fr);
+    good_cells = good_cells_all(fr>=opt.min_fr); 
 
 
     %% compute PCA

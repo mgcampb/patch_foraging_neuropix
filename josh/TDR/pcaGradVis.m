@@ -15,7 +15,8 @@ opt = struct;
 opt.tbin = 0.02; % time bin for whole session rate matrix (in sec)
 opt.smoothSigma_time = 0.1; % gauss smoothing sigma for rate matrix (in sec)
 opt.patch_leave_buffer = 0; % in seconds; only takes within patch times up to this amount before patch leave
-opt.min_fr = 0; % minimum firing rate (on patch, excluding buffer) to keep neurons
+opt.min_fr = 0; % minimum firing rate (on patch, excluding buffer) to keep neurons 
+opt.cortex_only = true;
 tbin_ms = opt.tbin*1000;
 sessions = dir(fullfile(paths.data,'*.mat'));
 sessions = {sessions.name};
@@ -23,7 +24,7 @@ sessions = {sessions.name};
 %% Load firing rate matrices, perform PCA
 pca_trialed = cell(numel(sessions),1); 
 mPFC_sessions = [1:8 10:13 15:18 23 25];
-for i = 1:numel(mPFC_sessions) 
+for i = 5
     sIdx = mPFC_sessions(i);
     % Get the session name
     session = sessions{sIdx}(1:end-4); 
@@ -258,7 +259,7 @@ for i = 18
         centBinPC2 = edgePC2(1:end-1) + edge_bin2 / 2;
         %         dPC1 = discretize(dState(plot_pcs(1),:)',edgePC1); % pc1 gradient
         %         dPC2 = discretize(dState(plot_pcs(2),:)',edgePC2); % pc2 gradient
-        %
+
         dPC1 = dState(plot_pcs(1),:)';
         dPC2 = dState(plot_pcs(2),:)';
         pca_gradient_table = table(PC1,PC2,dPC1,dPC2); 
