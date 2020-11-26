@@ -441,7 +441,7 @@ for i = 1:numel(mPFC_sessions)
     session_title = ['m' sessions{sIdx}(1:2) ' ' sessions{sIdx}(end-6) '/' sessions{sIdx}(end-5:end-4)]; 
     X_full = cat(2,TDR_struct(sIdx).X_trials{:});
     figure('Renderer', 'painters', 'Position', [350 350 500 500])
-    imagesc(corrcoef([TDR_struct(sIdx).beta_time2leave TDR_struct(sIdx).beta])) 
+    imagesc(corrcoef([TDR_struct(sIdx).beta TDR_struct(sIdx).beta_time2leave])) 
     xticklabels(regressors) 
     xtickangle(45) 
     yticklabels(regressors) 
@@ -455,7 +455,7 @@ end
 %% Project PCs onto taskVar axes 
 RX_means = cell(numel(mPFC_sessions),6); 
 RXX_means = cell(numel(mPFC_sessions),12); 
-rIdx = [1,5]; % orthogonalize visualization axes 
+rIdx = [2,7]; % orthogonalize visualization axes 
 time2leave_projections = cell(numel(mPFC_sessions),1); 
 
 for i = 1:numel(mPFC_sessions)
@@ -470,8 +470,8 @@ for i = 1:numel(mPFC_sessions)
     
     TDR_struct(sIdx).projected_trials = cell(nTrials,1);  
     
-%     beta_orth = orth(TDR_struct(sIdx).beta(:,rIdx)); 
-    beta_orth = TDR_struct(sIdx).beta(:,rIdx); 
+    beta_orth = orth(TDR_struct(sIdx).beta(:,rIdx)); 
+%     beta_orth = TDR_struct(sIdx).beta(:,rIdx); 
     
     for iTrial = 1:numel(TDR_struct(sIdx).X_trials) 
 %         TDR_struct(sIdx).projected_trials{iTrial} = TDR_struct(sIdx).beta' * TDR_struct(sIdx).pca_trials{iTrial};
@@ -519,7 +519,7 @@ colors = {[.5 1 1],[.75 .75 1],[1 .5 1],[0 1 1],[.5 .5 1],[1 0 1]};
 regressors = ["Time on Patch","Time Since Reward","Reward Number","Total uL","0:500 msec Since Rew","500:1000 msec Since Rew","Reward Above Expected"]; 
 conds = 1:6;  
 close all 
-for i = 1:numel(mPFC_sessions)
+for i = 18
     sIdx = mPFC_sessions(i);   
     session_title = ['m' sessions{sIdx}(1:2) ' ' sessions{sIdx}(end-6) '/' sessions{sIdx}(end-5:end-4)]; 
     figure();hold on
@@ -554,6 +554,6 @@ for i = 1:numel(mPFC_sessions)
     ylabel(sprintf("Projection onto %s Axis",regressors(rIdx(2)))) 
     title(session_title) 
     
-    plot(xlim,ylim * time2leave_projections{sIdx}(2) / time2leave_projections{sIdx}(1),'k--','linewidth',2) 
+    plot(xlim time2leave_projections{sIdx},'k--','linewidth',2) 
 %     plot(xlim / time2leave_projections{sIdx}(1),ylim / time2leave_projections{sIdx}(2),'k--','linewidth',2)
 end

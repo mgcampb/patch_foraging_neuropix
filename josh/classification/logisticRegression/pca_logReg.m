@@ -366,6 +366,7 @@ for sIdx = 8
         end
 
         foldid = data_grp(IC)';  
+        
         threshold_step = .05;
         thresholds = 0:threshold_step:1; 
 
