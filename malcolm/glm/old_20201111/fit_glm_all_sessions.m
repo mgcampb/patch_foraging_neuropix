@@ -16,7 +16,7 @@ paths.malcolm_functions = 'C:\code\patch_foraging_neuropix\malcolm\functions';
 addpath(genpath(paths.malcolm_functions));
 paths.glmnet = 'C:\code\glmnet_matlab';
 addpath(genpath(paths.glmnet));
-paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20201114_all_sessions_model_comparison';
+paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20201110_all_sessions_1SecKerns';
 if ~isfolder(paths.results)
     mkdir(paths.results);
 end
@@ -27,7 +27,7 @@ session_all = {session_all.name}';
 for i = 1:numel(session_all)
     session_all{i} = session_all{i}(1:end-4);
 end
-session_all = session_all(~contains(session_all,'mc'));
+% session_all = session_all(~contains(session_all,'mc'));
 
 % analysis opts
 opt = struct;
@@ -64,7 +64,7 @@ opt.alpha = 0.9; % weighting of L1 and L2 penalties in elastic net regularizatio
 % cross validation over trials
 opt.numFolds = 5; % split up trials into (roughly) equally sized fold, assigning (roughly) equal numbers of each reward size to each fold
 
-opt.compute_full_vs_base_pval = true; % whether to run model comparison between full and base model using nested cross validation
+opt.compute_full_vs_base_pval = false; % whether to run model comparison between full and base model using nested cross validation
 
 
 %% raised cosine basis for time since patch stop
@@ -96,18 +96,21 @@ for session_idx = 1:numel(session_all)
 
     %% load data    
     dat = load(fullfile(paths.data,opt.session));
-    good_cells_all = dat.sp.cids(dat.sp.cgs==2);    
+    good_cells_all = dat.sp.cids(dat.sp.cgs==2);
 
-    if isfield(dat,'anatomy') && isfield(dat,'brain_region_rough')
+    if isfield(dat,'anatomy')
+        
+%         keep_cell = dat.anatomy.cell_labels.Cortex;
+%         anatomy_all = dat.anatomy.cell_labels(keep_cell,:);
+%         good_cells_all = anatomy_all.CellID;
 
         anatomy = dat.anatomy;
-        brain_region_rough = dat.brain_region_rough;
 
         % get depth
         [~, spike_depths_all] = templatePositionsAmplitudes(dat.sp.temps,dat.sp.winv,dat.sp.ycoords,dat.sp.spikeTemplates,dat.sp.tempScalingAmps);
         spike_depths = nan(numel(good_cells_all),1);
         for cidx = 1:numel(good_cells_all)
-            spike_depths(cidx) = median(spike_depths_all(dat.sp.clu==good_cells_all(cidx)));
+            spike_depths(cidx) = median(spike_depths_all(dat.sp.cids==good_cells_all(cidx)));
         end
         
         if isfield(anatomy,'insertion_depth')
@@ -115,9 +118,17 @@ for session_idx = 1:numel(session_all)
         else
             depth_from_surface = nan;
         end
+        
+%         if strcmp(anatomy.target,'OFC')
+%             keep_cell = depth_from_surface<0 & depth_from_surface>-3000;
+%         elseif strcmp(anatomy.target,'DMS')
+%             keep_cell = depth_from_surface<-2000 & depth_from_surface>-4000;
+%         end
+%         good_cells_all = good_cells_all(keep_cell);
 
     else
         continue;
+        % anatomy_all = nan(numel(good_cells_all),4);
     end
 
     %% compute binned spikecounts for each cell
@@ -190,7 +201,7 @@ for session_idx = 1:numel(session_all)
         A = [A, {X_this}];
         grp_name = [grp_name,'Position'];
         var_name = [var_name,'Position','Position^2'];
-        base_var = [base_var 1 1];
+        base_var = [base_var 0 0];
     end
 
     % iterate over reward sizes
@@ -302,11 +313,9 @@ for session_idx = 1:numel(session_all)
     N(2,:) = sum(spikecounts(floor(Nbin/3):floor(2*Nbin/3),:));
     N(3,:) = sum(spikecounts(floor(2*Nbin/3):end,:));
     fr = N/T;
-    keep_cell = mean(fr)>opt.min_fr & all(fr>opt.min_fr/2);
+    keep_cell = mean(fr)>opt.min_fr & all(fr)>opt.min_fr/2;
     spikecounts = spikecounts(:,keep_cell);
     good_cells = good_cells_all(keep_cell);
-    brain_region_rough = brain_region_rough(keep_cell);
-    depth_from_surface = depth_from_surface(keep_cell);
     % anatomy = anatomy_all(keep_cell,:));
     Ncells = numel(good_cells);
 
@@ -397,9 +406,9 @@ for session_idx = 1:numel(session_all)
     
     % save results
     save(fullfile(paths.results,sprintf('%s',opt.session)),'opt','beta_all','pval_full_vs_base',...
-        'var_name','base_var','X_full','Xmean','Xstd','spikecounts','good_cells',...
+        'var_name','X_full','Xmean','Xstd','spikecounts','good_cells',...
         'trial_grp','foldid','bas_patch_stop','t_basis_patch_stop','bas_rew','t_basis_rew',...
-        'anatomy','run_times','depth_from_surface','fr','good_cells_all','brain_region_rough');
+        'anatomy','run_times','depth_from_surface','fr','good_cells_all');
 
 end
 toc

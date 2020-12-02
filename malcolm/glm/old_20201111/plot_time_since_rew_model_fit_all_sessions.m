@@ -1,11 +1,22 @@
 paths = struct;
 
-paths.model_fits = 'C:\data\patch_foraging_neuropix\GLM_output\run_20201110_all_sessions';
+paths.model_fits = 'C:\data\patch_foraging_neuropix\GLM_output\run_20201110_all_sessions_1SecKerns';
 paths.figs = 'C:\figs\patch_foraging_neuropix\glm_time_since_reward_kernels_allRewSize_20201111';
 
+model_fits = dir(fullfile(paths.model_fits,'*.mat'));
+model_fits = {model_fits.name}';
+% model_fits = model_fits(~contains(model_fits,'mc'));
+
+% model_fits = {'mc2_20201005.mat',...
+%     'mc2_20201016.mat',...
+%     'mc4_20201025.mat',...
+%     'mc4_20201027.mat'};
+
+model_fits = {'mc2_20201020.mat',...
+    'mc4_20201024.mat',...
+    'mc4_20201026.mat'};
+
 opt = struct;
-opt.brain_region = 'Sub-PFC';
-opt.data_set = 'mc';
 opt.tbin = 0.02;
 opt.basis_length = 2;
 opt.nbasis = 11;
@@ -13,20 +24,12 @@ opt.nbasis = 11;
 % opt.pval_thresh = 0.05;
 opt.rew_size = [1 2 4];
 
-
-%%
-model_fits = dir(fullfile(paths.model_fits,'*.mat'));
-model_fits = {model_fits.name}';
-if strcmp(opt.data_set,'mc')
-    model_fits = model_fits(contains(model_fits,'mc'));
-elseif strcmp(opt.data_set,'mb')
-    model_fits = model_fits(~contains(model_fits,'mc'));
-end
+opt.brain_region = ''; % 'ORB'; % for all, put ''
 
 %% load all model fits
 pval_all = [];
 beta_all = [];
-keep_cell_all = [];
+cell_labels_all = [];
 for mIdx = 1:numel(model_fits)
     dat = load(fullfile(paths.model_fits,model_fits{mIdx}));
     pval_all = [pval_all; dat.pval_full_vs_base];
@@ -34,18 +37,21 @@ for mIdx = 1:numel(model_fits)
     var_name = dat.var_name;
     bas = dat.bas_rew;
     t_basis = dat.t_basis_rew;
-    keep_cell_this = strcmp(dat.brain_region_rough,opt.brain_region);
-    keep_cell_this = keep_cell_this(ismember(dat.good_cells_all,dat.good_cells));
-    keep_cell_all = [keep_cell_all; keep_cell_this];
+    %cell_labels_this = dat.anatomy.cell_labels;
+    cell_labels_this = table;
+    cell_labels_this.CellID = dat.good_cells_all';
+    % cell_labels_this.Cortex = dat.depth_from_surface>-3000;
+    cell_labels_this.Cortex = dat.depth_from_surface>-2000; %  & dat.depth_from_surface>-4000;
+    cell_labels_all = [cell_labels_all; cell_labels_this(ismember(dat.good_cells_all,dat.good_cells),:)];
 end
 
 %% plot
 
 hfig = figure('Position',[200 200 1400 1000]);
-hfig.Name = sprintf('Post reward modulation allRewSize allSessions %s %s cohort',opt.brain_region,opt.data_set);
+hfig.Name = sprintf('Post reward modulation allRewSize allSessions MC cohort MOs %s',opt.brain_region);
 
 rew_kern = contains(var_name,'RewKern') | contains(var_name,'TimeSinceRew');
-keep = sum(beta_all(rew_kern,:)>0)>0 & keep_cell_all';
+keep = sum(beta_all(rew_kern,:)>0)>0 & cell_labels_all.Cortex';
 beta_filt = beta_all(:,keep);
 
 % Kernels only

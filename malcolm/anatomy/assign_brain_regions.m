@@ -2,8 +2,8 @@
 % output by Display_Probe_Track in SHARP-Track code
 % MGC 8/19/2020
 
-data_dir = 'H:\My Drive\processed_neuropix_data\';
-data_set = '79_20200229';
+data_dir = 'H:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data\';
+data_set = '80_20200317';
 
 opt = struct;
 opt.scale_depth = false; % whether or not to scale the probe so that insertion depth matches probe tip detected in histology

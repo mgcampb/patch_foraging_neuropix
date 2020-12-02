@@ -6,11 +6,13 @@
 % 5. profit
 
 paths = struct;
-paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/all_mice';
-paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
+paths.data = 'H:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
+% paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/all_mice';
+% paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData/HGK_analysis_tools'));
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData'));
+addpath(genpath('C:\code\patch_foraging_neuropix\malcolm\functions'));
+% addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData/HGK_analysis_tools'));
+
 
 % analysis options
 opt = struct;
@@ -24,7 +26,7 @@ sessions = {sessions.name};
 %% Extract FR matrices and timing information 
 FR_decVar = struct; 
 FRandTimes = struct;
-for sIdx = 24:24
+for sIdx = 25:25
     buffer = 500;
     [FR_decVar_tmp,FRandTimes_tmp] = genSeqStructs(paths,sessions,opt,sIdx,buffer);
     % assign to sIdx
@@ -40,7 +42,7 @@ end
 %% Sort by all trials to get ordering
 
 index_sort_all = {sIdx};
-for sIdx = 24:24
+for sIdx = 25:25
     decVar_bins = linspace(0,2,41);
     opt.norm = "zscore";
     opt.trials = 'all';

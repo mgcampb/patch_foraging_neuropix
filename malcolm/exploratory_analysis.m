@@ -1,9 +1,9 @@
 paths = struct;
-paths.data = '/Users/joshstern/Documents/UchidaLab_matlab/neuroPixelsData/80';
-paths.figs = '/Users/joshstern/Documents/UchidaLab_matlab/neural_data_figs'; % where to save figs
+paths.data = 'H:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
+paths.figs = 'C:\figs\patch_foraging_neuropix\behavior\mike_cohort'; % where to save figs
 
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab/HGK_analysis_tools'));
-addpath(genpath('/Users/joshstern/Documents/UchidaLab_matlab'));
+addpath(genpath('C:\code\HGK_analysis_tools'));
+addpath(genpath('C:\code\patch_foraging_neuropix\malcolm\functions'));
 
 % analysis options
 opt = struct;
@@ -12,6 +12,7 @@ opt.smoothSigma_time = 0.1; % gauss smoothing sigma for rate matrix (in sec)
 
 sessions = dir(fullfile(paths.data,'*.mat'));
 sessions = {sessions.name};
+sessions = sessions(~contains(sessions,'mc'));
 
 %% BEHAVIOR
 reset_figs;
