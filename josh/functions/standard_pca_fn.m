@@ -1,4 +1,4 @@
-function [coeffs,fr_mat,good_cells,score] = standard_pca_fn(paths,opt)
+function [coeffs,fr_mat,good_cells,score,score_full,expl] = standard_pca_fn(paths,opt)
 % Standard function to calculate PCA and perform smoothing 
 
     %% Handle optional arguments
@@ -6,11 +6,29 @@ function [coeffs,fr_mat,good_cells,score] = standard_pca_fn(paths,opt)
     onPatchOnly = true;
     if exist('opt', 'var') && isfield(opt,'onPatchOnly')
         onPatchOnly = opt.onPatchOnly;
-    end
+    end 
+    
+    cortex_only = true; 
+    if exist('opt', 'var') && isfield(opt,'cortex_only')
+        cortex_only = opt.cortex_only;
+    end   
+    
+    region_selection = []; 
+    if exist('opt','var') && isfield(opt,'region_selection') 
+        region_selection = opt.region_selection;  
+    end 
 
     %% Load in data
     dat = load(fullfile(paths.data,opt.session));
-    good_cells_all = dat.sp.cids(dat.sp.cgs==2);
+    good_cells_all = dat.sp.cids(dat.sp.cgs==2);  
+    if cortex_only == true
+        good_cells_all = good_cells_all(dat.anatomy.cell_labels.Cortex); 
+    end  
+    
+    % subselect w/ rough brain region
+    if ~isempty(region_selection) 
+        good_cells_all = good_cells_all(dat.brain_region_rough == region_selection);
+    end 
 
     % time bins
     opt.tstart = 0;
@@ -24,8 +42,9 @@ function [coeffs,fr_mat,good_cells,score] = standard_pca_fn(paths,opt)
     for i = 1:size(dat.patchCSL,1)
         in_patch(tbincent>=dat.patchCSL(i,2) & tbincent<=dat.patchCSL(i,3)) = true;
         in_patch_buff(tbincent>=dat.patchCSL(i,2) & tbincent<=dat.patchCSL(i,3)-opt.patch_leave_buffer) = true;
-    end
-    tbincent = tbincent(in_patch);
+    end 
+    tbincent = tbincent(in_patch);  
+    
 
     %% remove cells that don't pass minimum firing rate cutoff
 
@@ -41,10 +60,10 @@ function [coeffs,fr_mat,good_cells,score] = standard_pca_fn(paths,opt)
     spikecounts = spikecounts_whole_session(in_patch_buff,:);
 
     % apply firing rate cutoff
-    T = size(spikecounts,1)*opt.tbin;
+    T = size(spikecounts,1)*opt.tbin; 
     N = sum(spikecounts);
     fr = N/T;
-    good_cells = good_cells_all(fr>opt.min_fr);
+    good_cells = good_cells_all(fr>=opt.min_fr); 
 
 
     %% compute PCA
@@ -57,15 +76,17 @@ function [coeffs,fr_mat,good_cells,score] = standard_pca_fn(paths,opt)
 
     % pca on firing rate matrix, only in patches with buffer before patch leave
     if onPatchOnly == true
-        coeffs = pca(fr_mat_zscore(:,in_patch_buff)'); 
+%         coeffs = pca(fr_mat_zscore(:,in_patch_buff)'); 
+        [coeffs,~,~,~,expl] = pca(fr_mat_zscore(:,in_patch_buff)');  
     else 
-        coeffs = pca(fr_mat_zscore');  
+%         coeffs = pca(fr_mat_zscore');  
+        [coeffs,~,~,~,expl] = pca(fr_mat_zscore');  
     end
 
     % project full session onto these PCs
-    score = coeffs'*fr_mat_zscore;
+    score_full = coeffs'*fr_mat_zscore;
 
     % only take on-patch times (including buffer)
-    score = score(:,in_patch)';
+    score = score_full(:,in_patch)';
 end
 

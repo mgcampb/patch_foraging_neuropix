@@ -1,4 +1,4 @@
-function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,buffer)
+function [FR_decVar,FRandTimes] = genFR_decVar(paths,sessions,sIdx,buffer)
 % Just a function to make two standardized structs useful for sequence
 % analysis
 
@@ -6,13 +6,11 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,b
     FR_decVar = struct;
     FRandTimes = struct;
     session = sessions{sIdx}(1:end-4);
-    tbin_ms = frCalc_opt.tbin*1000;
     
     % load data
     dat = load(fullfile(paths.data,session));
     fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
-    good_cells = dat.sp.cids(dat.sp.cgs==2);  
-    FR_decVar.goodcell_IDs = good_cells;
+    good_cells = dat.sp.cids(dat.sp.cgs==2); 
     
 %      % todo: depth/brain region specificity
 %     [~, spike_depths_all] = templatePositionsAmplitudes(dat.sp.temps, dat.sp.winv, dat.sp.ycoords, dat.sp.spikeTemplates, dat.sp.tempScalingAmps);
@@ -31,8 +29,8 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,b
 %     title("Distribution of spike depths")
     
     % time bins
-    frCalc_opt.tstart = 0;
-    frCalc_opt.tend = max(dat.sp.st);
+    opt.tstart = 0;
+    opt.tend = max(dat.sp.st);
     
     % behavioral events to align to
     patchstop_ms = dat.patchCSL(:,2)*1000;
@@ -46,12 +44,14 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,b
     if new_fr_mat == true
         % compute firing rate matrix
         tic
-        [fr_mat, ~] = calcFRVsTime(good_cells,dat,frCalc_opt); % calc from full matrix
+        [fr_mat, tbincent] = calcFRVsTime(good_cells,dat,opt); % calc from full matrix
         toc
     end 
     
 %     fr_mat = fr_mat(mm1_units,:); % subselect 
 %     display("Using units from top 1 mm of probe")
+
+    buffer = 500; % buffer before leave in ms
     
     % create index vectors from our update timestamp vectors
     patchstop_ix = round(patchstop_ms / tbin_ms) + 1;
@@ -61,6 +61,7 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,b
     patchstop_ms = patchCSL(:,2);
     patchleave_ms = patchCSL(:,3);
     rew_ms = dat.rew_ts;
+    rew_size = mod(dat.patches(:,2),10);
     prts = patchCSL(:,3) - patchCSL(:,2);
     floor_prts = floor(prts);
     patchType = patches(:,2);
@@ -90,22 +91,8 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,frCalc_opt,sIdx,b
             rew_ix = (rew_sec_cell{iTrial}(r) - 1) * 1000 / tbin_ms;
             FR_decVar.decVarTimeSinceRew{iTrial}(rew_ix:end) =  (1:length(FR_decVar.decVarTimeSinceRew{iTrial}(rew_ix:end))) * tbin_ms / 1000;
         end
-    end 
+    end
     
-    % add PCA
-    fr_mat_onPatch = horzcat(FR_decVar.fr_mat{:}); 
-    fr_mat_onPatchZscore = zscore(fr_mat_onPatch,[],2); 
-    [~,score,~,~,expl] = pca(fr_mat_onPatchZscore');
-    score = score'; % reduced data  
-    t_lens = cellfun(@(x) size(x,2),FR_decVar.fr_mat); 
-    new_patchleave_ix = cumsum(t_lens);
-    new_patchstop_ix = new_patchleave_ix - t_lens + 1;  
-    FR_decVar.pca = {length(dat.patchCSL)};
-    for iTrial = 1:length(dat.patchCSL) 
-        FR_decVar.pca{iTrial} = score(1:10,new_patchstop_ix(iTrial):new_patchleave_ix(iTrial)); 
-    end 
-    FR_decVar.expl10 = sum(expl(1:10)) / sum(expl);
-
     FRandTimes.fr_mat = fr_mat;
     FRandTimes.stop_leave_ms = [patchstop_ms patchleave_ms];
     FRandTimes.stop_leave_ix = [patchstop_ix patchleave_ix];
