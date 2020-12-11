@@ -364,7 +364,6 @@ for sIdx = 8
             data_grp(keep_this) = data_grp_this(1:sum(keep_this)); % assign folds 1:10
             shift_by = shift_by - mod(sum(keep_this),xval_opt.numFolds); % shift which fold is getting fewer trials
         end
-
         foldid = data_grp(IC)';  
         
         threshold_step = .05;
