@@ -120,9 +120,10 @@ for mIdx = 1:5
         end 
         
         % Create task variables and bin according to some discretization  
-        timeSinceReward_bins = 0:.1:3; % bins to classify (sec)
-        timeOnPatch_bins = 0:.1:3; % bins to classify (sec)
-        time2Leave_bins = 0:.1:3; % bins to classify (sec)
+        var_bins{1} = 0:.05:2; % bins to classify timeSinceReward (sec) 
+        var_bins{2} = 0:.05:2; % bins to classify timeOnPatch (sec) 
+        var_bins{3} = 0:.05:2; % bins to classify time2Leave (sec) 
+        
         timeSinceReward_binned = cell(nTrials,1); 
         timeOnPatch_binned = cell(nTrials,1); 
         time2Leave_binned = cell(nTrials,1);  
@@ -146,14 +147,13 @@ for mIdx = 1:5
             
             % Now use histcounts to actually bin task variables  
             % Set out of bounds (0 label) as NaN to denote missing data
-            % rather than having a huge poorly defined class
-            [~,~,timeSinceReward_binned{iTrial}] = histcounts(timeSinceReward_binned{iTrial},timeSinceReward_bins);  
+            [~,~,timeSinceReward_binned{iTrial}] = histcounts(timeSinceReward_binned{iTrial},var_bins{1});  
             timeSinceReward_binned{iTrial}(timeSinceReward_binned{iTrial} == 0) = NaN; 
-            [~,~,timeOnPatch_binned{iTrial}] = histcounts(timeOnPatch_binned{iTrial},timeOnPatch_bins);  
+            [~,~,timeOnPatch_binned{iTrial}] = histcounts(timeOnPatch_binned{iTrial},var_bins{2});  
             timeOnPatch_binned{iTrial}(timeOnPatch_binned{iTrial} == 0) = NaN; 
-            [~,~,time2Leave_binned{iTrial}] = histcounts(time2Leave_binned{iTrial},time2Leave_bins);  
+            [~,~,time2Leave_binned{iTrial}] = histcounts(time2Leave_binned{iTrial},var_bins{3});  
             time2Leave_binned{iTrial}(time2Leave_binned{iTrial} == 0) = NaN; 
-        end   
+        end
         
         % add to xval table data
         SessionName = [SessionName ; repmat(session,[nTrials,1])];
@@ -177,48 +177,85 @@ end
 % together, then specify different options for classification training 
 % Also, this cell runs really quickly
 dataset_opt = struct;
-dataset_opt.clusters = [1 2 3]; % which neuron clusters to include in classification
+% select the features to add in different 
+dataset_opt.features = {}; 
+for clust = 1:3
+    dataset_opt.features{clust} = struct;
+    dataset_opt.features{clust}.type = "KMeans Clusters"; 
+    dataset_opt.features{clust}.ix = (clust); % indices within the feature type we selected
+    dataset_opt.features{clust}.shuffle = false; % shuffle? 
+    dataset_opt.features{clust}.name = sprintf("Cluster %i",clust); % name for visualizations
+end 
+% add a shuffle control (could loop to do more than 1 shuffle)
+dataset_opt.features{4} = struct;  
+dataset_opt.features{4}.type = "KMeans Clusters";   
+dataset_opt.features{4}.ix = [1 2 3]; % indices within the feature type we selected
+dataset_opt.features{4}.shuffle = true; % shuffle? 
+dataset_opt.features{4}.name = "Shuffled All Clusters"; % name for visualizations
+
+
 dataset_opt.rewsizes = [1 2 4]; % which reward size trials will we train to
-dataset_opt.numFolds = 2; % xval folds  
-dataset_opt.vars = [1 2 3];   
+dataset_opt.numFolds = 5; % xval folds  
+dataset_opt.vars = [1 2 3];     
 X_dataset = cell(numel(mouse_grps),1);  
 y_dataset = cell(numel(mouse_grps),1); 
 
-for mIdx = 1:5 % iterate over mice 
-    X_dataset{mIdx} = cell(numel(dataset_opt.vars),1); 
-    y_dataset{mIdx} = cell(numel(dataset_opt.vars),1); 
-    for iVar = 1:numel(dataset_opt.vars) % iterate over variables
-        X_dataset{mIdx}{iVar} = cell(numel(dataset_opt.rewsizes),1);
-        y_dataset{mIdx}{iVar} = cell(numel(dataset_opt.rewsizes),1); 
-        for i = 1:numel(mouse_grps{mIdx}) % iterate over sessions, collect data
-            sIdx = mouse_grps{mIdx}(i);
-            rewsize = y_rewsize{mIdx}{i};
-            neurons_keep = ismember(X_clusters{mIdx}{i},dataset_opt.clusters); % neuron cluster mask
-            X_session_cluster = cellfun(@(x) x(neurons_keep,:),X{mIdx}{i,iVar},'UniformOutput',false); % X w/ neurons of interest
-            for iRewsize = 1:numel(dataset_opt.rewsizes)
-                this_rewsize = dataset_opt.rewsizes(iRewsize);
-                trials_keep = rewsize == this_rewsize; % rewsize mask 
-                X_dataset{mIdx}{iVar}{iRewsize} = [X_dataset{mIdx}{iVar}{iRewsize};X_session_cluster(trials_keep)]; 
-                y_dataset{mIdx}{iVar}{iRewsize} = [y_dataset{mIdx}{iVar}{iRewsize};y{mIdx}{i,iVar}(trials_keep)];
+for mIdx = 1:5 % iterate over mice
+    X_dataset{mIdx} = cell(numel(dataset_opt.features),1);
+    y_dataset{mIdx} = cell(numel(dataset_opt.features),1); 
+    for iFeature = 1:numel(dataset_opt.features)  
+        X_dataset{mIdx}{iFeature} = cell(numel(dataset_opt.vars),1);
+        y_dataset{mIdx}{iFeature} = cell(numel(dataset_opt.vars),1);
+        for iVar = 1:numel(dataset_opt.vars) % iterate over variables
+            X_dataset{mIdx}{iFeature}{iVar} = cell(numel(dataset_opt.rewsizes),1);
+            y_dataset{mIdx}{iFeature}{iVar} = cell(numel(dataset_opt.rewsizes),1);
+            for i = 1:numel(mouse_grps{mIdx}) % iterate over sessions, collect data
+                sIdx = mouse_grps{mIdx}(i); 
+                rewsize = y_rewsize{mIdx}{i};   
+                nTrials = length(rewsize); 
+                
+                % Pull out feature
+                if strcmp(dataset_opt.features{iFeature}.type,"KMeans Clusters")
+                    neurons_keep = ismember(X_clusters{mIdx}{i},dataset_opt.features{iFeature}.ix); % neuron cluster mask
+                    X_session_feature = cellfun(@(x) x(neurons_keep,:),X{mIdx}{i,iVar},'UniformOutput',false); % X w/ neurons of interest
+                end 
+                
+                % Shuffle data?
+                if dataset_opt.features{iFeature}.shuffle == true   
+                    % save indexing so that we can throw this back in trialed form
+                    t_lens = cellfun(@length,X_session_feature); 
+                    leave_ix = cumsum(t_lens);
+                    stop_ix = leave_ix - t_lens + 1;   
+                    % concatenate, then circshift neurons independently
+                    X_session_feature_cat = cat(2,X_session_feature{:});  
+                    shifts = randi(size(X_session_feature_cat,2),1,size(X_session_feature_cat,1));
+                    X_session_feature_cat_shuffle = cell2mat(arrayfun(@(x) circshift(X_session_feature_cat(x,:),[1 shifts(x)]),(1:numel(shifts))','un',0));
+                    X_session_feature = arrayfun(@(x) X_session_feature_cat_shuffle(:,stop_ix(x):leave_ix(x)),
+                end
+                
+                for iRewsize = 1:numel(dataset_opt.rewsizes)
+                    this_rewsize = dataset_opt.rewsizes(iRewsize);
+                    trials_keep = rewsize == this_rewsize; % rewsize mask
+                    X_dataset{mIdx}{iFeature}{iVar}{iRewsize} = [X_dataset{mIdx}{iFeature}{iVar}{iRewsize};X_session_feature(trials_keep)];
+                    y_dataset{mIdx}{iFeature}{iVar}{iRewsize} = [y_dataset{mIdx}{iFeature}{iVar}{iRewsize};y{mIdx}{i,iVar}(trials_keep)];
+                end
             end
         end
     end
-    
-    % Now initialize folds in xval table 
-    % Evenly distribute sessions between folds as we have previously done
-    % for reward size 
+
+    % Make xval folds, evenly distributing sessions between folds
     for iRewsize = 1:numel(dataset_opt.rewsizes)
         this_rewsize = dataset_opt.rewsizes(iRewsize);
-        xval_table_thisRewsize = xval_table{mIdx}(xval_table{mIdx}.Rewsize == this_rewsize,:);   
-        iRewsize_foldid = nan(size(xval_table_thisRewsize,1),1); 
+        xval_table_thisRewsize = xval_table{mIdx}(xval_table{mIdx}.Rewsize == this_rewsize,:);
+        iRewsize_foldid = nan(size(xval_table_thisRewsize,1),1);
         shift_by = 0; % change which fold is the "last fold" to make sure one fold is not way smaller than the rest
         for i = 1:numel(mouse_grps{mIdx}) % evenly distribute trials from this session between folds
-            keep_this = xval_table_thisRewsize.SessionIx == i; % keep trials from this session 
+            keep_this = xval_table_thisRewsize.SessionIx == i; % keep trials from this session
             i_nTrials = sum(keep_this); % to ensure proper assignment indexing
             iRewsize_foldid_this = repmat(circshift(1:dataset_opt.numFolds,shift_by),1,ceil(i_nTrials/dataset_opt.numFolds)*dataset_opt.numFolds);
             iRewsize_foldid(keep_this) = iRewsize_foldid_this(1:i_nTrials); % assign folds 1:k
             shift_by = shift_by - mod(i_nTrials,dataset_opt.numFolds); % shift which fold is getting fewer trials
-        end 
+        end
         % assign folds among trials of this reward size
         xval_table{mIdx}(xval_table{mIdx}.Rewsize == this_rewsize,4).FoldID = iRewsize_foldid;
     end
@@ -228,44 +265,268 @@ end
 
 models = cell(numel(mouse_grps),1);
 zero_sigma = 0.5;
-for mIdx = [1:3 5] 
-    models{mIdx} = cell(numel(dataset_opt.vars),1);
-    % iterate over the variables we are decoding 
-    for iVar = 1:3
-        models{mIdx}{iVar} = cell(numel(dataset_opt.rewsizes),1); 
-        % iterate over reward sizes of interest
-        for iRewsize = 1:numel(dataset_opt.rewsizes)   
-            models{mIdx}{iVar}{iRewsize} = cell(dataset_opt.numFolds,1);  
-            this_rewsize = dataset_opt.rewsizes(iRewsize);  
-            % xval folds for this mouse and reward size
-            foldid = xval_table{mIdx}(xval_table{mIdx}.Rewsize == this_rewsize,4).FoldID; 
-            sessionIx = xval_table{mIdx}(xval_table{mIdx}.Rewsize == this_rewsize,:).SessionIx; 
-            
-            % iterate over xval folds and train models
-            for kFold = 1:dataset_opt.numFolds  
-                [X_train,X_test,y_train,y_test] = kfold_split(X_dataset{mIdx}{iVar}{iRewsize}, ... 
-                                                              y_dataset{mIdx}{iVar}{iRewsize}, ... 
-                                                              foldid,kFold,sessionIx);
-                % Add some noise s.t. we can avoid zero variance gaussians
-                X_train(X_train == 0) = normrnd(0,zero_sigma,[length(find(X_train == 0)),1]);
-                models{mIdx}{iVar}{iRewsize}{kFold} = fitcnb(X_train',y_train,'Prior','uniform');
-                
-                % fitcnb(X_train',y_train,'Prior','uniform');
+for mIdx = 1:5
+    models{mIdx} = cell(numel(dataset_opt.features),1);
+    % iterate over the variables we are decoding
+    for iFeature = 1:numel(dataset_opt.features)
+        models{mIdx}{iFeature} = cell(numel(dataset_opt.vars),1);
+        for iVar = 1:3
+            models{mIdx}{iFeature}{iVar} = cell(numel(dataset_opt.rewsizes),1);
+            % iterate over reward sizes of interest
+            for iRewsize = 1:numel(dataset_opt.rewsizes)
+                models{mIdx}{iFeature}{iVar}{iRewsize} = cell(dataset_opt.numFolds,1);
+                this_rewsize = dataset_opt.rewsizes(iRewsize);
+                % xval folds for this mouse and reward size
+                foldid = xval_table{mIdx}(xval_table{mIdx}.Rewsize == this_rewsize,:).FoldID;
+                sessionIx = xval_table{mIdx}(xval_table{mIdx}.Rewsize == this_rewsize,:).SessionIx; 
+                % iterate over xval folds and train models
+                for kFold = 1:dataset_opt.numFolds
+                    [X_train,X_test,y_train,y_test] = kfold_split(X_dataset{mIdx}{iFeature}{iVar}{iRewsize}, ...
+                                                                  y_dataset{mIdx}{iFeature}{iVar}{iRewsize}, ...
+                                                                  foldid,kFold,sessionIx);
+                    % Add some noise s.t. we can avoid zero variance gaussians
+                    X_train(X_train == 0) = normrnd(0,zero_sigma,[length(find(X_train == 0)),1]);
+                    models{mIdx}{iFeature}{iVar}{iRewsize}{kFold} = fitcnb(X_train',y_train,'Prior','uniform');
+                end
+            end
+        end
+    end
+    fprintf("%s Model Fitting Complete \n",mouse_names(mIdx))
+end
+
+%% Now evaluate classifier performance on test folds 
+confusion_mats = cell(numel(mouse_grps),1);
+generative_models = cell(numel(mouse_grps),1);
+y_true_full = cell(numel(mouse_grps),1);
+y_hat_full = cell(numel(mouse_grps),1);
+for mIdx = 1:5
+    confusion_mats{mIdx}{iFeature} = cell(numel(dataset_opt.features),1);
+    generative_models{mIdx}{iFeature} = cell(numel(dataset_opt.features),1);
+    y_true_full{mIdx}{iFeature} = cell(numel(dataset_opt.features),1);
+    y_hat_full{mIdx}{iFeature} = cell(numel(dataset_opt.features),1);
+    for iFeature = 1:numel(dataset_opt.features)
+        confusion_mats{mIdx}{iFeature} = cell(numel(dataset_opt.vars),1);
+        generative_models{mIdx}{iFeature} = cell(numel(dataset_opt.vars),1);
+        y_true_full{mIdx}{iFeature} = cell(numel(dataset_opt.vars),1);
+        y_hat_full{mIdx}{iFeature} = cell(numel(dataset_opt.vars),1);
+        for iVar = 1:3
+            confusion_mats{mIdx}{iFeature}{iVar} = cell(numel(dataset_opt.rewsizes),1);
+            generative_models{mIdx}{iFeature}{iVar} = cell(numel(dataset_opt.rewsizes),1);
+            y_true_full{mIdx}{iFeature}{iVar} = cell(numel(dataset_opt.rewsizes),1);
+            y_hat_full{mIdx}{iFeature}{iVar} = cell(numel(dataset_opt.rewsizes),1);
+            for iRewsize = 1:numel(dataset_opt.rewsizes)
+                confusion_mats_tmp = cell(numel(dataset_opt.numFolds),1);
+                generative_models_tmp = cell(numel(dataset_opt.numFolds),1);
+                y_true_full_tmp = cell(numel(dataset_opt.numFolds),1);
+                y_hat_full_tmp = cell(numel(dataset_opt.numFolds),1);
+                this_rewsize = dataset_opt.rewsizes(iRewsize);
+                % xval folds for this mouse and reward size
+                foldid = xval_table{mIdx}(xval_table{mIdx}.Rewsize == this_rewsize,4).FoldID;
+                sessionIx = xval_table{mIdx}(xval_table{mIdx}.Rewsize == this_rewsize,:).SessionIx;
+                for kFold = 1:dataset_opt.numFolds
+                    [~,X_test,~,y_test] = kfold_split(X_dataset{mIdx}{iFeature}{iVar}{iRewsize}, ...
+                                                      y_dataset{mIdx}{iFeature}{iVar}{iRewsize}, ...
+                                                      foldid,kFold,sessionIx);
+                    [y_hat,Posterior] = predict(models{mIdx}{iFeature}{iVar}{iRewsize}{kFold},X_test');
+                    confusion_mats_tmp{kFold} = confusionmat(y_test,y_hat);
+                    generative_models_tmp{kFold} = rot90(cellfun(@(x) x(1),models{mIdx}{iFeature}{iVar}{iRewsize}{kFold}.DistributionParameters));
+                    y_true_full_tmp{kFold} = y_test;
+                    y_hat_full_tmp{kFold} = y_hat;
+                end
+                confusion_mats{mIdx}{iFeature}{iVar}{iRewsize} = sum(cat(3,confusion_mats_tmp{:}),3);
+                generative_models{mIdx}{iFeature}{iVar}{iRewsize} = mean(cat(3,generative_models_tmp{:}),3);
+                y_true_full{mIdx}{iFeature}{iVar}{iRewsize} = cat(1,y_true_full_tmp{:});
+                y_hat_full{mIdx}{iFeature}{iVar}{iRewsize} = cat(1,y_hat_full_tmp{:});
+            end
+        end
+    end
+    fprintf("%s Model Evaluation Complete \n",mouse_names(mIdx))
+end
+
+%% Analyze decoding performance in terms of time prediction 
+
+error_bin_width = .05;
+error_hmap = cell(numel(mouse_grps),1); 
+absError_mean = cell(numel(mouse_grps),1); 
+absError_sem = cell(numel(mouse_grps),1);
+learned_representations = cell(numel(mouse_grps),1);
+for mIdx = 1:5
+    error_hmap{mIdx} = cell(numel(dataset_opt.features),1);
+    absError_mean{mIdx} = cell(numel(dataset_opt.features),1);
+    absError_sem{mIdx} = cell(numel(dataset_opt.features),1);
+    learned_representations{mIdx} = cell(numel(dataset_opt.features),1);
+    for iFeature = 1:numel(dataset_opt.features)
+        error_hmap{mIdx}{iFeature} = cell(numel(dataset_opt.vars),1);
+        absError_mean{mIdx}{iFeature} = cell(numel(dataset_opt.vars),1);
+        absError_sem{mIdx}{iFeature} = cell(numel(dataset_opt.vars),1);
+        learned_representations{mIdx}{iFeature} = cell(numel(dataset_opt.vars),1);
+        for iVar = 1:3
+            error_hmap{mIdx}{iFeature}{iVar} = cell(numel(dataset_opt.rewsizes),1);
+            absError_mean{mIdx}{iFeature}{iVar} = cell(numel(dataset_opt.rewsizes),1);
+            absError_sem{mIdx}{iFeature}{iVar} = cell(numel(dataset_opt.rewsizes),1);
+            error_bins = -max(var_bins{iVar}):error_bin_width:max(var_bins{iVar});
+            msec_conversion = diff(var_bins{iVar}(1:2));
+            for iRewsize = 1:numel(dataset_opt.rewsizes)
+                i_y_true = y_true_full{mIdx}{iFeature}{iVar}{iRewsize};
+                i_y_true_msec = msec_conversion * i_y_true;
+                i_y_hat_msec = msec_conversion * y_hat_full{mIdx}{iFeature}{iVar}{iRewsize};
+                errors_msec = i_y_hat_msec - i_y_true_msec; % so that positive errors are late predictions
+                error_hmap{mIdx}{iFeature}{iVar}{iRewsize} = nan(length(error_bins)-1,max(i_y_true));
+                absError_mean{mIdx}{iFeature}{iVar}{iRewsize} = nan(max(i_y_true),1);
+                absError_sem{mIdx}{iFeature}{iVar}{iRewsize} = nan(max(i_y_true),1);
+                for true_label = 1:max(i_y_true)
+                    error_hmap{mIdx}{iFeature}{iVar}{iRewsize}(:,true_label) = histcounts(errors_msec(i_y_true == true_label),error_bins,'Normalization', 'probability');
+                    absError_mean{mIdx}{iFeature}{iVar}{iRewsize}(true_label) = mean(abs(errors_msec(i_y_true == true_label)));
+                    absError_sem{mIdx}{iFeature}{iVar}{iRewsize}(true_label) = std(abs(errors_msec(i_y_true == true_label))) / sqrt(length(find(i_y_true == true_label)));
+                end
             end
         end
     end
 end
 
-
-%% Now evaluate classifier performance in test folds
-for mIdx = [1:3 5] 
-    for iVar = 1:3 
-        for iRewsize = 1:numel(dataset_opt.rewsizes) 
-            for 
-[label,Posterior] = predict(models{mIdx}{iVar}{iRewsize}{kFold},X_test);  
+%% Visualize encoding representation 
+close all
+var_names = ["Time Since Reward","Time On Patch","Time Until Leave"]; 
+for iRewsize = 3
+    this_rewsize = dataset_opt.rewsizes(iRewsize);
+    for iFeature = 4
+        figure()
+        for mIdx = 1:numel(mouse_grps)
+            for iVar = 1:numel(dataset_opt.vars)
+                subplot(3,5,mIdx + 5 * (iVar - 1))
+                
+                if iVar ~= 3
+                    imagesc(zscore(generative_models{mIdx}{iFeature}{iVar}{iRewsize},[],2))
+                    xticks(1:10:(numel(var_bins{iVar})))
+                    xticklabels(var_bins{iVar}(1:10:end))
+                else
+                    imagesc(zscore(fliplr(generative_models{mIdx}{iFeature}{iVar}{iRewsize}),[],2))
+                    xticks(1:10:(numel(var_bins{iVar})))
+                    xticklabels(-fliplr(var_bins{iVar}(1:10:end)) )
+                end
+                
+                if mIdx == 1
+                    ylabel("Neurons")
+                end
+                if iVar == 1
+                    title(mouse_names(mIdx))
+                end
+                xlabel(sprintf("%s (sec)",var_names(iVar)))
+            end
         end
+        suptitle(sprintf("%s, %i uL Trials",dataset_opt.features{iFeature}.name,this_rewsize))
     end
 end
+
+
+%% Visualize decoding performance with heatmap
+close all
+var_names = ["Time Since Reward","Time On Patch","Time Until Leave"];
+for iRewsize = 3
+    this_rewsize = dataset_opt.rewsizes(iRewsize);
+    for iFeature = 1:3
+        figure()
+        for mIdx = 1:numel(mouse_grps)
+            for iVar = 1:numel(dataset_opt.vars)
+                subplot(3,5,mIdx + 5 * (iVar - 1))
+                
+                if iVar ~= 3
+                    imagesc(confusion_mats{mIdx}{iFeature}{iVar}{iRewsize})
+                    xticks(1:10:(numel(var_bins{iVar})))
+                    xticklabels(var_bins{iVar}(1:10:end))
+                    yticks(1:10:(numel(var_bins{iVar})))
+                    yticklabels(var_bins{iVar}(1:10:end))
+                else
+                    imagesc(rot90(confusion_mats{mIdx}{iFeature}{iVar}{iRewsize},2))
+                    xticks(1:10:(numel(var_bins{iVar})))
+                    xticklabels(-fliplr(var_bins{iVar}(1:10:end)) )
+                    yticks(1:10:(numel(var_bins{iVar})))
+                    yticklabels(-fliplr(var_bins{iVar}(1:10:end)) )
+                end
+                
+                if mIdx == 1
+                    ylabel(sprintf("True %s",var_names(iVar)))
+                end
+                if iVar == 1
+                    title(mouse_names(mIdx))
+                end
+                %             if iVar == 3
+                %                 xlabel("Decoded Task Variable")
+                xlabel(sprintf("Decoded %s",var_names(iVar)))
+                %             end
+            end
+        end
+        suptitle(sprintf("%s, %i uL Trials",dataset_opt.features{iFeature}.name,this_rewsize))
+    end
+end
+
+%% Visualize decoding performance betw reward sizes with line plot of abs error
+colors = cool(3);
+close all
+var_names = ["Time Since Reward","Time On Patch","Time Until Leave"];
+this_rewsize = dataset_opt.rewsizes(iRewsize);
+for iFeature = 1:3
+    figure()
+    for mIdx = 1:numel(mouse_grps)
+        for iVar = 1:numel(dataset_opt.vars)
+            subplot(3,5,mIdx + 5 * (iVar - 1))
+            for iRewsize = 1:numel(dataset_opt.rewsizes)
+                if iVar ~= 3
+                    shadedErrorBar(var_bins{iVar}(1:end-1),absError_mean{mIdx}{iFeature}{iVar}{iRewsize},absError_sem{mIdx}{iFeature}{iVar}{iRewsize},'lineprops',{'Color',colors(iRewsize,:)});
+                else
+                    shadedErrorBar(-fliplr(var_bins{iVar}(1:end-1)),flipud(absError_mean{mIdx}{iFeature}{iVar}{iRewsize}),flipud(absError_sem{mIdx}{iFeature}{iVar}{iRewsize}),'lineprops',{'Color',colors(iRewsize,:)});
+                end
+            end
+            ylim([0,1])
+            
+            if mIdx == 1
+                ylabel(sprintf("%s |Decoding Error|",var_names(iVar)))
+            end
+            if iVar == 1
+                title(mouse_names(mIdx))
+            end
+            xlabel(sprintf("%s",var_names(iVar)))
+        end
+    end
+    suptitle(sprintf("%s Decoding Timecourse",dataset_opt.features{iFeature}.name))
+end 
+
+%% Visualize decoding performance betw features in dataset 
+colors = hsv(4);
+close all
+var_names = ["Time Since Reward","Time On Patch","Time Until Leave"];
+
+for iRewsize = 1:3
+    this_rewsize = dataset_opt.rewsizes(iRewsize);
+    figure()
+    for mIdx = 1:numel(mouse_grps)
+        for iVar = 1:numel(dataset_opt.vars)
+            subplot(3,5,mIdx + 5 * (iVar - 1))
+            for iFeature = 1:numel(dataset_opt.features)
+                if iVar ~= 3
+                    shadedErrorBar(var_bins{iVar}(1:end-1),absError_mean{mIdx}{iFeature}{iVar}{iRewsize},absError_sem{mIdx}{iFeature}{iVar}{iRewsize},'lineprops',{'Color',colors(iFeature,:)});
+                else
+                    shadedErrorBar(-fliplr(var_bins{iVar}(1:end-1)),flipud(absError_mean{mIdx}{iFeature}{iVar}{iRewsize}),flipud(absError_sem{mIdx}{iFeature}{iVar}{iRewsize}),'lineprops',{'Color',colors(iFeature,:)});
+                end
+            end
+            ylim([0,1])
+            
+            if mIdx == 1
+                ylabel(sprintf("%s |Decoding Error|",var_names(iVar)))
+            end
+            if iVar == 1
+                title(mouse_names(mIdx))
+            end
+            xlabel(sprintf("%s",var_names(iVar)))
+            if mIdx == 1 && iVar == 1
+                legend(cellfun(@(x) x.name,dataset_opt.features))
+            end
+        end
+        
+    end
+    suptitle(sprintf("%i uL Decoding Timecourse",this_rewsize))
+end
+
 %% Testing  
 mIdx = 5; 
 iVar = 2;
@@ -273,7 +534,11 @@ iRewsize = 1;
 this_rewsize = 1;
 X_practice = X_dataset{mIdx}{iVar}{iRewsize};  
 sessionIx = xval_table{mIdx}(xval_table{mIdx}.Rewsize == this_rewsize,:).SessionIx;
-X_padcat = padCat(X_practice,sessionIx);
+X_padcat = padCat(X_practice,sessionIx); 
+
+% get the generative model tracking learned representation across time 
+kFold = 1;
+rep = rot90(cellfun(@(x) x(1),models{mIdx}{iVar}{iRewsize}{1}.DistributionParameters));
 
 
 %% Helper functions 
@@ -284,7 +549,6 @@ function [X_train,X_test,y_train,y_test] = kfold_split(X_dataset,y_dataset,foldi
 %   y (labels array) is concatenated and returned as a column vector 
 
     % Concatenate and pad features  
-    X_train_cell = X_dataset(foldid ~= kFold);
     X_train = padCat(X_dataset(foldid ~= kFold),sessionIx(foldid ~= kFold)); 
     X_test = padCat(X_dataset(foldid == kFold),sessionIx(foldid == kFold));    
     
