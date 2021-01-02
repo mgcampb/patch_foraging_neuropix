@@ -25,7 +25,6 @@ function transients_struct = driscoll_transient_discovery(FR_decVar,trial_select
     end
 
     %%%% Finished kwarg reading %%%% 
-
     % Only select one reward size at a time
     fr_mat = FR_decVar.fr_mat(trial_selection);
     fr_mat = cat(2,fr_mat{:});

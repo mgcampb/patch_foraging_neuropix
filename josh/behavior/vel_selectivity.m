@@ -397,7 +397,125 @@ for mIdx = [1 3 5]
     xlabel("PRT") 
     ylabel("Velocity Selectivity") 
     title(sprintf("%s (r = %.2f p = %.3f)",mouse_names{mIdx},r(2),p(2))) 
+end 
+
+%% Investigate PRT distribution in creeping / high creeping trials  
+
+mouse_rewsize = cell(numel(mouse_grps),1); 
+mouse_N0 = cell(numel(mouse_grps),1); 
+mouse_prts = cell(numel(mouse_grps),1); 
+mouse_sel_metric = cell(numel(mouse_grps),1); 
+for mIdx = 1:5
+    mouse_prts{mIdx} = []; 
+    mouse_rewsize{mIdx} = []; 
+    mouse_N0{mIdx} = [];  
+    mouse_sel_metric{mIdx} = []; 
+    for i = 1:numel(mouse_grps{mIdx})
+        sIdx = mouse_grps{mIdx}(i);
+        visualization_metric = behavior_struct(sIdx).vel_selectivity_metric_sum_eqWindow;
+        session = sessions{sIdx}(1:end-4);
+        data = load(fullfile(paths.data,session));  
+        rewsize = mod(data.patches(:,2),10);  
+        mouse_rewsize{mIdx} = [mouse_rewsize{mIdx} ; rewsize]; 
+        N0 = round(mod(data.patches(:,2),100)/10);
+        N0(N0 == 3) = .125; % just reorder in terms of 
+        N0(N0 == 2) = .25;
+        N0(N0 == 1) = .5; 
+        mouse_N0{mIdx} = [mouse_N0{mIdx} ; N0];  
+        prts = data.patchCSL(:,3) - data.patchCSL(:,2);   
+        mouse_prts{mIdx} = [mouse_prts{mIdx} ; prts]; 
+        
+        metric = behavior_struct(sIdx).vel_selectivity_metric_sum_eqWindow; 
+        k_period = 2; % 1000 msec 
+        metric_k = metric(:,k_period); 
+        mouse_sel_metric{mIdx} = [mouse_sel_metric{mIdx} ; metric_k]; 
+    end
 end
+
+%% Visualize PRT between creeping metric 
+
+mouse_names = ["m75","m76","m78","m79","m80"];
+x = [1 2 3 5 6 7 9 10 11];
+
+darkBlack = [0 0 0];
+darkCyan = [0 1 1];
+darkBlue = [0 0 1];
+cmapBlack = ones(4,3);
+cmapCyan = ones(4,3);
+cmapBlue = ones(4,3);
+for i = 1:3
+    cmapBlack(:,i) = linspace(1, darkBlack(i), size(cmapBlack,1));
+    cmapCyan(:,i) = linspace(1, darkCyan(i), size(cmapCyan,1));
+    cmapBlue(:,i) = linspace(1, darkBlue(i), size(cmapBlue,1));
+end
+
+cool3 = cool(3);
+cool9_light = zeros(9,3);
+cool9_dark = zeros(9,3);
+for i = 1:3
+    %colors4(1:4,i) = linspace(1, cool3(1,i), 4);
+    cool9_light(1:3,i) = linspace(.9, cool3(1,i), 3);
+    cool9_light(4:6,i) = linspace(.9, cool3(2,i), 3);
+    cool9_light(7:9,i) = linspace(.9, cool3(3,i), 3);
+    
+    cool9_dark(1:3,i) = linspace(.4, cool3(1,i), 3);
+    cool9_dark(4:6,i) = linspace(.4, cool3(2,i), 3);
+    cool9_dark(7:9,i) = linspace(.4, cool3(3,i), 3);
+end
+cool9_light(2,1) = .7; % adjustment otherwise the 1uL colors don't come out nice 
+
+vis_mice = 1:5; 
+vis_quartiles = 1:3;
+
+for m = [2 4]
+    mIdx = vis_mice(m); 
+    creeping_quantiles = quantile(mouse_sel_metric{mIdx},2);
+    creeping_quantiles = [min(mouse_sel_metric{mIdx}) ...
+                          creeping_quantiles ...
+                          max(mouse_sel_metric{mIdx})];
+    [~,~,creeping_bin] = histcounts(mouse_sel_metric{mIdx},creeping_quantiles);
+    creeping_bin(creeping_bin == 0) = nan;
+    counter = 1;
+    for iRewsize = [1 2 4]
+        for iN0 = [.125 .25 .5]  
+            for iQuartile = 1:numel(vis_quartiles) 
+                subplot(length(vis_quartiles),numel(vis_mice),m + numel(vis_mice) * (iQuartile - 1));hold on
+                these_trials = (mouse_rewsize{mIdx} == iRewsize & mouse_N0{mIdx} == iN0 & creeping_bin == iQuartile);
+                bar(x(counter), mean(mouse_prts{mIdx}(these_trials)),'FaceColor', cool9_light(counter,:), 'EdgeColor', 'k');
+                errorbar(x(counter), mean(mouse_prts{mIdx}(these_trials)),std(mouse_prts{mIdx}(these_trials)) / sqrt(numel(find(these_trials))),'k.');
+                if iQuartile == 1 
+                    title(sprintf("%s \n High Creeping",mouse_names(mIdx)));
+                elseif iQuartile == 2 
+                    title("Medium Creeping") 
+                elseif iQuartile == 3 
+                    title("Low Creeping")
+                end  
+                ax = gca;
+                ax.XTick = x;
+                if iQuartile == numel(vis_quartiles) 
+                    ax.XTickLabel = {'Lo', 'Md', 'Hi', 'Lo', 'Md', 'Hi', 'Lo', 'Md', 'Hi'};
+                    ax.XTickLabelRotation = 60;  
+                else 
+                    ax.XTickLabel = {[]};
+                end 
+                if m == 1 
+                   ylabel("PRT (sec)")
+                end
+            end
+            counter = counter + 1;
+        end
+    end
+    
+%     maxPos = find([mice(mIdx).rFreqSize(:).mean] == max([(mice(iMouse).rFreqSize(:).mean)])); % location of max mean PRT (plus SEM)
+%     maxMean = mice(mIdx).rFreqSize(maxPos).mean + .1;
+%     maxPlusSEM = mice(mIdx).rFreqSize(maxPos).mean + mice(iMouse).rFreqSize(maxPos).sem;
+%     
+%     maxY = (floor(maxMean / 5) + 1) * 5;
+%     ylim([0 maxY]);
+
+end
+
+
     
 %% Now investigate differences in neural dynamics w/ malcolm's significant neurons 
 % pool across days  
@@ -596,7 +714,7 @@ for mIdx = 1:5
         xlim([0 2])  
         xlabel("Time since patch stop (sec)") 
         if clustIdx == 1
-            title(sprintf("%s Cluster %i 40",mouse_names{mIdx},clustIdx))  
+            title(sprintf("%s Cluster %i 40",{mIdx},clustIdx))  
         else 
             title(sprintf("Cluster %i 40",clustIdx))  
         end

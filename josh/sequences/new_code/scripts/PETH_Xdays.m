@@ -31,8 +31,8 @@ FR_decVar = struct;
 driscoll_struct = struct; 
 decVar_bins = linspace(0,2,41);  
 bin_tbin = decVar_bins(2) - decVar_bins(1);
-for sIdx = 1:numel(sessions) 
-%     sIdx = mPFC_sessions(i); 
+for i = 1:numel(mPFC_sessions)
+    sIdx = mPFC_sessions(i); 
 
     if ismember(sIdx,mgcPFC_sessions) 
         FR_calcOpt.region_selection = "PFC";  
