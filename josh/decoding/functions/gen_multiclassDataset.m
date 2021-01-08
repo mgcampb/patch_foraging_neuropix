@@ -21,21 +21,15 @@ function [X_dataset,y_dataset,xval_table] = gen_multiclassDataset(X,X_vel,X_pos,
                         neurons_keep = ismember(X_clusters{mIdx}{i},dataset_opt.features{iFeature}.ix); % neuron cluster mask
                         X_session_feature = cellfun(@(x) x(neurons_keep,:),X{mIdx}{i,iVar},'UniformOutput',false); % X w/ neurons of interest 
                     elseif strcmp(dataset_opt.features{iFeature}.type,"CellID")  
-                        if mIdx == dataset_opt.features{iFeature}.ix(1) && i == dataset_opt.features{iFeature}.ix(2) % right session?
-                            neurons_keep = ismember(X_cellIDs{mIdx}{i},dataset_opt.features{iFeature}.ix(3:end)); % neuron cellID mask 
-                            X_session_feature = cellfun(@(x) x(neurons_keep,:),X{mIdx}{i,iVar},'UniformOutput',false); % X w/ neurons of interest 
-                        else 
-                            X_session_feature = arrayfun(@(x) nan(size(X_vel{mIdx}{i,iVar}{x}))',1:nTrials,'un',0); % otherwise pad w/ nan
-                        end 
+                        neurons_keep = ismember(X_cellIDs{mIdx}{i},dataset_opt.features{iFeature}.ix{mIdx}{i}); % neuron cellID mask
+                        X_session_feature = cellfun(@(x) x(neurons_keep,:),X{mIdx}{i,iVar},'UniformOutput',false); % X w/ neurons of interest
                     elseif strcmp(dataset_opt.features{iFeature}.type,"Velocity")
                         X_session_feature = X_vel{mIdx}{i,iVar};
                     elseif strcmp(dataset_opt.features{iFeature}.type,"Position")
                         X_session_feature = X_pos{mIdx}{i,iVar};
                     elseif strcmp(dataset_opt.features{iFeature}.type,"Acceleration")
                         X_session_feature = X_accel{mIdx}{i,iVar};
-                    end 
-                    
-                    disp(X_session_feature{1})
+                    end
                     
                     % Shuffle data?
                     if dataset_opt.features{iFeature}.shuffle == true
@@ -52,8 +46,8 @@ function [X_dataset,y_dataset,xval_table] = gen_multiclassDataset(X,X_vel,X_pos,
 
                     for iRewsize = 1:numel(dataset_opt.rewsizes)
                         this_rewsize = dataset_opt.rewsizes(iRewsize);
-                        trials_keep = rewsize == this_rewsize; % rewsize mask
-                        X_dataset{mIdx}{iFeature}{iVar}{iRewsize} = [X_dataset{mIdx}{iFeature}{iVar}{iRewsize};X_session_feature(trials_keep)];
+                        trials_keep = rewsize == this_rewsize; % rewsize mask  
+                        X_dataset{mIdx}{iFeature}{iVar}{iRewsize} = [X_dataset{mIdx}{iFeature}{iVar}{iRewsize};X_session_feature(trials_keep)];  
                         if iFeature == numel(dataset_opt.features)
                             y_dataset{mIdx}{iVar}{iRewsize} = [y_dataset{mIdx}{iVar}{iRewsize};y{mIdx}{i,iVar}(trials_keep)]; 
                         end

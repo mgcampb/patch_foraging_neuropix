@@ -1,7 +1,7 @@
 %% Get familiar with Naive bayes decoding on fisher iris dataset 
 % load data
 load fisheriris
-X = meas(:,3:4); % take data as last two measures
+X_iris = meas(:,3:4); % take data as last two measures
 Y = species;
 % tabulate(Y) 
 
@@ -64,10 +64,10 @@ Mdl = fitcnb(X,Y,'ClassNames',classNames,'Prior','uniform');
 
 %% Try a kernel density estimation 
 figure()
-Mdl = fitcnb(X,Y,'ClassNames',{'setosa','versicolor','virginica'},'DistributionNames','kernel');  
+Mdl = fitcnb(X_iris,Y,'ClassNames',{'setosa','versicolor','virginica'},'DistributionNames','kernel','Prior','uniform');  
 
-xMax = max(X);
-xMin = min(X);
+xMax = max(X_iris);
+xMin = min(X_iris);
 h = 0.01;
 [x1Grid,x2Grid] = meshgrid(xMin(1):h:xMax(1),xMin(2):h:xMax(2)); 
 [label,PosteriorRegion,cost] = predict(Mdl,[x1Grid(:),x2Grid(:)]); 

@@ -12,5 +12,4 @@ function [X_train,X_test,y_train,y_test] = kfold_split(X_dataset,y_dataset,foldi
     y_train = cat(2,y_train_cell{:})';
     y_test_cell = y_dataset(foldid == kFold);
     y_test = cat(2,y_test_cell{:})';
-    
 end

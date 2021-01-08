@@ -1,6 +1,6 @@
 function models = fit_dataset(X_dataset,y_dataset,xval_table,mouse_names,dataset_opt)
-%FIT_DATASET 
-%   Fit multiclass classification problem
+    % FIT_DATASET
+    %   Fit multiclass classification problem
     nMice = numel(X_dataset);
     models = cell(nMice,1);
     zero_sigma = 0.5;
@@ -17,27 +17,27 @@ function models = fit_dataset(X_dataset,y_dataset,xval_table,mouse_names,dataset
                     this_rewsize = dataset_opt.rewsizes(iRewsize);
                     % xval folds for this mouse and reward size
                     foldid = xval_table{mIdx}(xval_table{mIdx}.Rewsize == this_rewsize,:).FoldID;
-                    sessionIx = xval_table{mIdx}(xval_table{mIdx}.Rewsize == this_rewsize,:).SessionIx; 
+                    sessionIx = xval_table{mIdx}(xval_table{mIdx}.Rewsize == this_rewsize,:).SessionIx;
                     % iterate over xval folds and train models
-                    for kFold = 1:dataset_opt.numFolds 
+                    for kFold = 1:dataset_opt.numFolds
                         [X_train,~,y_train,~] = kfold_split(X_dataset{mIdx}{iFeature}{iVar}{iRewsize}, ...
-                                                            y_dataset{mIdx}{iVar}{iRewsize}, ...
-                                                            foldid,kFold,sessionIx);  
+                            y_dataset{mIdx}{iVar}{iRewsize}, ...
+                            foldid,kFold,sessionIx,sessionIx_sel); 
+                        
                         % Add some noise s.t. we can avoid zero variance gaussians
                         X_train(X_train == 0) = normrnd(0,zero_sigma,[length(find(X_train == 0)),1]);
                         models{mIdx}{iFeature}{iVar}{iRewsize}{kFold} = fitcnb(X_train',y_train,'Prior','uniform');
                     end
                 end
             end
-        end 
+        end
         if isfield(dataset_opt,'suppressOutput')
             if dataset_opt.suppressOutput == false
-                fprintf("%s Model Fitting Complete \n",mouse_names(mIdx))  
+                fprintf("%s Model Fitting Complete \n",mouse_names(mIdx))
             end
-        else 
-            fprintf("%s Model Fitting Complete \n",mouse_names(mIdx))  
+        else
+            fprintf("%s Model Fitting Complete \n",mouse_names(mIdx))
         end
     end
-
 end
 
