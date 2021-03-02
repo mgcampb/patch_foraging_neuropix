@@ -23,7 +23,7 @@ sessions = {sessions.name};
 % mPFC_sessions = [1:8 10:13 15:18 23 25]; 
 % mouse_grps = {1:2,3:8,10:13,15:18,[23 25]}; 
 % mouse_names = ["m75","m76","m78","m79","m80"];  
-mouse_grps = {1:2,3,[5 7],[4 6 8:9]};
+mouse_grps = {1:2,3,[5 7],[4 6 8:9]}; 
 mouse_names = ["mc2 PFC","mc2 STR","mc4 PFC","mc4 STR"];  
 
 %% Extract FR matrices and timing information (here for all trials)

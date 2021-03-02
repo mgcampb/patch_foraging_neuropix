@@ -406,3 +406,16 @@ for session_idx = 1:numel(session_all)
 
 end
 toc
+
+
+%% 
+numFolds = 5; 
+
+foldid = repmat(1:numFolds,1,ceil(sum(keep_this)/opt.numFolds)*opt.numFolds); 
+foldid = trial_grp_this(1:numberof4uLtrials); 
+
+for kFold = 1:numFolds 
+    fitmodel(data(foldid ~= kFold))
+    predictmodel(data(foldid == kFold)) 
+    % eval predictions
+end

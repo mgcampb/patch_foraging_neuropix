@@ -18,7 +18,7 @@ opt = struct;
 opt.tbin = 0.02; % time bin for whole session rate matrix (in sec)
 opt.smoothSigma_time = 0.1; % gauss smoothing sigma for rate matrix (in sec)
 opt.patch_leave_buffer = .5; % in seconds; only takes within patch times up to this amount before patch leave
-opt.min_fr = 0; % minimum firing rate (on patch, excluding buffer) to keep neurons 
+opt.min_fr = 1; % minimum firing rate (on patch, excluding buffer) to keep neurons 
 opt.cortex_only = true;
 tbin_ms = opt.tbin*1000;
 sessions = dir(fullfile(paths.data,'*.mat'));
@@ -26,10 +26,9 @@ sessions = {sessions.name};
 mouse_grps = {1:2,3:8,10:13,15:18,[23 25]};
 
 %% Load firing rate matrices, perform PCA
-pca_trialed = cell(numel(sessions),1); 
 mPFC_sessions = [1:8 10:13 15:18 23 25]; 
 TDR_struct = struct; 
-for i = 1:numel(mPFC_sessions)
+for i = 18 % 1:numel(mPFC_sessions)
     sIdx = mPFC_sessions(i);
     % Get the session name
     session = sessions{sIdx}(1:end-4); 
@@ -53,21 +52,23 @@ for i = 1:numel(mPFC_sessions)
     for iTrial = 1:length(dat.patchCSL)
         fr_mat_trials{iTrial} = fr_mat(:,patchstop_ix(iTrial):patchleave_ix(iTrial)); 
     end  
-    score_full = coeffs' * zscore(horzcat(fr_mat_trials{:}),[],2); % s.t. indexing will line up 
+    score_full = coeffs' * zscore(horzcat(fr_mat_trials{:}),[],2); % s.t. indexing will line up  
     
     % Get new indexing vectors for our just on patch matrix
     t_lens = cellfun(@(x) size(x,2),fr_mat_trials); 
     new_patchleave_ix = cumsum(t_lens);
     new_patchstop_ix = new_patchleave_ix - t_lens + 1;   
     
-    % Similarly gather PCA projections to explain 75% variance in cell arra
-    surpass_75 = find(cumsum(expl / sum(expl)) > .75,1);
-    pca_trialed{sIdx} = cell(length(dat.patchCSL),1);
+    % Similarly gather PCA projections to explain x% variance 
+    proportion_var = .75;
+    surpass_prop = find(cumsum(expl / sum(expl)) > proportion_var,1); 
+    denoised_fr_mat_full = (score_full(1:surpass_prop,:)' * coeffs(:,1:surpass_prop)')';
+    denoised_fr_mat = cell(length(dat.patchCSL),1);
     for iTrial = 1:length(dat.patchCSL)
-        pca_trialed{sIdx}{iTrial} = score_full(1:surpass_75,new_patchstop_ix(iTrial,1):new_patchleave_ix(iTrial,1)); 
+        denoised_fr_mat{iTrial} = denoised_fr_mat_full(:,new_patchstop_ix(iTrial,1):new_patchleave_ix(iTrial,1)); 
     end 
     
-    TDR_struct(sIdx).pca_trials = pca_trialed{sIdx}; 
+    TDR_struct(sIdx).denoised_fr_mat = denoised_fr_mat; 
 end  
 
 %% Generate "reward barcodes" to average firing rates later
@@ -107,13 +108,13 @@ end
 % - reward delivery event    
 % - rewards above expected 
 
-% avg CDF for reward above expected
+% avg CDF for reward count above expected
 tau = .125; 
 N0 = .25; 
 x = 0:tbin_ms/1000:150; 
 avg_cdf = 1 - N0 * exp(-tau * x) / tau + N0 / tau;
 
-for i = 1:numel(mPFC_sessions)
+for i = 18
     sIdx = mPFC_sessions(i);
     session = sessions{sIdx}(1:end-4); 
     dat = load(fullfile(paths.data,session)); 
@@ -166,7 +167,7 @@ for i = 1:numel(mPFC_sessions)
             total_uL{iTrial}(rew_ix:end) = r * rewsize(iTrial); 
             rew_binary_early{iTrial}(rew_ix:min(trial_len_ix,rew_ix + round(500/tbin_ms))) = rewsize(iTrial);
             rew_binary_late{iTrial}(min(trial_len_ix,rew_ix + round(500/tbin_ms)):min(trial_len_ix,rew_ix + round(1000/tbin_ms))) = rewsize(iTrial);
-        end  
+        end
         rewcount_pe{iTrial} = rew_num{iTrial}' - avg_cdf(1:length(rew_num{iTrial}));
         X_trials{iTrial} = [time_on_patch{iTrial}' time_since_rew{iTrial}' rew_num{iTrial} total_uL{iTrial} rew_binary_early{iTrial} rew_binary_late{iTrial} rewcount_pe{iTrial}']';
     end  
@@ -174,10 +175,9 @@ for i = 1:numel(mPFC_sessions)
     TDR_struct(sIdx).X_trials = X_trials;
 end  
 
-
 %% Perform Regression against task events
 %  would be nice to do this cross-validated for visualization
-for i = 1:numel(mPFC_sessions)
+for i = 18
     sIdx = mPFC_sessions(i);    
     dat = load(fullfile(paths.data,sessions{sIdx})); 
     nTrials = length(dat.patchCSL); 
@@ -185,8 +185,8 @@ for i = 1:numel(mPFC_sessions)
     
     % concatenate task variable and pca data
     X_full = cat(2,TDR_struct(sIdx).X_trials{:});
-    pca_full = cat(2,TDR_struct(sIdx).pca_trials{:}); 
-    nPCs = size(pca_full,1); 
+    denoised_fr_mat_full = zscore(cat(2,TDR_struct(sIdx).denoised_fr_mat{:}),[],2); 
+    nNeurons = size(denoised_fr_mat_full,1); 
     nTaskVars = size(X_full,1);   
     
     % Make folds for xval to evaluate coding fidelity per variable
@@ -207,38 +207,39 @@ for i = 1:numel(mPFC_sessions)
     foldid = data_grp(IC)';  
 
     % fit task variable regressions
-    beta = zeros(nPCs,nTaskVars); 
+    beta = zeros(nNeurons,nTaskVars); 
     p_values = nan(nTaskVars,1); 
     Rsquared = nan(nTaskVars,1); 
     Rsquared_xval = nan(nTaskVars,xval_opt.numFolds);
     for vIdx = 1:nTaskVars
-        lm = fitlm(pca_full',X_full(vIdx,:),'intercept',true);   
-        significant_coeffs = (lm.Coefficients.pValue(2:end) < .01); 
-        coeffs = lm.Coefficients.Estimate(2:end);
-        beta(significant_coeffs,vIdx) = lm.Coefficients.Estimate(significant_coeffs);  
+        lm = fitlm(denoised_fr_mat_full',X_full(vIdx,:),'intercept',true);   
+%         significant_coeffs = (lm.Coefficients.pValue(2:end) < .01); 
+%         coeffs = lm.Coefficients.Estimate(2:end);
+%         beta(significant_coeffs,vIdx) = lm.Coefficients.Estimate(significant_coeffs);  
+        beta(:,vIdx) = lm.Coefficients.Estimate(2:end);
         p_values(vIdx) = anova(lm,'summary').pValue(2);  
         Rsquared(vIdx) = lm.Rsquared.Adjusted;  
         
         % now calculate cross-validated R^2 
         for f = 1:xval_opt.numFolds   
             % Fold training data
-            pca_full_train = TDR_struct(sIdx).pca_trials(foldid~= f); 
-            pca_full_train = cat(2,pca_full_train{:});  
+            fr_mat_full_train = TDR_struct(sIdx).denoised_fr_mat(foldid~= f); 
+            fr_mat_full_train = cat(2,fr_mat_full_train{:});  
             taskvars_train = TDR_struct(sIdx).X_trials(foldid ~= f);
             taskvars_train = cat(2,taskvars_train{:}); 
             % Fold test data
-            pca_full_test = TDR_struct(sIdx).pca_trials(foldid == f); 
-            pca_full_test = cat(2,pca_full_test{:});  
+            fr_mat_full_test = TDR_struct(sIdx).denoised_fr_mat(foldid == f); 
+            fr_mat_full_test = cat(2,fr_mat_full_test{:});  
             taskvars_test = TDR_struct(sIdx).X_trials(foldid == f);
             taskvars_test = cat(2,taskvars_test{:});
             
             % Fit model on training data 
-            fLm = fitlm(pca_full_train',taskvars_train(vIdx,:),'intercept',true);   
+            fLm = fitlm(fr_mat_full_train',taskvars_train(vIdx,:),'intercept',true);   
             fCoeffs = fLm.Coefficients.Estimate;  
             
             % Evaluate on test data
-            pca_full_test_ones = [ones(size(pca_full_test',1),1) pca_full_test' ]; 
-            taskvars_test_predictions = pca_full_test_ones * fCoeffs; 
+            fr_mat_full_test_ones = [ones(size(fr_mat_full_test',1),1) fr_mat_full_test' ]; 
+            taskvars_test_predictions = fr_mat_full_test_ones * fCoeffs; 
             SS_tot = sum((taskvars_test(vIdx,:) - mean(taskvars_test(vIdx,:))).^2); 
             SS_res = sum((taskvars_test(vIdx,:) - taskvars_test_predictions').^2); 
             Rsquared_xval(vIdx,f) = 1 - SS_res / SS_tot;
@@ -254,39 +255,8 @@ for i = 1:numel(mPFC_sessions)
     TDR_struct(sIdx).Rsquared_xval_sd = std(Rsquared_xval,[],2);
 end    
 
-%% Visualize decoding fidelity of different variables across sessions   
-regressors = ["Time on Patch","Time Since Reward","Reward Number","Total uL","0:500 msec Since Rew","500:1000 msec Since Rew","Reward Above Expected"]; 
-session_titles = cell(numel(mPFC_sessions),1); 
-for i = 1:numel(mPFC_sessions)
-    sIdx = mPFC_sessions(i);   
-    session_title = ['m' sessions{sIdx}(1:2) ' ' sessions{sIdx}(end-6) '/' sessions{sIdx}(end-5:end-4)];  
-    session_titles{i} = session_title;
-end
-tdr_cell = squeeze(struct2cell(TDR_struct))';
-Rsquared_xval_means = tdr_cell(mPFC_sessions,8);  
-Rsquared_xval_means = cat(2,Rsquared_xval_means{:});
-Rsquared_xval_sd = tdr_cell(mPFC_sessions,9);  
-Rsquared_xval_sd = cat(2,Rsquared_xval_sd{:});
-figure('Renderer', 'painters', 'Position', [300 300 1200 400]) 
-b = bar(Rsquared_xval_means','Facecolor','Flat');   hold on 
-taskVarColors = [0 0 1 ; .2 .4 1 ; 1 0 1 ;  .8 .2 .8 ; .7 0 0 ; 1 .3 .3 ; 1 0 0]; 
-for i = 1:size(Rsquared_xval_means',2)
-    x_pts = b(i).XEndPoints;  
-    errorbar(x_pts(Rsquared_xval_means(i,:) > 0),Rsquared_xval_means(i,Rsquared_xval_means(i,:) > 0)',Rsquared_xval_sd(i,Rsquared_xval_means(i,:) > 0)','k.','linewidth',1)  
-    b(i).CData = taskVarColors(i,:);
-end 
-legend(regressors) 
-
-title("Mean Cross-Validated R^2 for PCA Task Variable Regressions Across Days") 
-
-ylim([0,1])   
-ylabel("Cross-Validated R^2")
-xticks(1:length(Rsquared_xval_means))
-xticklabels(session_titles) 
-xtickangle(45)
-
 %% Perform regression against time 2 leave
-for i = 1:numel(mPFC_sessions) 
+for i = 18
     sIdx = mPFC_sessions(i);
     session = sessions{sIdx}(1:end-4); 
     dat = load(fullfile(paths.data,session)); 
@@ -306,7 +276,7 @@ for i = 1:numel(mPFC_sessions)
     
     % gather regression data
     r_ix_final = nan(nTrials,1);  
-    pca_postRew = cell(nTrials,1);
+    fr_mat_postRew = cell(nTrials,1);
     time2leave = cell(nTrials,1);  
     timeSinceRew = cell(nTrials,1); 
     for iTrial = 1:nTrials 
@@ -315,22 +285,22 @@ for i = 1:numel(mPFC_sessions)
         rew_indices = round(rew_sec(rew_sec >= patchstop_sec(iTrial) & rew_sec < (patchleave_sec(iTrial) - opt.patch_leave_buffer)) - patchstop_sec(iTrial)) + 1;
         r_ix_final(iTrial) = max([1 ; (rew_indices - 1) * 1000 / tbin_ms]);  
         
-        pca_postRew{iTrial} = TDR_struct(sIdx).pca_trials{iTrial}(:,r_ix_final(iTrial):end); 
+        fr_mat_postRew{iTrial} = TDR_struct(sIdx).denoised_fr_mat{iTrial}(:,r_ix_final(iTrial):end); 
         time2leave{iTrial} = fliplr(time2leave{iTrial}(r_ix_final(iTrial):end) - time2leave{iTrial}(r_ix_final(iTrial))); 
         timeSinceRew{iTrial} = fliplr(time2leave{iTrial}); % this looks wack but i think it's going to be important?
     end  
-    TDR_struct(sIdx).pca_postRew = pca_postRew; 
+    TDR_struct(sIdx).fr_mat_postRew = fr_mat_postRew; 
     TDR_struct(sIdx).time2leave = time2leave;  
     TDR_struct(sIdx).timeSinceRew_postRew = timeSinceRew;  
     
     % Gather data
     time2leave_full = cat(2,TDR_struct(sIdx).time2leave{:}); 
-    pca_postRewFull = cat(2,TDR_struct(sIdx).pca_postRew{:});   
-    nPCs = size(pca_postRewFull,1);   
+    fr_mat_postRewFull = cat(2,TDR_struct(sIdx).fr_mat_postRew{:});   
+    nPCs = size(fr_mat_postRewFull,1);   
     
     % fit time2leave linear model
     beta_time2leave = zeros(nPCs,1); 
-    lm = fitlm(pca_postRewFull',time2leave_full,'intercept',true);
+    lm = fitlm(fr_mat_postRewFull',time2leave_full,'intercept',true);
     significant_coeffs = (lm.Coefficients.pValue(2:end) < .01); 
     coeffs = lm.Coefficients.Estimate(2:end);
     beta_time2leave(significant_coeffs) = coeffs(significant_coeffs);    
@@ -359,23 +329,23 @@ for i = 1:numel(mPFC_sessions)
     % now calculate cross-validated R^2
     for f = 1:xval_opt.numFolds
         % Fold training data
-        pca_full_train = TDR_struct(sIdx).pca_postRew(foldid~= f);
-        pca_full_train = cat(2,pca_full_train{:});
+        fr_mat_full_train = TDR_struct(sIdx).fr_mat_postRew(foldid~= f);
+        fr_mat_full_train = cat(2,fr_mat_full_train{:});
         time2leave_train = TDR_struct(sIdx).time2leave(foldid ~= f);
         time2leave_train = cat(2,time2leave_train{:});
         % Fold test data
-        pca_full_test = TDR_struct(sIdx).pca_postRew(foldid == f);
-        pca_full_test = cat(2,pca_full_test{:});
+        fr_mat_full_test = TDR_struct(sIdx).fr_mat_postRew(foldid == f);
+        fr_mat_full_test = cat(2,fr_mat_full_test{:});
         time2leave_test = TDR_struct(sIdx).time2leave(foldid == f);
         time2leave_test = cat(2,time2leave_test{:});
         
         % Fit model on training data
-        fLm = fitlm(pca_full_train',time2leave_train,'intercept',true);
+        fLm = fitlm(fr_mat_full_train',time2leave_train,'intercept',true);
         fCoeffs = fLm.Coefficients.Estimate;
         
         % Evaluate on test data
-        pca_full_test_ones = [ones(size(pca_full_test',1),1) pca_full_test' ];
-        time2leave_test_predictions = pca_full_test_ones * fCoeffs;
+        fr_mat_full_test_ones = [ones(size(fr_mat_full_test',1),1) fr_mat_full_test' ];
+        time2leave_test_predictions = fr_mat_full_test_ones * fCoeffs;
         SS_tot = sum((time2leave_test - mean(time2leave_test)).^2);
         SS_res = sum((time2leave_test - time2leave_test_predictions').^2);
         Rsquared_time2leave_xval(f) = 1 - SS_res / SS_tot;
@@ -389,6 +359,45 @@ for i = 1:numel(mPFC_sessions)
     TDR_struct(sIdx).Rsquared_time2leave_xval_sd = std(Rsquared_time2leave_xval);
 end
 
+%% Visualize decoding fidelity of different variables across sessions   
+regressors = ["Time on Patch","Time Since Reward","Reward Number","Total uL","0:500 msec Since Rew","500:1000 msec Since Rew","Reward Above Expected","Time until Leave"]; 
+session_titles = cell(numel(mPFC_sessions),1); 
+for i = 1:numel(mPFC_sessions)
+    sIdx = mPFC_sessions(i);   
+    session_title = ['m' sessions{sIdx}(1:2) ' ' sessions{sIdx}(end-6) '/' sessions{sIdx}(end-5:end-4)];  
+    session_titles{i} = session_title;
+end
+tdr_cell = squeeze(struct2cell(TDR_struct))'; 
+Rsquared_xval_means = tdr_cell(mPFC_sessions,8);  
+Rsquared_xval_means = cat(2,Rsquared_xval_means{:}); 
+Rsquared_xval_sd = tdr_cell(mPFC_sessions,9);  
+Rsquared_xval_sd = cat(2,Rsquared_xval_sd{:}); 
+time2leave_xval_means = tdr_cell(mPFC_sessions,17);
+time2leave_xval_means = cat(1,time2leave_xval_means{:});
+time2leave_xval_sd = tdr_cell(mPFC_sessions,18);
+time2leave_xval_sd = cat(1,time2leave_xval_sd{:}); 
+ % add time to leave regression
+Rsquared_xval_means = cat(1,Rsquared_xval_means,time2leave_xval_means');
+Rsquared_xval_sd = cat(1,Rsquared_xval_sd,time2leave_xval_sd'); 
+
+figure('Renderer', 'painters', 'Position', [300 300 1200 400]) 
+b = bar(Rsquared_xval_means','Facecolor','Flat');   hold on 
+taskVarColors = [0 0 1 ; .2 .4 1 ; 1 0 1 ;  .8 .2 .8 ; .7 0 0 ; 1 .3 .3 ; 1 0 0;1 .7 0]; 
+for i = 1:size(Rsquared_xval_means',2)
+    x_pts = b(i).XEndPoints;  
+    errorbar(x_pts(Rsquared_xval_means(i,:) > 0),Rsquared_xval_means(i,Rsquared_xval_means(i,:) > 0)',Rsquared_xval_sd(i,Rsquared_xval_means(i,:) > 0)','k.','linewidth',1)  
+    b(i).CData = taskVarColors(i,:);
+end 
+legend(regressors) 
+
+title("Mean Cross-Validated R^2 for PCA Task Variable Regressions Across Days") 
+
+ylim([0,1])   
+ylabel("Cross-Validated R^2")
+xticks(1:length(Rsquared_xval_means))
+xticklabels(session_titles) 
+xtickangle(45)
+
 %% visualize correlation between axes  
 close all
 regressors = ["Time on Patch","Time Since Reward","Reward Number","Total uL","0:500 msec Since Rew","500:1000 msec Since Rew","Reward Above Expected"]; 
@@ -399,7 +408,7 @@ for i = 18
     X_full = cat(2,TDR_struct(sIdx).X_trials{:});
     figure('Renderer', 'painters', 'Position', [300 300 1200 400])
     subplot(1,3,1)
-    imagesc(corrcoef(TDR_struct(sIdx).beta)) 
+    imagesc(corrcoef(TDR_struct(sIdx).beta(all(abs(TDR_struct(sIdx).beta) > 0,2),:)))
     xticklabels(regressors) 
     xtickangle(45) 
     yticklabels(regressors) 
@@ -436,7 +445,7 @@ end
 close all 
 regressors = ["Time to Leave","Time on Patch","Time Since Reward","Reward Number","Total uL","0:500 msec Since Rew","500:1000 msec Since Rew","Reward Above Expected"]; 
 RdBu = flipud(cbrewer('div','RdBu',100)); 
-for i = 1:numel(mPFC_sessions)
+for i = 18
     sIdx = mPFC_sessions(i);   
     session_title = ['m' sessions{sIdx}(1:2) ' ' sessions{sIdx}(end-6) '/' sessions{sIdx}(end-5:end-4)]; 
     X_full = cat(2,TDR_struct(sIdx).X_trials{:});
@@ -453,12 +462,13 @@ for i = 1:numel(mPFC_sessions)
 end 
 
 %% Project PCs onto taskVar axes 
-RX_means = cell(numel(mPFC_sessions),6); 
-RXX_means = cell(numel(mPFC_sessions),12); 
-rIdx = [1,5]; % orthogonalize visualization axes 
-time2leave_projections = cell(numel(mPFC_sessions),1); 
+RX_means = cell(numel(mPFC_sessions),6,2);  
+RXNil_means = cell(numel(mPFC_sessions),6,2);  
+RXX_means = cell(numel(mPFC_sessions),12,2); 
+% rIdx = [1,5]; % orthogonalize visualization axes 
+time2leave_projections = cell(numel(mPFC_sessions),1);  
 
-for i = 1:numel(mPFC_sessions)
+for i = 18
     sIdx = mPFC_sessions(i);   
     session = sessions{sIdx}(1:end-4); 
     dat = load(fullfile(paths.data,session)); 
@@ -466,21 +476,24 @@ for i = 1:numel(mPFC_sessions)
     patchleave_ms = dat.patchCSL(:,3);  
     prts = patchleave_ms - patchstop_ms;  
     nTrials = length(prts);  
-    rew_barcode = rew_barcodes{sIdx};
+    rew_barcode = rew_barcodes{sIdx}; 
     
     TDR_struct(sIdx).projected_trials = cell(nTrials,1);  
     
-%     beta_orth = orth(TDR_struct(sIdx).beta(:,rIdx)); 
-    beta_orth = TDR_struct(sIdx).beta(:,rIdx); 
+%     beta_orth = orth(TDR_struct(sIdx).beta); 
+%     beta_orth = TDR_struct(sIdx).beta(:,rIdx); 
     
     for iTrial = 1:numel(TDR_struct(sIdx).X_trials) 
-%         TDR_struct(sIdx).projected_trials{iTrial} = TDR_struct(sIdx).beta' * TDR_struct(sIdx).pca_trials{iTrial};
-        TDR_struct(sIdx).projected_trials{iTrial} = beta_orth' * TDR_struct(sIdx).pca_trials{iTrial};
-    end
+        TDR_struct(sIdx).projected_trials{iTrial} = TDR_struct(sIdx).beta' * TDR_struct(sIdx).pca_trials{iTrial};
+%         TDR_struct(sIdx).projected_trials{iTrial} = beta_orth' * TDR_struct(sIdx).pca_trials{iTrial};
+    end 
+    nAxes = size(TDR_struct(sIdx).projected_trials{1},1); 
     
-    time2leave_projections{sIdx} = beta_orth' * TDR_struct(sIdx).beta_time2leave; % / norm(beta_orth' * TDR_struct(sIdx).beta_time2leave);
+    % projection of stimuli axes onto the time to leave axis
+    time2leave_projections{sIdx} = TDR_struct(sIdx).beta' * TDR_struct(sIdx).beta_time2leave; % / norm(beta_orth' * TDR_struct(sIdx).beta_time2leave);
     
-    % Now average projections over RX and RXX trials for visualization 
+    % Now average projections over RX and RXX trials for visualization  
+    sec1ix = round(1000 / tbin_ms); 
     sec2ix = round(2000 / tbin_ms); 
     sec3ix = round(3000 / tbin_ms);  
     rewsizes = [1,2,4];
@@ -494,41 +507,68 @@ for i = 1:numel(mPFC_sessions)
         trialsR00x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) <= 0 & rew_barcode(:,3) <= 0 & prts > 3.55);
         trialsRR0x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) <= 0 & prts > 3.55);
         trialsR0Rx = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == 0 & rew_barcode(:,3) == iRewsize & prts > 3.55);
-        trialsRRRx = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) == iRewsize & prts > 3.55);
+        trialsRRRx = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) == iRewsize & prts > 3.55); 
+        % Collect RXNil trials
+        trialsR0Nil = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) < 0 & prts > 1.55);
+        trialsRRNil = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) < 0 & prts > 1.55);
+        % RXNil (PRT - 1)s for stretching
+        medianPRT_R0Nil_ix = round((1000 * median(prts(trialsR0Nil) - 1) / tbin_ms)); 
+        medianPostRewRT_RRNil_ix = round((1000 * (median(prts(trialsRRNil) - 1)) / tbin_ms)); 
     
         % average RX
         trialsR0x_cell = cellfun(@(x) x(:,1:sec2ix),TDR_struct(sIdx).projected_trials(trialsR0x),'UniformOutput',false);
         trialsRRx_cell = cellfun(@(x) x(:,1:sec2ix),TDR_struct(sIdx).projected_trials(trialsRRx),'UniformOutput',false);
-        RX_means{sIdx,r} = mean(cat(3,trialsR0x_cell{:}),3); 
-        RX_means{sIdx,r + 3} = mean(cat(3,trialsRRx_cell{:}),3); 
+        RX_means{sIdx,r,1} = cat(3,trialsR0x_cell{:}); 
+        RX_means{sIdx,r,2} = mean(cat(3,trialsR0x_cell{:}),3);  
+        RX_means{sIdx,r + 3,1} = cat(3,trialsRRx_cell{:}); 
+        RX_means{sIdx,r + 3,2} = mean(cat(3,trialsRRx_cell{:}),3); 
         
-        % average RX
+        % average RXX
         trialsR00x_cell = cellfun(@(x) x(:,1:sec3ix),TDR_struct(sIdx).projected_trials(trialsR00x),'UniformOutput',false);
         trialsRR0x_cell = cellfun(@(x) x(:,1:sec3ix),TDR_struct(sIdx).projected_trials(trialsRR0x),'UniformOutput',false);
         trialsR0Rx_cell = cellfun(@(x) x(:,1:sec3ix),TDR_struct(sIdx).projected_trials(trialsR0Rx),'UniformOutput',false);
         trialsRRRx_cell = cellfun(@(x) x(:,1:sec3ix),TDR_struct(sIdx).projected_trials(trialsRRRx),'UniformOutput',false); 
-        RXX_means{sIdx,(r - 1) * 4 + 1} = mean(cat(3,trialsR00x_cell{:}),3); 
-        RXX_means{sIdx,(r - 1) * 4 + 2} = mean(cat(3,trialsRR0x_cell{:}),3); 
-        RXX_means{sIdx,(r - 1) * 4 + 3} = mean(cat(3,trialsR0Rx_cell{:}),3);  
-        RXX_means{sIdx,(r - 1) * 4 + 4} = mean(cat(3,trialsRRRx_cell{:}),3); 
+        RXX_means{sIdx,(r - 1) * 4 + 1,1} = cat(3,trialsR00x_cell{:}); 
+        RXX_means{sIdx,(r - 1) * 4 + 1,2} = mean(cat(3,trialsR00x_cell{:}),3);  
+        RXX_means{sIdx,(r - 1) * 4 + 2,1} = cat(3,trialsRR0x_cell{:});
+        RXX_means{sIdx,(r - 1) * 4 + 2,2} = mean(cat(3,trialsRR0x_cell{:}),3);  
+        RXX_means{sIdx,(r - 1) * 4 + 3,1} = cat(3,trialsR0Rx_cell{:}); 
+        RXX_means{sIdx,(r - 1) * 4 + 3,2} = mean(cat(3,trialsR0Rx_cell{:}),3);   
+        RXX_means{sIdx,(r - 1) * 4 + 4,1} = cat(3,trialsRRRx_cell{:});
+        RXX_means{sIdx,(r - 1) * 4 + 4,2} = mean(cat(3,trialsRRRx_cell{:}),3);  
+        
+        % average RXNil
+        R0Nil_tmpCell = cellfun(@(x) cat(2,x(:,1:sec1ix),imresize(x(:,sec1ix:end),[nAxes,medianPRT_R0Nil_ix])) ... 
+                                                            ,TDR_struct(sIdx).projected_trials(trialsR0Nil),'UniformOutput',false);
+        RRNil_tmpCell = cellfun(@(x) cat(2,x(:,1:sec1ix),imresize(x(:,sec1ix:end),[nAxes,medianPostRewRT_RRNil_ix])) ... 
+                                                            ,TDR_struct(sIdx).projected_trials(trialsRRNil),'UniformOutput',false); 
+        RXNil_means{sIdx,r,1} = R0Nil_tmpCell;
+        RXNil_means{sIdx,r,2} = mean(cat(3,R0Nil_tmpCell{:}),3);
+        RXNil_means{sIdx,r + 3,1} = RRNil_tmpCell; 
+        RXNil_means{sIdx,r + 3,2} = mean(cat(3,RRNil_tmpCell{:}),3);
     end
 end
 
 %% Visualize projected axes RX trials  
 colors = {[.5 1 1],[.75 .75 1],[1 .5 1],[0 1 1],[.5 .5 1],[1 0 1]};   
 regressors = ["Time on Patch","Time Since Reward","Reward Number","Total uL","0:500 msec Since Rew","500:1000 msec Since Rew","Reward Above Expected"]; 
-conds = 1:6;  
-close all 
-for i = 1:numel(mPFC_sessions)
+conds = 1:6;   
+rIdx = [1,5];
+close all  
+figure() 
+vis_sessions = [6 9 15 18];
+for vi = 1:numel(vis_sessions) 
+    i = vis_sessions(vi);
+    subplot(2,2,vi);hold on
     sIdx = mPFC_sessions(i);   
     session_title = ['m' sessions{sIdx}(1:2) ' ' sessions{sIdx}(end-6) '/' sessions{sIdx}(end-5:end-4)]; 
-    figure();hold on
+%     figure();hold on
     for condIdx = conds 
         if ~isempty(RX_means{sIdx,condIdx})
-            plot(RX_means{sIdx,condIdx}(1,:),RX_means{sIdx,condIdx}(2,:),'color',colors{condIdx},'linewidth',1.5);hold on
+            plot(RX_means{sIdx,condIdx,2}(rIdx(1),:),RX_means{sIdx,condIdx,2}(rIdx(2),:),'color',colors{condIdx},'linewidth',1.5);hold on
             sec_ticks = 50;   
-            plot(RX_means{sIdx,condIdx}(1,1),RX_means{sIdx,condIdx}(2,1), 'ko', 'markerSize', 6, 'markerFaceColor',colors{condIdx});
-            plot(RX_means{sIdx,condIdx}(1,sec_ticks),RX_means{sIdx,condIdx}(2,sec_ticks), 'kd', 'markerSize', 6, 'markerFaceColor',colors{condIdx}); 
+            plot(RX_means{sIdx,condIdx,2}(rIdx(1),1),RX_means{sIdx,condIdx,2}(rIdx(2),1), 'ko', 'markerSize', 6, 'markerFaceColor',colors{condIdx});
+            plot(RX_means{sIdx,condIdx,2}(rIdx(1),sec_ticks),RX_means{sIdx,condIdx,2}(rIdx(2),sec_ticks), 'kd', 'markerSize', 6, 'markerFaceColor',colors{condIdx}); 
         end
     end  
     
@@ -541,8 +581,8 @@ for i = 1:numel(mPFC_sessions)
     for condIdx = conds  
         if ~isempty(RX_means{sIdx,condIdx})
             % for arrow, figure out last two points, and (if asked) supress the arrow if velocity is below a threshold.
-            penultimatePoint = [RX_means{sIdx,condIdx}(1,end-1), RX_means{sIdx,condIdx}(2,end-1)];
-            lastPoint = [RX_means{sIdx,condIdx}(1,end), RX_means{sIdx,condIdx}(2,end)];
+            penultimatePoint = [RX_means{sIdx,condIdx,2}(rIdx(1),end-1), RX_means{sIdx,condIdx,2}(rIdx(2),end-1)];
+            lastPoint = [RX_means{sIdx,condIdx,2}(rIdx(1),end), RX_means{sIdx,condIdx,2}(rIdx(2),end)];
             vel = norm(lastPoint - penultimatePoint);
 
             axLim = [xl yl];
@@ -554,6 +594,108 @@ for i = 1:numel(mPFC_sessions)
     ylabel(sprintf("Projection onto %s Axis",regressors(rIdx(2)))) 
     title(session_title) 
     
-    plot(xlim,ylim * time2leave_projections{sIdx}(2) / time2leave_projections{sIdx}(1),'k--','linewidth',2) 
+    plot(xlim,ylim * time2leave_projections{sIdx}(rIdx(2)) / time2leave_projections{sIdx}(rIdx(1)),'k--','linewidth',2) 
 %     plot(xlim / time2leave_projections{sIdx}(1),ylim / time2leave_projections{sIdx}(2),'k--','linewidth',2)
+end  
+
+%% Visualize RXNil trials 
+rIdx = [1,5];  
+close all
+conds = 1:3; 
+for i = 9
+    sIdx = mPFC_sessions(i); 
+    session_title = ['m' sessions{sIdx}(1:2) ' ' sessions{sIdx}(end-6) '/' sessions{sIdx}(end-5:end-4)]; 
+    figure();hold on
+    for condIdx = conds 
+        if ~isempty(RXNil_means{sIdx,condIdx})
+            plot(RXNil_means{sIdx,condIdx,2}(rIdx(1),:),RXNil_means{sIdx,condIdx,2}(rIdx(2),:),'color',colors{condIdx},'linewidth',1.5);hold on
+            sec_ticks = 50:50:size(RXNil_means{sIdx,condIdx,2},2);  
+            plot(RXNil_means{sIdx,condIdx,2}(rIdx(1),1),RXNil_means{sIdx,condIdx,2}(rIdx(2),1), 'ko', 'markerSize', 6, 'markerFaceColor',colors{condIdx});
+            plot(RXNil_means{sIdx,condIdx,2}(rIdx(1),sec_ticks),RXNil_means{sIdx,condIdx,2}(rIdx(2),sec_ticks), 'kd', 'markerSize', 6, 'markerFaceColor',colors{condIdx}); 
+        end
+    end  
+    
+    % get axis limits to draw arrows
+    xl = xlim();
+    yl = ylim();
+    arrowSize = 5; 
+    arrowGain = 0;
+    arrowEdgeColor = 'k';
+    for condIdx = conds  
+        if ~isempty(RXNil_means{sIdx,condIdx})
+            % for arrow, figure out last two points, and (if asked) supress the arrow if velocity is below a threshold.
+            penultimatePoint = [RXNil_means{sIdx,condIdx,2}(rIdx(1),end-1), RXNil_means{sIdx,condIdx,2}(rIdx(2),end-1)];
+            lastPoint = [RXNil_means{sIdx,condIdx,2}(rIdx(1),end), RXNil_means{sIdx,condIdx,2}(rIdx(2),end)];
+            vel = norm(lastPoint - penultimatePoint);
+
+            axLim = [xl yl];
+            aSize = arrowSize + arrowGain * vel;  % if asked (e.g. for movies) arrow size may grow with vel
+            arrowMMC(penultimatePoint, lastPoint, [], aSize, axLim, colors{condIdx}, arrowEdgeColor); 
+        end
+    end
+    xlabel(sprintf("Projection onto %s Axis",regressors(rIdx(1))))
+    ylabel(sprintf("Projection onto %s Axis",regressors(rIdx(2)))) 
+    title(session_title) 
+    
+    plot(xlim,ylim * time2leave_projections{sIdx}(rIdx(2)) / time2leave_projections{sIdx}(rIdx(1)),'k--','linewidth',2) 
+    
 end
+
+
+%% Pool trials across days within mice
+mouse_groups = {1:2,6:8,[10 11 13],17:18,[23 25]}; % average over good regression sessions 
+RX_means_pooled = cell(numel(mouse_groups),6); 
+RXX_means_pooled = cell(numel(mouse_groups),12); 
+for m = 1:numel(mouse_groups)  
+    for cIdx = 1:6 
+        RX_means_pooled{m,cIdx} = mean(cat(3,RX_means{mouse_groups{m},cIdx,1}),3);
+    end  
+    for cIdx = 1:12 
+        RXX_means_pooled{m,cIdx} = mean(cat(3,RXX_means{mouse_groups{m},cIdx,1}),3);
+    end
+    
+end
+
+%% Visualize projected axes pooled RX trials 
+colors = {[.5 1 1],[.75 .75 1],[1 .5 1],[0 1 1],[.5 .5 1],[1 0 1]};   
+regressors = ["Time on Patch","Time Since Reward","Reward Number","Total uL","0:500 msec Since Rew","500:1000 msec Since Rew","Reward Above Expected"];  
+mouse_names = ["75","76","78","79","80"];
+conds = 1:6;   
+rIdx = [1,7];
+close all 
+for mIdx = 1:numel(mouse_groups)
+    figure();hold on
+    for condIdx = conds 
+        if ~isempty(RX_means_pooled{mIdx,condIdx})
+            plot(RX_means_pooled{mIdx,condIdx}(rIdx(1),:),RX_means_pooled{mIdx,condIdx}(rIdx(2),:),'color',colors{condIdx},'linewidth',1.5);hold on
+            sec_ticks = 50;   
+            plot(RX_means_pooled{mIdx,condIdx}(rIdx(1),1),RX_means_pooled{mIdx,condIdx}(rIdx(2),1), 'ko', 'markerSize', 6, 'markerFaceColor',colors{condIdx});
+            plot(RX_means_pooled{mIdx,condIdx}(rIdx(1),sec_ticks),RX_means_pooled{mIdx,condIdx}(rIdx(2),sec_ticks), 'kd', 'markerSize', 6, 'markerFaceColor',colors{condIdx}); 
+        end
+    end  
+    
+    % get axis limits to draw arrows
+    xl = xlim();
+    yl = ylim();
+    arrowSize = 5; 
+    arrowGain = 0;
+    arrowEdgeColor = 'k';
+    for condIdx = conds  
+        if ~isempty(RX_means_pooled{mIdx,condIdx})
+            % for arrow, figure out last two points, and (if asked) supress the arrow if velocity is below a threshold.
+            penultimatePoint = [RX_means_pooled{mIdx,condIdx}(rIdx(1),end-1), RX_means_pooled{mIdx,condIdx}(rIdx(2),end-1)];
+            lastPoint = [RX_means_pooled{mIdx,condIdx}(rIdx(1),end), RX_means_pooled{mIdx,condIdx}(rIdx(2),end)];
+            vel = norm(lastPoint - penultimatePoint);
+
+            axLim = [xl yl];
+            aSize = arrowSize + arrowGain * vel;  % if asked (e.g. for movies) arrow size may grow with vel
+            arrowMMC(penultimatePoint, lastPoint, [], aSize, axLim, colors{condIdx}, arrowEdgeColor); 
+        end
+    end
+    xlabel(sprintf("Projection onto %s Axis",regressors(rIdx(1))))
+    ylabel(sprintf("Projection onto %s Axis",regressors(rIdx(2)))) 
+    title(mouse_names(mIdx)) 
+    
+    plot(xlim,ylim * time2leave_projections{sIdx}(rIdx(2)) / time2leave_projections{sIdx}(rIdx(1)),'k--','linewidth',2) 
+%     plot(xlim / time2leave_projections{sIdx}(1),ylim / time2leave_projections{sIdx}(2),'k--','linewidth',2)
+end 

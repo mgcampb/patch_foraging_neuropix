@@ -62,7 +62,7 @@ for i = 1:numel(mPFC_sessions)
     end 
     
     TDR_struct(sIdx).pca_trials = pca_trialed{sIdx}; 
-end  
+end
 
 %% Generate "reward barcodes" to average firing rates  
 rew_barcodes = cell(numel(sessions),1);
@@ -131,7 +131,7 @@ for i = 1:numel(mPFC_sessions)
     end  
     TDR_struct(sIdx).pca_postLeave = pca_postLeave; 
     TDR_struct(sIdx).time2leave = time2leave;  
-    TDR_struct(sIdx).timeSinceRew_postLeave = timeSinceRew;  
+    TDR_struct(sIdx).timeSinceRew = timeSinceRew;  
     
     % now perform regression 
     time2leave_full = cat(2,TDR_struct(sIdx).time2leave{:}); 
@@ -152,7 +152,7 @@ end
 
 %% Fit models... analyze evolution of coefficients 
 close all
-for i = 18 % 1:numel(mPFC_sessions)
+for i = 1:numel(mPFC_sessions)
     sIdx = mPFC_sessions(i);    
     session_title = ['m' sessions{sIdx}(1:2) ' ' sessions{sIdx}(end-6) '/' sessions{sIdx}(end-5:end-4)]; 
     time2leave_full = cat(2,TDR_struct(sIdx).time2leave{:});  
@@ -196,20 +196,32 @@ for i = 18 % 1:numel(mPFC_sessions)
     TDR_struct(sIdx).beta_timesince = beta_timesince;   
     TDR_struct(sIdx).pvalue_timesince = pvalue_timesince; 
     TDR_struct(sIdx).Rsquared_timesince = Rsquared_timesince;
-    
-%     figure('Renderer', 'painters', 'Position', [300 300 1200 400]) 
+
     figure()  
     subplot(2,2,1)
-    imagesc(beta_timesince)
-    title("Time to leave decoders") 
+    imagesc(beta_timesince(1:10,:))
+    title("Time to leave decoders")  
+    xticks(1:10:length(timesince_bins))
+    xticklabels(timesince_bins(1:10:end))  
+    ylabel("PC Decoding Coefficients") 
+    xlabel("Time since reward bin")
     subplot(2,2,2)
     imagesc(corrcoef(beta_timesince))  
     title("Correlation between time to leave decoders")  
-    suptitle(session_title) 
+    suptitle(session_title)  
+    xticks(1:10:length(timesince_bins))
+    xticklabels(timesince_bins(1:10:end)) 
+    yticks(1:10:length(timesince_bins))
+    yticklabels(timesince_bins(1:10:end))  
+    caxis([-1,1]) 
+    colorbar()
     subplot(2,2,3) 
     plot(Rsquared_timesince,'linewidth',2) 
     hold on 
-    plot(find(pvalue_timesince < .01),Rsquared_timesince(pvalue_timesince < .01) + .1,'*') 
+    plot(find(pvalue_timesince < .01),Rsquared_timesince(pvalue_timesince < .01) + .1,'*')  
+    xticks(1:10:length(timesince_bins))
+    xticklabels(timesince_bins(1:10:end)) 
+    title("Time to Leave R^2 w.r.t. time since reward")
 end
 
 %% Heatmap R^2 for different timewindow decoders 

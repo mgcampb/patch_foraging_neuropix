@@ -356,7 +356,9 @@ for sIdx = 8
         xval_opt.rew_size = [1,2,4];
         % split trials into groups (num groups = opt.numFolds)
         [trials,~,IC] = unique(trials);
-        data_grp = nan(size(trials));
+        data_grp = nan(size(trials)); 
+        
+        data_grp = nan(nTrials,1); 
         shift_by = 0; % to make sure equal numbers of trials end up in each fold
         for i = 1:numel(xval_opt.rew_size)
             keep_this = rewsize == xval_opt.rew_size(i);
@@ -364,7 +366,6 @@ for sIdx = 8
             data_grp(keep_this) = data_grp_this(1:sum(keep_this)); % assign folds 1:10
             shift_by = shift_by - mod(sum(keep_this),xval_opt.numFolds); % shift which fold is getting fewer trials
         end
-
         foldid = data_grp(IC)';  
         
         threshold_step = .05;
