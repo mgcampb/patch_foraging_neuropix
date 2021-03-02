@@ -1,21 +1,24 @@
 addpath(genpath('C:\code\patch_foraging_neuropix\malcolm\functions\'));
 
 paths = struct;
-paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20201114_all_sessions_model_comparison';
-paths.figs = 'C:\figs\patch_foraging_neuropix\glm_pca_on_model_coefficients';
+% paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20201114_all_sessions_model_comparison';
+paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20210212_R_test\sessions';
+% paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20210208_original_vars';
+% paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20210210_model_comparison_new_glmnet';
+paths.figs = 'C:\figs\patch_foraging_neuropix\glm_pca_on_model_coefficients\run_20210212_R_test\no_pvalue_cutoff';
 if ~isfolder(paths.figs)
     mkdir(paths.figs);
 end
 
 opt = struct;
 opt.brain_region = 'PFC';
-opt.data_set = 'mc';
-opt.pval_thresh = 0.05;
+opt.data_set = 'mb';
+opt.pval_thresh = 2; % 0.05;
 
-opt.num_clust = 3; % for k means
+opt.num_clust = 5; % for k means
+opt.num_pcs = 3; % for k means
 
 %% get sessions
-
 session_all = dir(fullfile(paths.results,'*.mat'));
 session_all = {session_all.name}';
 for i = 1:numel(session_all)
@@ -43,24 +46,35 @@ uniq_mouse = unique(mouse);
 %% get significant cells from all sessions
 sesh_all = [];
 beta_all_sig = [];
+cellID_uniq = [];
 for i = 1:numel(session_all)
     fprintf('Session %d/%d: %s\n',i,numel(session_all),session_all{i});
     
     fit = load(fullfile(paths.results,session_all{i}));
     
     keep_cell = strcmp(fit.brain_region_rough,opt.brain_region);
+    good_cells_this = fit.good_cells(keep_cell);
     
-    sig = fit.pval_full_vs_base(keep_cell)<opt.pval_thresh & sum(abs(fit.beta_all(fit.base_var==0,keep_cell))>0)'>0;
-    
+    % sig = fit.pval_full_vs_base(keep_cell)<opt.pval_thresh & sum(abs(fit.beta_all(fit.base_var==0,keep_cell))>0)'>0;
+    sig = sum(abs(fit.beta_all(fit.base_var==0,keep_cell))>0)'>0;
+    sig_cells = good_cells_this(sig);
+
     beta_this = fit.beta_all(fit.base_var==0,keep_cell);
     beta_all_sig = [beta_all_sig beta_this(:,sig)];
     sesh_all = [sesh_all; i*ones(sum(sig),1)];
+    
+    cellID_uniq_this = cell(numel(sig_cells),1);
+    for j = 1:numel(sig_cells)
+        cellID_uniq_this{j} = sprintf('%s_c%d',fit.opt.session,sig_cells(j));
+    end
+    cellID_uniq = [cellID_uniq; cellID_uniq_this];
 
 end
 var_name = fit.var_name(fit.base_var==0)';
 
 %% perform PCA
 beta_norm = zscore(beta_all_sig);
+% beta_norm = beta_all_sig;
 [coeff,score,~,~,expl] = pca(beta_norm');
 
 %% visualize normalized beta matrix
@@ -82,6 +96,7 @@ for i = 1:size(beta_norm,2)
 end
 ylim([-0.5 max(ylim)]);
 box off
+colorbar
 saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 
 %% scree plot
@@ -172,7 +187,8 @@ saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 %% k means on top 2 PCs
 
 rng(1);
-kmeans_idx = kmeans(score(:,1:2),opt.num_clust);
+kmeans_idx = kmeans(score(:,1:opt.num_pcs),opt.num_clust);
+% kmeans_idx = kmeans(beta_all_sig',opt.num_clust);
 
 % reorder cluster numbers to match MB dataset
 if strcmp(opt.data_set,'mc') && strcmp(opt.brain_region,'PFC')
@@ -196,9 +212,40 @@ title('k means');
 
 saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 
+%% k means on top 2 PCs
+
+rng(1);
+kmeans_idx = kmeans(score(:,1:opt.num_pcs),opt.num_clust);
+% kmeans_idx = kmeans(beta_all_sig',opt.num_clust);
+
+% reorder cluster numbers to match MB dataset
+if strcmp(opt.data_set,'mc') && strcmp(opt.brain_region,'PFC')
+    kmeans_idx2 = kmeans_idx;
+    kmeans_idx(kmeans_idx2==1) = 3;
+    kmeans_idx(kmeans_idx2==2) = 1;
+    kmeans_idx(kmeans_idx2==3) = 2;
+end
+
+hfig = figure; hold on;
+hfig.Name = sprintf('k means on top 3 PCs %s cohort %s',opt.data_set,opt.brain_region);
+
+plot_col = lines(opt.num_clust);
+for i = 1:opt.num_clust
+    scatter3(score(kmeans_idx==i,1),score(kmeans_idx==i,2),score(kmeans_idx==i,3),[],plot_col(i,:)) %,'MarkerFaceAlpha',0.7);
+end
+xlabel('PC1');
+ylabel('PC2');
+zlabel('PC3');
+set(gca,'FontSize',14);
+title('k means');
+view([45 45]);
+grid on;
+
+saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
+
 %% plot coefficients for kmeans clusters
 
-hfig = figure('Position',[50 50 1500 900]);
+hfig = figure('Position',[50 50 1500 1250]);
 hfig.Name = sprintf('k means avg cluster coefficients %s cohort %s',opt.data_set,opt.brain_region);
 
 plot_col = cool(3);
@@ -234,4 +281,69 @@ set(gca,'TickLabelInterpreter','none');
 set(gca,'FontSize',14);
 saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 
-    
+%% Consistency of kmeans clusters
+% 
+% num_iter = 1000;
+% num_clust = 1:15;
+% 
+% pct_all = nan(numel(num_clust),1);
+% D_all = nan(numel(num_clust),1);
+% for ii = 1:numel(num_clust)
+%     clust_all = nan(size(score,1),num_iter);
+%     D_this = nan(num_iter,1);
+%     for iter = 1:num_iter
+%         [kmeans_idx,~,~,D] = kmeans(score(:,1:2),num_clust(ii));
+% 
+%         % reorder cluster numbers to be consistent across reps
+%         % order by mean on PC1
+%         means = nan(opt.num_clust,1);
+%         for i = 1:opt.num_clust
+%             means(i) = mean(score(kmeans_idx==i,1));
+%         end
+%         [~,sort_idx] = sort(means);
+%         kmeans_idx2 = nan(size(kmeans_idx));
+%         for i = 1:opt.num_clust
+%             kmeans_idx2(kmeans_idx==sort_idx(i)) = i;
+%         end
+%         clust_all(:,iter) = kmeans_idx2;
+%         D_this(iter) = mean(min(D,[],2));
+%     end
+% 
+%     D_all(ii) = mean(D_this);
+%     
+%     pct_clust = nan(size(clust_all,1),1);
+%     for i = 1:numel(pct_clust)
+%         pct_clust(i) = sum(clust_all(i,:)==mode(clust_all(i,:)))/num_iter;
+%     end
+%     
+%     pct_all(ii) = mean(pct_clust);
+% end
+% 
+% % take second derivative
+% secondDeriv = nan(numel(D_all)-2,1);
+% for ii = 2:numel(D_all)-1
+%     secondDeriv(ii-1) = D_all(ii+1)+D_all(ii-1)-2*D_all(ii);
+% end
+% [~,max_idx] = max(secondDeriv);
+% max_idx = max_idx+1;
+% 
+% hfig = figure('Position',[300 300 900 400]);
+% hfig.Name = sprintf('Picking num clusters %s cohort %s',opt.data_set,opt.brain_region);
+% 
+% subplot(1,2,1);
+% plot(pct_all,'ko');
+% ylabel('Avg. fraction in same cluster');
+% xlabel('Num. clusters');
+% set(gca,'FontSize',14);
+% box off;
+% 
+% subplot(1,2,2); hold on;
+% plot(D_all,'ko');
+% p = plot([max_idx max_idx],ylim,'b--');
+% legend(p,'Max. curvature');
+% ylabel('Avg. distance to nearest centroid');
+% xlabel('Num. clusters');
+% set(gca,'FontSize',14);
+% box off;
+% 
+% saveas(hfig,fullfile(paths.figs,hfig.Name),'png');

@@ -1,0 +1,58 @@
+paths = struct;
+
+paths.data = 'G:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
+paths.results = 'C:\data\patch_foraging_neuropix\spike_time_cross_correlation';
+if ~isfolder(paths.results)
+    mkdir(paths.results);
+end
+
+opt = struct;
+opt.num_shuf = 1000;
+session = '80_20200317';
+
+%%
+dat = load(fullfile(paths.data,session));
+
+%%
+good_cells = dat.sp.cids(dat.sp.cgs==2);
+
+%%
+
+minT = 0;
+maxT = max(dat.sp.st);
+binsize = 0.001;
+num_lags = 200;
+N_pairs = numel(good_cells)*(numel(good_cells)-1)/2;
+
+xcorr_shuf = nan(opt.num_shuf,num_lags*2+1);
+
+pairs_idx = combntns(1:numel(good_cells),2);
+
+tic
+
+i = 74675;
+    
+fprintf('computing xcorr for pair %d/%d\n',i,N_pairs);
+
+cell1 = good_cells(pairs_idx(i,1));
+cell2 = good_cells(pairs_idx(i,2));
+
+st1 = dat.sp.st(dat.sp.clu==cell1);
+st2 = dat.sp.st(dat.sp.clu==cell2);
+
+st1_bin = histcounts(st1,minT:binsize:maxT);
+st2_bin = histcounts(st2,minT:binsize:maxT);
+
+st_xcorr = xcorr(st1_bin,st2_bin,num_lags);
+st_xcorr(num_lags+1)=0;
+xcorr_this = st_xcorr;
+
+pb = ParforProgressbar(opt.num_shuf);
+parfor i = 1:opt.num_shuf
+    st1_shuf = mod(st1+unifrnd(20,maxT-20),maxT);
+    xcorr_shuf(i,:) = xcorr(st1_bin,st2_bin,num_lags);
+end
+
+pb.increment();
+
+toc

@@ -10,19 +10,17 @@
 
 % NOTE: currently only analyzes sessions with histology
 
-restoredefaultpath;
 paths = struct;
 paths.data = 'G:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
 paths.malcolm_functions = 'C:\code\patch_foraging_neuropix\malcolm\functions';
 addpath(genpath(paths.malcolm_functions));
-paths.glmnet = 'C:\code\glmnet_matlab_from_cluster';
+paths.glmnet = 'C:\code\glmnet_matlab';
 addpath(genpath(paths.glmnet));
-paths.spikes = 'C:\code\spikes';
-addpath(genpath(paths.spikes));
-paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20210210_model_comparison_new_glmnet';
+paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20210204_mikeModelFits';
 if ~isfolder(paths.results)
     mkdir(paths.results);
 end
+paths.mike_model_fits = 'C:\data\patch_foraging_behavior\mike_model_fits';
 
 % all sessions to analyze:
 session_all = dir(fullfile(paths.data,'*.mat'));
@@ -67,7 +65,7 @@ opt.alpha = 0.9; % weighting of L1 and L2 penalties in elastic net regularizatio
 % cross validation over trials
 opt.numFolds = 5; % split up trials into (roughly) equally sized fold, assigning (roughly) equal numbers of each reward size to each fold
 
-opt.compute_full_vs_base_pval = true; % whether to run model comparison between full and base model using nested cross validation
+opt.compute_full_vs_base_pval = false; % whether to run model comparison between full and base model using nested cross validation
 
 
 %% raised cosine basis for time since patch stop
@@ -101,48 +99,34 @@ for session_idx = 1:numel(session_all)
     dat = load(fullfile(paths.data,opt.session));
     good_cells_all = dat.sp.cids(dat.sp.cgs==2);    
 
-    if isfield(dat,'anatomy') && isfield(dat,'brain_region_rough')
+    %% anatomy
+    anatomy = dat.anatomy;
+    brain_region_rough = dat.brain_region_rough;
 
-        anatomy = dat.anatomy;
-        brain_region_rough = dat.brain_region_rough;
+    % get depth
+    [~, spike_depths_all] = templatePositionsAmplitudes(dat.sp.temps,dat.sp.winv,dat.sp.ycoords,dat.sp.spikeTemplates,dat.sp.tempScalingAmps);
+    spike_depths = nan(numel(good_cells_all),1);
+    for cidx = 1:numel(good_cells_all)
+        spike_depths(cidx) = median(spike_depths_all(dat.sp.clu==good_cells_all(cidx)));
+    end
 
-        % get depth
-        [~, spike_depths_all] = templatePositionsAmplitudes(dat.sp.temps,dat.sp.winv,dat.sp.ycoords,dat.sp.spikeTemplates,dat.sp.tempScalingAmps);
-        spike_depths = nan(numel(good_cells_all),1);
-        for cidx = 1:numel(good_cells_all)
-            spike_depths(cidx) = median(spike_depths_all(dat.sp.clu==good_cells_all(cidx)));
-        end
-        
-        if isfield(anatomy,'insertion_depth')
-            depth_from_surface = spike_depths-anatomy.insertion_depth;
-        else
-            depth_from_surface = nan;
-        end
-
+    if isfield(anatomy,'insertion_depth')
+        depth_from_surface = spike_depths-anatomy.insertion_depth;
     else
-        continue;
+        depth_from_surface = nan;
     end
 
     %% compute binned spikecounts for each cell
-    
+
     t = dat.velt;
     spikecounts_whole_session = nan(numel(t),numel(good_cells_all));
     for cIdx = 1:numel(good_cells_all)
         spike_t = dat.sp.st(dat.sp.clu==good_cells_all(cIdx));
         spikecounts_whole_session(:,cIdx) = histc(spike_t,t);
     end
-    
-    %% get patch num for each patch
-    
-    patch_num = nan(size(t));
-    for i = 1:size(dat.patchCSL,1)
-        % include one time bin before patch stop to catch the first reward
-        patch_num(t>=(dat.patchCSL(i,2)-opt.tbin) & t<=dat.patchCSL(i,3)) = i;
-    end
-    in_patch = ~isnan(patch_num);
 
     %% get size of each reward
-    
+
     dat.rew_size = nan(size(dat.rew_ts));
     rew_size_all = mod(dat.patches(:,2),10);
     for i = 1:numel(dat.rew_size)
@@ -152,9 +136,21 @@ for session_idx = 1:numel(session_all)
         end
     end
 
+    %% get patch num for each patch
+
+    patch_num = nan(size(t));
+    for i = 1:size(dat.patchCSL,1)
+        % include one time bin before patch stop to catch the first reward
+        patch_num(t>=(dat.patchCSL(i,2)-opt.tbin) & t<=dat.patchCSL(i,3)) = i;
+    end
+    in_patch = ~isnan(patch_num); % define "in-patch" times
+
+    %% Get Mike's model fit
+    mike_model_fits = load(fullfile(paths.mike_model_fits,sprintf('%s_DVs',opt.session)));
+
     %% make predictors for this session
     % group by type (in A) for forward search and dropout analysis
-    
+
     A = {}; % grouped by type for forward search and dropout
     grp_name = {'Intercept'};
     var_name = {'Intercept'};
@@ -185,7 +181,7 @@ for session_idx = 1:numel(session_all)
         var_name = [var_name,'LickRate'];
         base_var = [base_var 1];
     end
-    
+
     % PATCH POSITION
     if isfield(dat,'patch_pos')
         dat.patch_pos(isnan(dat.patch_pos)) = -4;
@@ -197,81 +193,95 @@ for session_idx = 1:numel(session_all)
     end
 
     % iterate over reward sizes
-    for rIdx = 1:numel(opt.rew_size)
+    for rIdx = numel(opt.rew_size) % 1:numel(opt.rew_size)
 
         rew_size_this = opt.rew_size(rIdx);
-        
-        % TIME SINCE PATCH STOP (patch onset)
-        patch_stop_binary = histc(dat.patchCSL(rew_size_all==rew_size_this,2),t);
-        patch_stop_conv = nan(numel(patch_stop_binary),opt.nbasis_patch_stop);
-        for i = 1:opt.nbasis_patch_stop
-            conv_this = conv(patch_stop_binary,bas_patch_stop(i,:));
-            patch_stop_conv(:,i) = conv_this(1:numel(patch_stop_binary));
-        end
-        X_this = patch_stop_conv;
-        A = [A, {X_this}];
-        grp_name = [grp_name,sprintf('TimeSincePatchStop_%uL',rew_size_this)];
-        for i = 1:opt.nbasis_patch_stop
-            var_name = [var_name,sprintf('PatchStopKern%d_%duL',i,rew_size_this)];
-        end
-        base_var = [base_var ones(1,opt.nbasis_patch_stop)];
 
-        % TIME SINCE REWARD KERNELS
-        rew_ts_this = dat.rew_ts(dat.rew_size==rew_size_this);
-        if ~opt.include_first_reward
-            rew_ts_this = rew_ts_this(min(abs(rew_ts_this-dat.patchCSL(:,2)'),[],2)>0.01);
-        end
-        rew_binary = histc(rew_ts_this,t);
-        rew_conv = nan(numel(rew_binary),opt.nbasis_rew);
-        % convolve with basis functions
-        for i = 1:opt.nbasis_rew
-            conv_this = conv(rew_binary,bas_rew(i,:));
-            rew_conv(:,i) = conv_this(1:numel(rew_binary));
-        end
-        if opt.cut_off_kernel_sequence_after_each_reward
-            if opt.basis_length_rew>1
-                % cut off kernels when new reward comes
-                [~,idx]=max(rew_conv>0,[],2);
-                for i = 1:size(rew_conv,1)
-                    rew_conv(i,idx(i)+2:end) = 0;
-                end
-            end
-        end
-        X_this = rew_conv;
-        A = [A, {X_this}];
-        grp_name = [grp_name,sprintf('TimeSinceRewardKernels_%uL',rew_size_this)];
-        for i = 1:opt.nbasis_rew
-            var_name = [var_name,sprintf('RewKern%d_%duL',i,rew_size_this)];
-        end
-        base_var = [base_var zeros(1,opt.nbasis_rew)];
+    %     % TIME SINCE PATCH STOP (patch onset)
+    %     patch_stop_binary = histc(dat.patchCSL(rew_size_all==rew_size_this,2),t);
+    %     patch_stop_conv = nan(numel(patch_stop_binary),opt.nbasis_patch_stop);
+    %     for i = 1:opt.nbasis_patch_stop
+    %         conv_this = conv(patch_stop_binary,bas_patch_stop(i,:));
+    %         patch_stop_conv(:,i) = conv_this(1:numel(patch_stop_binary));
+    %     end
+    %     X_this = patch_stop_conv;
+    %     A = [A, {X_this}];
+    %     grp_name = [grp_name,sprintf('TimeSincePatchStop_%uL',rew_size_this)];
+    %     for i = 1:opt.nbasis_patch_stop
+    %         var_name = [var_name,sprintf('PatchStopKern%d_%duL',i,rew_size_this)];
+    %     end
+    %     base_var = [base_var ones(1,opt.nbasis_patch_stop)];
+    % 
+    %     % TIME SINCE REWARD KERNELS
+    %     rew_ts_this = dat.rew_ts(dat.rew_size==rew_size_this);
+    %     if ~opt.include_first_reward
+    %         rew_ts_this = rew_ts_this(min(abs(rew_ts_this-dat.patchCSL(:,2)'),[],2)>0.01);
+    %     end
+    %     rew_binary = histc(rew_ts_this,t);
+    %     rew_conv = nan(numel(rew_binary),opt.nbasis_rew);
+    %     % convolve with basis functions
+    %     for i = 1:opt.nbasis_rew
+    %         conv_this = conv(rew_binary,bas_rew(i,:));
+    %         rew_conv(:,i) = conv_this(1:numel(rew_binary));
+    %     end
+    %     if opt.cut_off_kernel_sequence_after_each_reward
+    %         if opt.basis_length_rew>1
+    %             % cut off kernels when new reward comes
+    %             [~,idx]=max(rew_conv>0,[],2);
+    %             for i = 1:size(rew_conv,1)
+    %                 rew_conv(i,idx(i)+2:end) = 0;
+    %             end
+    %         end
+    %     end
+    %     X_this = rew_conv;
+    %     A = [A, {X_this}];
+    %     grp_name = [grp_name,sprintf('TimeSinceRewardKernels_%uL',rew_size_this)];
+    %     for i = 1:opt.nbasis_rew
+    %         var_name = [var_name,sprintf('RewKern%d_%duL',i,rew_size_this)];
+    %     end
+    %     base_var = [base_var zeros(1,opt.nbasis_rew)];
+    % 
+    % 
+    %     % DECISION VARIABLES (DVs)
+    %     % time on patch
+    %     t_on_patch = zeros(size(t));
+    %     t_on_patch(in_patch) = t(in_patch) - dat.patchCSL(patch_num(in_patch),2)';
+    %     t_on_patch(~ismember(patch_num,find(rew_size_all==rew_size_this)))=0;
+    %     % total rewards on patch so far
+    %     tot_rew = zeros(size(t));
+    %     for i = 1:size(dat.patchCSL,1)
+    %         tot_rew(patch_num==i) = cumsum(rew_binary(patch_num==i));
+    %     end
+    %     % time since reward
+    %     t_since_rew = zeros(size(t));
+    %     for i = 2:numel(t)
+    %         if rew_binary(i)
+    %             t_since_rew(i) = 0;
+    %         else
+    %             t_since_rew(i) = t_since_rew(i-1)+opt.tbin;
+    %         end
+    %     end
+    %     t_since_rew(~in_patch)=0;
+    %     t_since_rew(~ismember(patch_num,find(rew_size_all==rew_size_this)))=0;
+    %     X_this = [t_on_patch' tot_rew' t_since_rew'];
+    %     A = [A, {X_this}];
+    %     grp_name = [grp_name,sprintf('DVs_%uL',rew_size_this)];
+    %     var_name = [var_name,sprintf('TimeOnPatch_%duL',rew_size_this),sprintf('TotalRew_%duL',rew_size_this),sprintf('TimeSinceRew_%duL',rew_size_this)];
+    %     base_var = [base_var 0 0 0];
 
-
-        % DECISION VARIABLES (DVs)
-        % time on patch
-        t_on_patch = zeros(size(t));
-        t_on_patch(in_patch) = t(in_patch) - dat.patchCSL(patch_num(in_patch),2)';
-        t_on_patch(~ismember(patch_num,find(rew_size_all==rew_size_this)))=0;
-        % total rewards on patch so far
-        tot_rew = zeros(size(t));
-        for i = 1:size(dat.patchCSL,1)
-            tot_rew(patch_num==i) = cumsum(rew_binary(patch_num==i));
-        end
-        % time since reward
-        t_since_rew = zeros(size(t));
-        for i = 2:numel(t)
-            if rew_binary(i)
-                t_since_rew(i) = 0;
-            else
-                t_since_rew(i) = t_since_rew(i-1)+opt.tbin;
-            end
-        end
-        t_since_rew(~in_patch)=0;
-        t_since_rew(~ismember(patch_num,find(rew_size_all==rew_size_this)))=0;
-        X_this = [t_on_patch' tot_rew' t_since_rew'];
+        % MIKE MODEL FITS
+        X_this = [mike_model_fits.DVs.mod1{rIdx}'...
+            mike_model_fits.DVs.mod2{rIdx}'...
+            mike_model_fits.DVs.mod3{rIdx}'...
+            mike_model_fits.DVs.modH{rIdx}'];
         A = [A, {X_this}];
-        grp_name = [grp_name,sprintf('DVs_%uL',rew_size_this)];
-        var_name = [var_name,sprintf('TimeOnPatch_%duL',rew_size_this),sprintf('TotalRew_%duL',rew_size_this),sprintf('TimeSinceRew_%duL',rew_size_this)];
-        base_var = [base_var 0 0 0];
+        grp_name = [grp_name,sprintf('model_fits_%duL',rew_size_this)];
+        var_name = [var_name,sprintf('mod1_%duL',rew_size_this),...
+            sprintf('mod2_%duL',rew_size_this),...
+            sprintf('mod3_%duL',rew_size_this),...
+            sprintf('mod4_%duL',rew_size_this)];
+        base_var = [base_var zeros(1,4)];
+
     end
 
     % CONCATENATE ALL PREDICTORS
@@ -279,7 +289,7 @@ for session_idx = 1:numel(session_all)
     for i = 1:numel(A)
         X = [X A{i}];
     end
-    
+
     %% subselect data to fit GLM to (in patch times)
 
     % final predictor matrix
@@ -298,7 +308,6 @@ for session_idx = 1:numel(session_all)
     %% remove cells that don't pass minimum firing rate cutoff
 
     T = size(spikecounts,1)*opt.tbin;
-    %N = sum(spikecounts);
     Nbin = size(spikecounts,1);
     N = nan(3,size(spikecounts,2));
     N(1,:) = sum(spikecounts(1:floor(Nbin/3),:));
@@ -310,7 +319,6 @@ for session_idx = 1:numel(session_all)
     good_cells = good_cells_all(keep_cell);
     brain_region_rough = brain_region_rough(keep_cell);
     depth_from_surface = depth_from_surface(keep_cell);
-    % anatomy = anatomy_all(keep_cell,:));
     Ncells = numel(good_cells);
 
     %% Create fold indices (for cross validation)
@@ -328,8 +336,7 @@ for session_idx = 1:numel(session_all)
     foldid = trial_grp(IC);
 
     %% Fit GLM to each cell
-    
-    pb = ParforProgressbar(Ncells);
+
     beta_all = nan(size(X,2)+1,Ncells);
     pval_full_vs_base = nan(Ncells,1);
 
@@ -337,67 +344,64 @@ for session_idx = 1:numel(session_all)
     opt_glmnet = glmnetSet;
     opt_glmnet.alpha = opt.alpha; % alpha for elastic net
     run_times = nan(Ncells,1);
-    parfor cIdx = 1:Ncells
+    for cIdx = 1:Ncells
 
-        tic
-        
+        fprintf('analyzing cell %d/%d (elapsed time %0.1f sec)\n',cIdx,Ncells,toc);
+
+        start_time = toc;
+
         y = spikecounts(:,cIdx);
-        
+
         % make sure there are spikes in each fold
         spikes_in_fold = nan(opt.numFolds,1);
         for fIdx = 1:opt.numFolds
             spikes_in_fold(fIdx) = sum(y(foldid==fIdx))>0;
         end
-        
+
         if all(spikes_in_fold)
 
-            try
-                if opt.compute_full_vs_base_pval
-                    % iterate over cross-validation folds
-                    log_llh_diff = nan(opt.numFolds,1);
-                    for fIdx = 1:opt.numFolds
+            if opt.compute_full_vs_base_pval
+                % iterate over cross-validation folds
+                log_llh_diff = nan(opt.numFolds,1);
+                for fIdx = 1:opt.numFolds
 
-                        y_train = y(foldid~=fIdx);
-                        y_test = y(foldid==fIdx);
+                    y_train = y(foldid~=fIdx);
+                    y_test = y(foldid==fIdx);
 
-                        if sum(y_train)>0 && sum(y_test)>0
+                    if sum(y_train)>0 && sum(y_test)>0
 
-                            % FULL MODEL
-                            X_train = X_full(foldid~=fIdx,:);
-                            X_test = X_full(foldid==fIdx,:);
-                            fit = cvglmnet(X_train,y_train,'poisson',opt_glmnet,[],5);
-                            beta = cvglmnetCoef(fit);     
-                            r_test = exp([ones(size(X_test,1),1) X_test] * beta);
-                            log_llh_full_model = nansum(r_test-y_test.*log(r_test)+log(factorial(y_test)))/sum(y_test);
+                        % FULL MODEL
+                        X_train = X_full(foldid~=fIdx,:);
+                        X_test = X_full(foldid==fIdx,:);
+                        fit = cvglmnet(X_train,y_train,'poisson',opt_glmnet,[],5);
+                        beta = cvglmnetCoef(fit);     
+                        r_test = exp([ones(size(X_test,1),1) X_test] * beta);
+                        log_llh_full_model = nansum(r_test-y_test.*log(r_test)+log(factorial(y_test)))/sum(y_test);
 
-                            % BASE MODEL
-                            X_train = X_full(foldid~=fIdx,base_var==1);
-                            X_test = X_full(foldid==fIdx,base_var==1);
-                            fit = cvglmnet(X_train,y_train,'poisson',opt_glmnet,[],5);
-                            beta = cvglmnetCoef(fit);    
-                            r_test = exp([ones(size(X_test,1),1) X_test] * beta);
-                            log_llh_base_model = nansum(r_test-y_test.*log(r_test)+log(factorial(y_test)))/sum(y_test);
+                        % BASE MODEL
+                        X_train = X_full(foldid~=fIdx,base_var==1);
+                        X_test = X_full(foldid==fIdx,base_var==1);
+                        fit = cvglmnet(X_train,y_train,'poisson',opt_glmnet,[],5);
+                        beta = cvglmnetCoef(fit);    
+                        r_test = exp([ones(size(X_test,1),1) X_test] * beta);
+                        log_llh_base_model = nansum(r_test-y_test.*log(r_test)+log(factorial(y_test)))/sum(y_test);
 
-                            log_llh_diff(fIdx) = log_llh_full_model-log_llh_base_model;
-                        end
+                        log_llh_diff(fIdx) = log_llh_full_model-log_llh_base_model;
                     end
-                    % statistical test to see if full model does better than base model
-                    [~,pval_full_vs_base(cIdx)] = ttest(log_llh_diff);
                 end
-
-                % fit parameters to full data  
-                fit = cvglmnet(X_full,y,'poisson',opt_glmnet,[],[],foldid);
-                beta_all(:,cIdx) = cvglmnetCoef(fit);
-            catch
-                fprintf('error: cell %d\n',cIdx);
+                % statistical test to see if full model does better than base model
+                [~,pval_full_vs_base(cIdx)] = ttest(log_llh_diff);
             end
-        end
-        
-        run_times(cIdx) = toc;
 
-        pb.increment();
+            % fit parameters to full data  
+            fit = cvglmnet(X_full,y,'poisson',opt_glmnet,[],[],foldid);
+            beta_all(:,cIdx) = cvglmnetCoef(fit);
+
+        end
+
+        run_times(cIdx) = toc-start_time;
     end
-    
+
     % save results
     save(fullfile(paths.results,sprintf('%s',opt.session)),'opt','beta_all','pval_full_vs_base',...
         'var_name','base_var','X_full','Xmean','Xstd','spikecounts','good_cells',...

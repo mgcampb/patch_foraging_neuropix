@@ -1,27 +1,22 @@
-% script to fit GLM to all cells in a given list of sessions
-% using the glmnet package
-% MGC 8/27/2020
+% script to prepare data to fit GLMs on cluster with glmnet (R version)
+% MGC 2/12/21
 
-% 24 Aug 2020: Extended reward kernels to 2 sec, cut off when new reward
-% arrives
-% QUESTION: should we do this cutoff or not?
-
-% 25 Aug 2020: All reward sizes
-
-% NOTE: currently only analyzes sessions with histology
+% based on fit_glm_all_sessions.m
 
 restoredefaultpath;
 paths = struct;
 paths.data = 'G:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
 paths.malcolm_functions = 'C:\code\patch_foraging_neuropix\malcolm\functions';
 addpath(genpath(paths.malcolm_functions));
-paths.glmnet = 'C:\code\glmnet_matlab_from_cluster';
-addpath(genpath(paths.glmnet));
 paths.spikes = 'C:\code\spikes';
 addpath(genpath(paths.spikes));
-paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20210210_model_comparison_new_glmnet';
+paths.results = 'C:\data\patch_foraging_neuropix\GLM_input\20210212_original_vars';
 if ~isfolder(paths.results)
     mkdir(paths.results);
+end
+paths.results_for_R = fullfile(paths.results,'for_R');
+if ~isfolder(paths.results_for_R)
+    mkdir(paths.results_for_R);
 end
 
 % all sessions to analyze:
@@ -30,7 +25,6 @@ session_all = {session_all.name}';
 for i = 1:numel(session_all)
     session_all{i} = session_all{i}(1:end-4);
 end
-session_all = session_all(~contains(session_all,'mc'));
 
 % analysis opts
 opt = struct;
@@ -66,8 +60,6 @@ opt.alpha = 0.9; % weighting of L1 and L2 penalties in elastic net regularizatio
 
 % cross validation over trials
 opt.numFolds = 5; % split up trials into (roughly) equally sized fold, assigning (roughly) equal numbers of each reward size to each fold
-
-opt.compute_full_vs_base_pval = true; % whether to run model comparison between full and base model using nested cross validation
 
 
 %% raised cosine basis for time since patch stop
@@ -326,83 +318,14 @@ for session_idx = 1:numel(session_all)
         shift_by = shift_by-mod(sum(keep_this),opt.numFolds);
     end
     foldid = trial_grp(IC);
-
-    %% Fit GLM to each cell
     
-    pb = ParforProgressbar(Ncells);
-    beta_all = nan(size(X,2)+1,Ncells);
-    pval_full_vs_base = nan(Ncells,1);
-
-    % options for glmnet
-    opt_glmnet = glmnetSet;
-    opt_glmnet.alpha = opt.alpha; % alpha for elastic net
-    run_times = nan(Ncells,1);
-    parfor cIdx = 1:Ncells
-
-        tic
-        
-        y = spikecounts(:,cIdx);
-        
-        % make sure there are spikes in each fold
-        spikes_in_fold = nan(opt.numFolds,1);
-        for fIdx = 1:opt.numFolds
-            spikes_in_fold(fIdx) = sum(y(foldid==fIdx))>0;
-        end
-        
-        if all(spikes_in_fold)
-
-            try
-                if opt.compute_full_vs_base_pval
-                    % iterate over cross-validation folds
-                    log_llh_diff = nan(opt.numFolds,1);
-                    for fIdx = 1:opt.numFolds
-
-                        y_train = y(foldid~=fIdx);
-                        y_test = y(foldid==fIdx);
-
-                        if sum(y_train)>0 && sum(y_test)>0
-
-                            % FULL MODEL
-                            X_train = X_full(foldid~=fIdx,:);
-                            X_test = X_full(foldid==fIdx,:);
-                            fit = cvglmnet(X_train,y_train,'poisson',opt_glmnet,[],5);
-                            beta = cvglmnetCoef(fit);     
-                            r_test = exp([ones(size(X_test,1),1) X_test] * beta);
-                            log_llh_full_model = nansum(r_test-y_test.*log(r_test)+log(factorial(y_test)))/sum(y_test);
-
-                            % BASE MODEL
-                            X_train = X_full(foldid~=fIdx,base_var==1);
-                            X_test = X_full(foldid==fIdx,base_var==1);
-                            fit = cvglmnet(X_train,y_train,'poisson',opt_glmnet,[],5);
-                            beta = cvglmnetCoef(fit);    
-                            r_test = exp([ones(size(X_test,1),1) X_test] * beta);
-                            log_llh_base_model = nansum(r_test-y_test.*log(r_test)+log(factorial(y_test)))/sum(y_test);
-
-                            log_llh_diff(fIdx) = log_llh_full_model-log_llh_base_model;
-                        end
-                    end
-                    % statistical test to see if full model does better than base model
-                    [~,pval_full_vs_base(cIdx)] = ttest(log_llh_diff);
-                end
-
-                % fit parameters to full data  
-                fit = cvglmnet(X_full,y,'poisson',opt_glmnet,[],[],foldid);
-                beta_all(:,cIdx) = cvglmnetCoef(fit);
-            catch
-                fprintf('error: cell %d\n',cIdx);
-            end
-        end
-        
-        run_times(cIdx) = toc;
-
-        pb.increment();
-    end
-    
-    % save results
-    save(fullfile(paths.results,sprintf('%s',opt.session)),'opt','beta_all','pval_full_vs_base',...
+    %% save results
+    save(fullfile(paths.results,sprintf('%s',opt.session)),'opt',...
         'var_name','base_var','X_full','Xmean','Xstd','spikecounts','good_cells',...
         'trial_grp','foldid','bas_patch_stop','t_basis_patch_stop','bas_rew','t_basis_rew',...
-        'anatomy','run_times','depth_from_surface','fr','good_cells_all','brain_region_rough');
+        'anatomy','depth_from_surface','fr','good_cells_all','brain_region_rough');
+    alpha = opt.alpha;
+    save(fullfile(paths.results_for_R,sprintf('%s',opt.session)),'alpha','X_full','spikecounts','good_cells','foldid','base_var');
 
 end
 toc
