@@ -1,5 +1,5 @@
 %% Now decoding with single cell selection 
-
+%  Decode one cell at a time, then see how this compares to population
 %% Set paths
 paths = struct;
 paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/all_mice';
@@ -511,6 +511,7 @@ end
 
 %% Visualize relationship between population confusionmats and mutual information  
 close all
+var_names = ["Time Since Reward","Time on Patch","Time to Leave"];
 n = length(var_bins{1})-1;
 for iVar = 1
     for mIdx = 1:5

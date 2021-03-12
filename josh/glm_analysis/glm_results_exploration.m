@@ -2,7 +2,8 @@
 paths = struct;
 paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/all_mice'; 
 paths.glm_results = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results'; 
-paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/sig_cells/sig_cells_mb_cohort_PFC.mat';
+% paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/sig_cells/sig_cells_mb_cohort_PFC.mat';
+paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/patch_foraging_neuropix/josh/structs/sig_cells5cluster.mat';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 
 addpath('/Users/joshstern/Documents/UchidaLab_NeuralData');
@@ -45,7 +46,7 @@ clear meanR0a
 ctr = 1;
 for clustIdx = 1:3
 
-    psth_clust = psth_all(sig_cells.KMeansCluster==clustIdx);
+    psth_clust = psth_all(sig_cells.GMM_cluster==clustIdx); % psth_all(sig_cells.KMeansCluster==clustIdx);
    
     miny = 100;
     maxy = 0;

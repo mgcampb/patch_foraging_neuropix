@@ -106,7 +106,7 @@ function [transients_struct,unshuffled_peths,pvalue_peths] = driscoll_transient_
             ind = sub2ind(size(i_shufflePETH),r,c);
             shuffle_greater(ind) = shuffle_greater(ind) + 1; 
             
-            % add 1 to the locations where the shuffled PETH was greater than unshuffled
+            % add 1 to the locations where the shuffled PETH was less than unshuffled
             [r,c] = find(i_shufflePETH <= unshuffled_peth);
             ind = sub2ind(size(i_shufflePETH),r,c);
             shuffle_lesser(ind) = shuffle_lesser(ind) + 1;

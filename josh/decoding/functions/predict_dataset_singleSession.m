@@ -21,27 +21,30 @@ function [y_true_full,y_hat_full] = predict_dataset_singleSession(X_dataset,y_da
 
                     % get y_true_full  
                     y_true_full_tmp = cell(numel(dataset_opt.numFolds),1); 
-                    for kFold = 1:dataset_opt.numFolds 
-                        [~,~,~,y_test] = kfold_split_singleSession(X_dataset{mIdx}{i}{iVar}{iRewsize}{1}, ...
+                    non_empty_feature = find(cellfun(@(x) ~isempty(x),X_dataset{mIdx}{i}{iVar}{iRewsize}),1);
+                    for kFold = 1:dataset_opt.numFolds                        
+                        [~,~,~,y_test] = kfold_split_singleSession(X_dataset{mIdx}{i}{iVar}{iRewsize}{non_empty_feature}, ...
                                                                    y_dataset{mIdx}{i}{iVar}{iRewsize}, ...
-                                                                   foldid,kFold);
+                                                                   foldid,kFold); 
+                        
                         y_true_full_tmp{kFold} = y_test;                                       
                     end
                     y_true_full{mIdx}{i}{iVar}{iRewsize} = cat(1,y_true_full_tmp{:});
 
                     % now get y_hat for every feature
-                    for iFeature = 1:numel(dataset_opt.features{mIdx}{i})
-                        y_hat_full_tmp = cell(numel(dataset_opt.numFolds),1);
-                        for kFold = 1:dataset_opt.numFolds
-                            [~,X_test,~,~] = kfold_split_singleSession(X_dataset{mIdx}{i}{iVar}{iRewsize}{iFeature}, ...
-                                y_dataset{mIdx}{i}{iVar}{iRewsize}, ...
-                                foldid,kFold);
-                            y_hat = predict(models{mIdx}{i}{iVar}{iRewsize}{iFeature}{kFold},X_test);
-
-                            y_hat_full_tmp{kFold} = y_hat;
+                    for iFeature = 1:numel(dataset_opt.features{mIdx}{i}) 
+                        if ~isempty(X_dataset{mIdx}{i}{iVar}{iRewsize}{iFeature})
+                            y_hat_full_tmp = cell(numel(dataset_opt.numFolds),1);
+                            for kFold = 1:dataset_opt.numFolds
+                                [~,X_test,~,~] = kfold_split_singleSession(X_dataset{mIdx}{i}{iVar}{iRewsize}{iFeature}, ...
+                                    y_dataset{mIdx}{i}{iVar}{iRewsize}, ...
+                                    foldid,kFold);
+                                y_hat = predict(models{mIdx}{i}{iVar}{iRewsize}{iFeature}{kFold},X_test);
+                                
+                                y_hat_full_tmp{kFold} = y_hat;
+                            end
+                            y_hat_full{mIdx}{i}{iVar}{iRewsize}{iFeature} = cat(1,y_hat_full_tmp{:});
                         end
-                        y_hat_full{mIdx}{i}{iVar}{iRewsize}{iFeature} = cat(1,y_hat_full_tmp{:});  
-%                         disp(iFeature)
                     end
                 end
             end 

@@ -8,11 +8,6 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,opt,sIdx)
         preLeave_buffer = opt.preLeave_buffer;
     end  
     
-    cortex_only = true;  
-    if exist('opt','var') && isfield(opt,'cortex_only') 
-        cortex_only = opt.cortex_only;  
-    end 
-    
     region_selection = []; 
     if exist('opt','var') && isfield(opt,'region_selection') 
         region_selection = opt.region_selection;  
@@ -30,12 +25,6 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,opt,sIdx)
     fprintf('Loading session %d/%d: %s...\n',sIdx,numel(sessions),session);
     good_cells = dat.sp.cids(dat.sp.cgs==2); 
     
-    % subselect w/ cortex binary label
-    if cortex_only == true && isfield(dat,'anatomy')
-        good_cells = good_cells(dat.anatomy.cell_labels.Cortex);
-    elseif cortex_only == true
-        disp("Cortex only but no anatomy file!")
-    end 
     % subselect w/ rough brain region
     if ~isempty(region_selection) 
         good_cells = good_cells(dat.brain_region_rough == region_selection);

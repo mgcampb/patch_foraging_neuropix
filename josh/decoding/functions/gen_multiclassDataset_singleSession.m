@@ -22,22 +22,24 @@ function [X_dataset,y_dataset,xval_table] = gen_multiclassDataset_singleSession(
                     % labels
                     y_dataset{mIdx}{i}{iVar}{iRewsize} = y{mIdx}{i,iVar}(trials_keep);
 
-                    for iFeature = 1:numel(dataset_opt.features{mIdx}{i}) % Pull out feature
-                        if strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"KMeans Clusters")
-                            neurons_keep = ismember(X_clusters{mIdx}{i},dataset_opt.features{mIdx}{i}{iFeature}.ix); % neuron cluster mask
-                            X_session_feature = cellfun(@(x) x(neurons_keep,:),X{mIdx}{i,iVar},'UniformOutput',false); % X w/ neurons of interest
-                        elseif strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"CellID")
-                            neurons_keep = ismember(X_cellIDs{mIdx}{i},dataset_opt.features{mIdx}{i}{iFeature}.ix); % neuron cellID mask
-                            X_session_feature = cellfun(@(x) x(neurons_keep,:),X{mIdx}{i,iVar},'UniformOutput',false); % X w/ neurons of interest
-                        elseif strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"Velocity")
-                            X_session_feature = X_vel{mIdx}{i,iVar};
-                        elseif strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"Position")
-                            X_session_feature = X_pos{mIdx}{i,iVar};
-                        elseif strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"Acceleration")
-                            X_session_feature = X_accel{mIdx}{i,iVar};
+                    for iFeature = 1:numel(dataset_opt.features{mIdx}{i}) % Pull out feature 
+                        if ~isempty(dataset_opt.features{mIdx}{i}{iFeature})
+                            if strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"KMeans Clusters")
+                                neurons_keep = ismember(X_clusters{mIdx}{i},dataset_opt.features{mIdx}{i}{iFeature}.ix); % neuron cluster mask
+                                X_session_feature = cellfun(@(x) x(neurons_keep,:),X{mIdx}{i,iVar},'UniformOutput',false); % X w/ neurons of interest
+                            elseif strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"CellID")
+                                neurons_keep = ismember(X_cellIDs{mIdx}{i},dataset_opt.features{mIdx}{i}{iFeature}.ix); % neuron cellID mask
+                                X_session_feature = cellfun(@(x) x(neurons_keep,:),X{mIdx}{i,iVar},'UniformOutput',false); % X w/ neurons of interest
+                            elseif strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"Velocity")
+                                X_session_feature = X_vel{mIdx}{i,iVar};
+                            elseif strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"Position")
+                                X_session_feature = X_pos{mIdx}{i,iVar};
+                            elseif strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"Acceleration")
+                                X_session_feature = X_accel{mIdx}{i,iVar};
+                            end
+                            % features
+                            X_dataset{mIdx}{i}{iVar}{iRewsize}{iFeature} = X_session_feature(trials_keep); 
                         end
-                        % features
-                        X_dataset{mIdx}{i}{iVar}{iRewsize}{iFeature} = X_session_feature(trials_keep);
                     end
                 end
             end

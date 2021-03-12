@@ -19,9 +19,9 @@
 % End result: table of cells w/ cellIDs, significant peak ix 
 
 % to get persistent higher activity: 
-% 1. t-test for incr FR post prox cue: patch off 
-% 2. t-test for incr FR on patch 
-% 3. t-test for incr FR just during prox cue 
+% 1. poisson test for incr FR post prox cue: patch off 
+% 2. poisson test for incr FR on patch 
+% 3. poisson test for incr FR just during prox cue 
 
 %% set path
 paths = struct;
@@ -44,8 +44,8 @@ calcFR_opt.tstart = 0;
 tbin_ms = calcFR_opt.tbin*1000;
 sessions = dir(fullfile(paths.data,'*.mat'));
 sessions = {sessions.name}; 
-mPFC_sessions = [1:8 10:13 15:18 23 25];   
-mouse_grps = {1:2,3:8,10:13,15:18,[23 25]};  
+mPFC_sessions = [1:8 10:13 14:18 23 25];   
+mouse_grps = {1:2,3:8,10:13,14:18,[23 25]};  
 mouse_names = ["m75","m76","m78","m79","m80"]; 
 session_titles = cell(numel(mPFC_sessions),1); 
 for i = 1:numel(mPFC_sessions)
@@ -258,7 +258,7 @@ transients_table.pValue_cuePatch = pValue_cuePatch;
 transients_table.pValue_cue = pValue_cue;
 transients_table.pValue_patch = pValue_patch;
 
-alpha = .01; 
+alpha = .01; % 5 / numel(pValue_patch); 
 sig_cuePatch = nan(sum(s_nNeurons),1);  
 sig_cuePatch(pValue_cuePatch < alpha) = 1; 
 sig_cuePatch(pValue_cuePatch > 1-alpha) = 2;  
@@ -279,7 +279,7 @@ gscatter(mean_fr_mat_offPatch_pooled(cortex_binary),mean_fr_mat_cuePatch_pooled(
 % gscatter(mean_fr_mat_offPatch(cortex_binary),mean_fr_mat_cuePatch(cortex_binary),p_cuePatch(cortex_binary) < .01/nNeurons);
 h = refline(1,0); xlim([0 60]);ylim([0 60]);
 h.LineStyle = '--';h.Color = 'k'; h.LineWidth = 1.5;h.HandleVisibility = 'off'; 
-legend("Non-Significant","p < 0.1 Lower FR","p < 0.1 Higher FR")
+legend("Non-Significant","p < 0.01 Lower FR","p < 0.01 Higher FR")
 title("Cortex")
 xlabel("Mean FR Off Patch");ylabel("Mean FR Prox Cue + Patch");
 subplot(2,3,2) ; hold on
@@ -298,7 +298,7 @@ subplot(2,3,4) ; hold on
 gscatter(mean_fr_mat_offPatch_pooled(~cortex_binary),mean_fr_mat_cuePatch_pooled(~cortex_binary),sig_cuePatch(~cortex_binary),colors(4:6,:),'.oo',[2 2 2]);
 h = refline(1,0); xlim([0 60]);ylim([0 60]);
 h.LineStyle = '--';h.Color = 'k'; h.LineWidth = 1.5;h.HandleVisibility = 'off'; 
-legend("Non-Significant","p < 0.1 Lower FR","p < 0.1 Higher FR")
+legend("Non-Significant","p < 0.01 Lower FR","p < 0.01 Higher FR")
 title("Sub-Cortex")
 xlabel("Mean FR Off Patch");ylabel("Mean FR Prox Cue + Patch");
 subplot(2,3,5) ; hold on
@@ -327,7 +327,7 @@ for iVar = 1:3
     prop_sig(iVar+3,2) = mean(pValues_full(region == "Sub-PFC",iVar) > 1- alpha); 
 end
 
-new_testing = false; 
+new_testing = true; 
 if new_testing == true
     true_diff = prop_sig(:,1) - prop_sig(:,2);
     pvalue_perm = nan(length(true_diff),1);
@@ -383,15 +383,15 @@ for i = 1:numel(pvalue_perm)
     end
 end
 xtickangle(45);
-ylabel("Proportion of Significant Transient Cells") 
-title(sprintf("Proportion of Cells With Significant Task-Related Transients \n Separated by Region"))
+ylabel("Proportion of Significant Persistent Activity Cells") 
+title(sprintf("Proportion of Cells With Significant Task-Related Persistent Activity \n Separated by Region"))
 
 %% Visualize transient discovery PETH
 % separate training and visualization data 
 
 var_bins{1} = 0:.025:.75; 
-var_bins{2} = 0:.050:3; 
-var_bins{3} = 0:.050:3;  
+var_bins{2} = 0:.050:2; 
+var_bins{3} = 0:.050:2;  
 transient_opt = struct; 
 transient_opt.visualization = false;  
 transient_opt.preRew_buffer = round(3 * calcFR_opt.smoothSigma_time * 1000 / tbin_ms);
@@ -436,7 +436,8 @@ for mIdx = 1:numel(mouse_grps)
             transient_opt.vars = iVar; 
             [transient_struct_tmp,taskvar_peth_cell,pvalue_peth_cell] = driscoll_transient_discovery2(fr_mat_trials{mIdx}{i},task_vars_trialed{mIdx}{i},vis_trials,tbin_ms,var_bins,transient_opt);
             pos_peak_ix{iVar}(i_start:i_end,1) = transient_struct_tmp.peak_ix_pos;
-            taskvar_peth{iVar}(i_start:i_end,:) = taskvar_peth_cell{iVar}; 
+            taskvar_peth{iVar}(i_start:i_end,:) = taskvar_peth_cell{iVar};  
+            disp([mIdx i length(find(isnan(taskvar_peth_cell{iVar})))])
             pvalue_peth{iVar}(i_start:i_end,:) = pvalue_peth_cell{iVar}; 
             transient_struct_tmp = driscoll_transient_discovery2(fr_mat_trials{mIdx}{i},task_vars_trialed{mIdx}{i},sort_trials,tbin_ms,var_bins,transient_opt);
             pos_peak_ix{iVar}(i_start:i_end,2) = transient_struct_tmp.peak_ix_pos;
@@ -450,8 +451,8 @@ close(bar);
 %% Visualize results 
 close all
 var_names = ["Cue","Rew t = 0","Rew t = 1+"]; 
-ROI = "Sub-PFC"; 
-region_bool = strcmp(ROI,transients_table.Region) | ~strcmp(ROI,transients_table.Region);   
+ROI = "PFC"; 
+region_bool = strcmp(ROI,transients_table.Region); %  | ~strcmp(ROI,transients_table.Region);   
 pos_peak_ix_roi = cell(3,1);  
 taskvar_peth_roi = cell(3,1);  
 pvalue_peth_roi = cell(3,1);  
@@ -461,7 +462,11 @@ for iVar = 1:3
     pvalue_peth_roi{iVar} = pvalue_peth{iVar}(region_bool,:); 
 end
 
-for iVar = 1:3
+
+for iVar = 1:3 
+%     both_nonNan = all(~isnan(pos_peak_ix_roi{iVar}),2); 
+%     taskvar_peth_roi_nonNan = taskvar_peth_roi{iVar}(both_nonNan,:);
+%     pvalue_peth_roi_nonNan = pvalue_peth_roi{iVar}(both_nonNan,:);
     [~,train_sort] = sort(pos_peak_ix_roi{iVar}(:,1));  
     train_sort = train_sort(ismember(train_sort,find(~isnan(pos_peak_ix_roi{iVar}(:,1))))); % get rid of non significant cells
     [~,test_sort] = sort(pos_peak_ix_roi{iVar}(:,2));  
@@ -469,6 +474,7 @@ for iVar = 1:3
     figure() 
     ax(1) = subplot(2,2,1);
     imagesc(flipud(zscore(taskvar_peth_roi{iVar}(train_sort,:),[],2)))
+%     colorbar()
     caxis([-3 3])   
     xticks(1:10:numel(var_bins{iVar})) 
     xticklabels(var_bins{iVar}(1:10:end)) 
@@ -518,81 +524,81 @@ for iVar = 1:3
     xlabel(sprintf("Time Since %s Train Peak",var_names(iVar))) 
     ylabel(sprintf("Time Since %s Test Peak",var_names(iVar))) 
 end
-
-% cross cue sort reward responsivity?
-[~,cue_sort] = sort(pos_peak_ix_roi{1}(:,2));
-cue_sort = cue_sort(ismember(cue_sort,find(~isnan(pos_peak_ix_roi{1}(:,2))))); % get rid of non significant cells 
-for iVar = 2:3  
-    figure() 
-    [~,rew_sort] = sort(pos_peak_ix_roi{iVar}(:,1));
-    rew_sort = rew_sort(ismember(rew_sort,find(~isnan(pos_peak_ix_roi{iVar}(:,1))))); % get rid of non significant cells
-    subplot(2,2,1);
-    imagesc(flipud(zscore(taskvar_peth_roi{1}(cue_sort,:),[],2)))
-    caxis([-3,3]) 
-    title("Z-Scored Cue Responsivity") 
-    xticks(1:10:numel(var_bins{1})) 
-    xticklabels(var_bins{1}(1:10:end)) 
-    xlabel(sprintf("Time Since %s",var_names(1)))  
-    ylabel(sprintf("Time Since %s Sort",var_names(1)))
-    subplot(2,2,3);
-    imagesc(flipud(zscore(taskvar_peth_roi{1}(rew_sort,:),[],2)))  
-    caxis([-3,3]) 
-    title("Z-Scored Cue Responsivity") 
-    xticks(1:10:numel(var_bins{1})) 
-    xticklabels(var_bins{1}(1:10:end)) 
-    xlabel(sprintf("Time Since %s",var_names(1)))  
-    ylabel(sprintf("Time Since %s Sort",var_names(iVar)))
-    subplot(2,2,2)
-    imagesc(flipud(zscore(taskvar_peth_roi{iVar}(cue_sort,:),[],2)))
-    caxis([-3,3])
-    title(sprintf("Z-Scored Time Since %s Responsivity",var_names(iVar))) 
-    xticks(1:10:numel(var_bins{iVar})) 
-    xticklabels(var_bins{iVar}(1:10:end)) 
-    xlabel(sprintf("Time Since %s",var_names(iVar))) 
-    ylabel(sprintf("Time Since %s Sort",var_names(1)))
-    subplot(2,2,4) 
-    imagesc(flipud(zscore(taskvar_peth_roi{iVar}(rew_sort,:),[],2))) 
-    caxis([-3,3]) 
-    title(sprintf("Z-Scored Time Since %s Responsivity",var_names(iVar))) 
-    xticks(1:10:numel(var_bins{iVar})) 
-    xticklabels(var_bins{iVar}(1:10:end)) 
-    xlabel(sprintf("Time Since %s",var_names(iVar)))  
-    ylabel(sprintf("Time Since %s Sort",var_names(iVar)))
-end  
-
-mouse_num = cell2mat(arrayfun(@(x) str2double(transients_table.Mouse{x}(2:3)), 1:length(transients_table.Mouse),'un',0))'; 
-
-for glm_cluster = 1:3 
-    figure() 
-    glm_bool = transients_table.GLM_Cluster == glm_cluster; 
-    mouse_num_clust = mouse_num(glm_bool); 
-    for iVar = 1:3 
-        sig_bool = all(~isnan(pos_peak_ix{iVar}),2); 
-        sig_bool = sig_bool(glm_bool);
-        subplot(1,3,iVar);hold on
-        imagesc(log(pvalue_peth{iVar}(glm_bool,:))) 
-        colormap('bone') 
-        if iVar > 1
-            gscatter(zeros(length(find(glm_bool)),1),1:length(find(glm_bool)),mouse_num_clust,[],[],[],'HandleVisibility','off')   
-            gscatter(zeros(length(find(glm_bool)),1) + length(var_bins{iVar}),1:length(find(glm_bool)),sig_bool,[0 0 0;1 0 0],'o',10,'HandleVisibility','off')
-        else  
-            gscatter(zeros(length(find(glm_bool)),1),1:length(find(glm_bool)),mouse_num_clust) 
-            gscatter(zeros(length(find(glm_bool)),1) + length(var_bins{iVar}),1:length(find(glm_bool)),sig_bool,[0 0 0;1 0 0],'o',10,'HandleVisibility','off')
-            legend([mouse_names "No Sig Transient" "Sig Transient"])
-        end
-        ylim([0 length(find(glm_bool))])
-        xticks(1:10:numel(var_bins{iVar}))
-        xticklabels(var_bins{iVar}(1:10:end))
-        xlabel(sprintf("Time Since %s",var_names(iVar)))
-    end
-    suptitle(sprintf("GLM KMeans Cluster %i",glm_cluster))
-end
+% 
+% % cross cue sort reward responsivity?
+% [~,cue_sort] = sort(pos_peak_ix_roi{1}(:,2));
+% cue_sort = cue_sort(ismember(cue_sort,find(~isnan(pos_peak_ix_roi{1}(:,2))))); % get rid of non significant cells 
+% for iVar = 2:3  
+%     figure() 
+%     [~,rew_sort] = sort(pos_peak_ix_roi{iVar}(:,1));
+%     rew_sort = rew_sort(ismember(rew_sort,find(~isnan(pos_peak_ix_roi{iVar}(:,1))))); % get rid of non significant cells
+%     subplot(2,2,1);
+%     imagesc(flipud(zscore(taskvar_peth_roi{1}(cue_sort,:),[],2)))
+%     caxis([-3,3]) 
+%     title("Z-Scored Cue Responsivity") 
+%     xticks(1:10:numel(var_bins{1})) 
+%     xticklabels(var_bins{1}(1:10:end)) 
+%     xlabel(sprintf("Time Since %s",var_names(1)))  
+%     ylabel(sprintf("Time Since %s Sort",var_names(1)))
+%     subplot(2,2,3);
+%     imagesc(flipud(zscore(taskvar_peth_roi{1}(rew_sort,:),[],2)))  
+%     caxis([-3,3]) 
+%     title("Z-Scored Cue Responsivity") 
+%     xticks(1:10:numel(var_bins{1})) 
+%     xticklabels(var_bins{1}(1:10:end)) 
+%     xlabel(sprintf("Time Since %s",var_names(1)))  
+%     ylabel(sprintf("Time Since %s Sort",var_names(iVar)))
+%     subplot(2,2,2)
+%     imagesc(flipud(zscore(taskvar_peth_roi{iVar}(cue_sort,:),[],2)))
+%     caxis([-3,3])
+%     title(sprintf("Z-Scored Time Since %s Responsivity",var_names(iVar))) 
+%     xticks(1:10:numel(var_bins{iVar})) 
+%     xticklabels(var_bins{iVar}(1:10:end)) 
+%     xlabel(sprintf("Time Since %s",var_names(iVar))) 
+%     ylabel(sprintf("Time Since %s Sort",var_names(1)))
+%     subplot(2,2,4) 
+%     imagesc(flipud(zscore(taskvar_peth_roi{iVar}(rew_sort,:),[],2))) 
+%     caxis([-3,3]) 
+%     title(sprintf("Z-Scored Time Since %s Responsivity",var_names(iVar))) 
+%     xticks(1:10:numel(var_bins{iVar})) 
+%     xticklabels(var_bins{iVar}(1:10:end)) 
+%     xlabel(sprintf("Time Since %s",var_names(iVar)))  
+%     ylabel(sprintf("Time Since %s Sort",var_names(iVar)))
+% end  
+% 
+% mouse_num = cell2mat(arrayfun(@(x) str2double(transients_table.Mouse{x}(2:3)), 1:length(transients_table.Mouse),'un',0))'; 
+% 
+% for glm_cluster = 1:3 
+%     figure() 
+%     glm_bool = transients_table.GLM_Cluster == glm_cluster; 
+%     mouse_num_clust = mouse_num(glm_bool); 
+%     for iVar = 1:3 
+%         sig_bool = all(~isnan(pos_peak_ix{iVar}),2); 
+%         sig_bool = sig_bool(glm_bool);
+%         subplot(1,3,iVar);hold on
+%         imagesc(log(pvalue_peth{iVar}(glm_bool,:))) 
+%         colormap('bone') 
+%         if iVar > 1
+%             gscatter(zeros(length(find(glm_bool)),1),1:length(find(glm_bool)),mouse_num_clust,[],[],[],'HandleVisibility','off')   
+%             gscatter(zeros(length(find(glm_bool)),1) + length(var_bins{iVar}),1:length(find(glm_bool)),sig_bool,[0 0 0;1 0 0],'o',10,'HandleVisibility','off')
+%         else  
+%             gscatter(zeros(length(find(glm_bool)),1),1:length(find(glm_bool)),mouse_num_clust) 
+%             gscatter(zeros(length(find(glm_bool)),1) + length(var_bins{iVar}),1:length(find(glm_bool)),sig_bool,[0 0 0;1 0 0],'o',10,'HandleVisibility','off')
+%             legend([mouse_names "No Sig Transient" "Sig Transient"])
+%         end
+%         ylim([0 length(find(glm_bool))])
+%         xticks(1:10:numel(var_bins{iVar}))
+%         xticklabels(var_bins{iVar}(1:10:end))
+%         xlabel(sprintf("Time Since %s",var_names(iVar)))
+%     end
+%     suptitle(sprintf("GLM KMeans Cluster %i",glm_cluster))
+% end
 
 %% Now look for transient responsivity w/ shuffle testing
 
 var_bins{1} = 0:.025:.75; 
-var_bins{2} = 0:.050:3; 
-var_bins{3} = 0:.050:3;  
+var_bins{2} = 0:.050:2; 
+var_bins{3} = 0:.050:2;  
 transient_opt = struct; 
 transient_opt.visualization = false;  
 transient_opt.preRew_buffer = round(3 * calcFR_opt.smoothSigma_time * 1000 / tbin_ms);
@@ -641,7 +647,8 @@ for mIdx = 1:numel(mouse_grps)
         
         counter = counter + 1; 
         waitbar(counter/numel(mPFC_sessions),b) 
-    end
+    end 
+    fprintf("%s Transients Discovery Complete",mouse_names(mIdx))
 end 
 close(b);
 

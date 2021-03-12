@@ -45,7 +45,7 @@
 %  
 %  If you don't provide it, a '.times' field
 % is created that starts at 1.  'analyzeTimes' then refers to those times.
-% 
+%  
 % 'params' is optional, and can contain the following fields:
 %   .numPCs        Default is 6. The number of traditional PCs to use (all jPCs live within this space)
 %   .normalize     Default is 'true'.  Whether or not to normalize each neurons response by its FR range.
