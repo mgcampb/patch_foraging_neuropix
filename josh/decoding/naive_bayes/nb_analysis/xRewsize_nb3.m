@@ -84,7 +84,8 @@ for mIdx = 1:numel(analysis_sessions)
         session_rewsize = mod(data.patches(:,2),10); 
         patchstop_sec = data.patchCSL(:,2);
         patchleave_sec = data.patchCSL(:,3); 
-        floor_prts = floor(patchleave_sec - patchstop_sec); 
+        session_prts = patchleave_sec - patchstop_sec;
+        floor_prts = floor(session_prts); 
         rew_sec = data.rew_ts;
         nTrials = length(session_rewsize);
         
@@ -98,6 +99,17 @@ for mIdx = 1:numel(analysis_sessions)
             rew_barcode(iTrial , (floor_prts(iTrial) + 1):end) = -2; % set part of patch after leave = -2
             rew_barcode(iTrial , rew_indices+1) = session_rewsize(iTrial);
         end 
+        
+        % Make postRew prts and last rew_ix
+        last_rew_sec = nan(nTrials,1); 
+        i_last_rew_ix = nan(nTrials,1); 
+        for iTrial = 1:nTrials
+            rew_indices = round(rew_sec(rew_sec >= patchstop_sec(iTrial) & rew_sec < patchleave_sec(iTrial)) - patchstop_sec(iTrial)) + 1;
+            last_rew_sec(iTrial) = rew_indices(end)-1;
+            i_last_rew_ix(iTrial) = round(((rew_indices(end)-1) * 1000) / tbin_ms);
+        end
+        session_postRew_prts = session_prts - last_rew_sec; 
+        i_last_rew_ix(i_last_rew_ix == 0) = 1; 
         
         % collect RX and RXX reward schedule labels
         session_RXX = nan(nTrials,1);
@@ -125,6 +137,8 @@ for mIdx = 1:numel(analysis_sessions)
         % log trial/behavior information
         rewsize{mIdx}{i_i} = session_rewsize;
         RX{mIdx}{i_i} = floor(session_RXX/10);
+        last_rew_ix{mIdx}{i_i} = i_last_rew_ix;
+        postRew_prts{mIdx}{i_i} = session_postRew_prts; 
         last_rew_ix{mIdx}{i_i} = i_last_rew_ix;
     end
 end 
@@ -170,7 +184,7 @@ for i_feature = [1 2 5]
                 sem_decodedTime = 3 * nanstd(decodedTime_hat) / sqrt(nTrials_true_rewsize);
                 
                 subplot(numel(rewsizes),numel(analysis_mice),numel(analysis_mice) * (i_true_rewsize - 1) + m_ix);hold on
-%                 shadedErrorBar((1:analyze_ix)*tbin_ms/1000,mean_decodedTime,sem_decodedTime,'lineProps',{'color',cool3(i_trained_rewsize,:)})
+                shadedErrorBar((1:analyze_ix)*tbin_ms/1000,mean_decodedTime,sem_decodedTime,'lineProps',{'color',cool3(i_trained_rewsize,:)})
 
 %                 % for single trial visualization
 %                 decodedTime_hat = decodedTime_trainedRewsize(these_trials,:);
@@ -254,5 +268,75 @@ for i_feature = 1:5
         end
         title(sprintf("%s \n %s Model Fits",feature_names(i_feature),mouse_names(mIdx))) 
         ylim([0 4])
+    end
+end
+
+%% 3) The second part of this: constant threshold integration? Plot decoded time until leave
+% the main difference here is going to be that we will align to leave
+% analyze_ix = [4000/tbin_ms 4000/tbin_ms 15000 / tbin_ms 4000/tbin_ms 4000/tbin_ms];
+vis_rewsizes = [1 2 4];
+rdbu3 = cbrewer('div',"RdBu",10);
+rdbu3 = rdbu3([3 7 end],:);
+
+smoothing_sigma = 1;
+analyze_ix = round(3000 / tbin_ms);
+cool3 = cool(3);  
+for i_feature = 1:5
+    figure();hold on
+    for m_ix = 1:numel(analysis_mice)
+        mIdx = analysis_mice(m_ix); 
+        % load RX for pooled sessions (look at R0 here)
+        mouse_RX = cat(1,RX{mIdx}{:});
+        
+        % make sure these are the same!
+        decoded_time_hat = timeUntil_hat_xRewsize;
+        y_true_tmp = y_true{mIdx}(pool_sessions{mIdx},timePatch_ix);
+        true_time = cat(1,y_true_tmp{:}); 
+        pad_trueTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) nan(1,max(0,analyze_ix - length(x)))],true_time,'un',0);
+        true_time = cat(1,pad_trueTime{:});
+        
+        for i_trained_rewsize = 1:numel(rewsizes) 
+            % gather decoded time variable from decoder trained on i_rewsize
+            decodedTime = cellfun(@(x) x{i_trained_rewsize}, decoded_time_hat{mIdx},'un',0);
+            decodedTime = cat(1,decodedTime{:}); 
+            decodedTime_trainedRewsize = decodedTime(:,i_feature); % with i_feature
+            decodedTime_trainedRewsize = cat(1,decodedTime_trainedRewsize{:}); 
+            % concatenate and pad to make [nTrials x analyze_ix] sized matrix that will be nice to work with
+            pad_decodedTime = cellfun(@(x) [nan(max(0,analyze_ix - (length(x)-1)),1) ; x(end-min((length(x)-1),analyze_ix):end)]',decodedTime_trainedRewsize,'un',0);
+            decodedTime_trainedRewsize = var_dt * cat(1,pad_decodedTime{:}); % now this is a matrix
+            
+            for i_true_rewsize = 1:numel(rewsizes)
+                iRewsize_true = rewsizes(i_true_rewsize); 
+                these_trials = round(mouse_RX/10) == iRewsize_true;
+                nTrials_true_rewsize = length(find(these_trials)); 
+                
+                decodedTime_hat = decodedTime_trainedRewsize(these_trials,:); 
+                
+                mean_decodedTime = nanmean(decodedTime_hat);
+                sem_decodedTime = 3 * nanstd(decodedTime_hat) / sqrt(nTrials_true_rewsize);
+                
+                subplot(numel(rewsizes),numel(analysis_mice),numel(analysis_mice) * (i_true_rewsize - 1) + m_ix);hold on
+                shadedErrorBar((0:analyze_ix)*tbin_ms/1000,mean_decodedTime,sem_decodedTime,'lineProps',{'color',cool3(i_trained_rewsize,:)})
+
+%                 % for single trial visualization
+%                 decodedTime_hat = decodedTime_trainedRewsize(these_trials,:);
+%                 trueTime = true_time(these_trials,:);
+%                 for iTrial = 1:15 % nTrials_true_rewsize
+%                     plot(trueTime(iTrial,:),gauss_smoothing(decodedTime_hat(iTrial,:),smoothing_sigma),'color',cool3(i_trained_rewsize,:),'linewidth',.5)
+%                 end
+                
+                ylim([0 3]) 
+                plot([3 0],[0 3],'k--','linewidth',1.5)  
+                if m_ix == 1
+                    ylabel(sprintf("%i uL Trials \n Decoded time",iRewsize_true))
+                end 
+                if i_true_rewsize == 1 
+                    title(sprintf("%s \n %s",feature_names(i_feature),mouse_names(mIdx)))
+                end
+            end
+            if i_trained_rewsize == numel(rewsizes)
+                xlabel("True time")
+            end
+        end
     end
 end

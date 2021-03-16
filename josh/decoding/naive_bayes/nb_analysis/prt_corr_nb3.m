@@ -98,7 +98,7 @@ for mIdx = 1:numel(analysis_sessions)
                     session_RXNil(iTrial) = 10*session_rewsize(iTrial) + session_rewsize(iTrial);
                 end
             end
-            last_rew_sec(iTrial) = rew_indices(end);
+            last_rew_sec(iTrial) = rew_indices(end)-1;
             i_last_rew_ix(iTrial) = round(((rew_indices(end)-1) * 1000) / tbin_ms);
         end
         session_postRew_prts = session_prts - last_rew_sec; 
