@@ -38,7 +38,7 @@ if ~isempty(trials_vis)
     if sort == true
         avgPETH = avgPETH(neuron_order,:);  
     end
-    [~,peak_ix] = max(unsorted_peth'); 
+    [~,peak_ix] = min(unsorted_peth'); % max(unsorted_peth'); 
     peak_ix = peak_ix';
 else % just return matrix of zeros
     avgPETH = nan(nNeurons,ix_visualize); 

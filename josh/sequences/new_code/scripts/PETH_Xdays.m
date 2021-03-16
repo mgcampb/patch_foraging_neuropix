@@ -9,7 +9,7 @@ paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix
 % paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/all_mgc';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs 
 paths.rampIDs = 'Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/ramping_neurons';
-paths.transients_table = '/Users/joshstern/Documents/UchidaLab_NeuralData/patch_foraging_neuropix/josh/structs/transients_table.mat';
+paths.transients_table = '/Users/joshstern/Documents/UchidaLab_NeuralData/patch_foraging_neuropix/josh/structs/transients_table_gmm.mat';
 load(paths.transients_table); 
 addpath('/Users/joshstern/Documents/UchidaLab_NeuralData');
 paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/sig_cells/sig_cells_mb_cohort_PFC.mat';
@@ -122,8 +122,8 @@ for i = 1:numel(mPFC_sessions)
     
     % use results from driscoll selection
     session_table = transients_table(transients_table.Session == session_name & transients_table.Region == "PFC",:);
-    peak_rew1plus = session_table.Rew1plus_peak_pos;
-    glm_clust = session_table.GLM_Cluster;
+    peak_rew1plus = session_table.Rew1plus_peak_neg;
+    glm_clust = session_table.gmm_cluster;
     
     opt = struct;
     opt.dvar = "timesince";
@@ -152,7 +152,7 @@ for i = 1:numel(mPFC_sessions)
 end 
 
 %% Now collect PETH across days with cross validated sort  
-session_grps = {[1:2] ,[4 6 8:9],10:13,(14:18),[23 25],[1:18]}; % 
+session_grps = {[1:2] ,[4 6 8:9],10:13,(14:18),[23 25],[1:18  23 25]}; % 
 % mouse_grps = {1:2,3,[5 7],[4 6 8:9]};
 RXX_avgPETHs = cell(8,numel(session_grps));
 for iSessionGrp = 1:numel(session_grps)
@@ -173,7 +173,7 @@ end
 %% Now visualize  
 close all
 
-session_grp_titles = ["m75","m76","m78","m79","m80","No Mouse 80"];  
+session_grp_titles = ["m75","m76","m78","m79","m80","PFC"];  
 conditions = ["200","220","202","222","400","440","404","444"];
 
 for iMouse = 1:numel(session_grps)
@@ -191,7 +191,3 @@ for iMouse = 1:numel(session_grps)
 %         colormap(flipud(cbrewer('div','RdBu',100)))
     end 
 end
-
-%% Here, investigate early vs late leave RXNil  
-% need: prt, RXNil
-

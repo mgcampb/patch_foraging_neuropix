@@ -11,12 +11,12 @@ end
 
 opt = struct;
 opt.brain_region = 'PFC';
-opt.data_set = 'mc';
+opt.data_set = 'mb';
 
-paths.psth_save_path = [paths.sig_cells sprintf('/sig_cells_gmm_%s_cohort_%s',opt.data_set,opt.brain_region)]; 
-if ~isfolder(paths.psth_save_path)
-    mkdir(paths.psth_save_path);
-end
+paths.psth_save_path = [paths.sig_cells sprintf('/sig_cells_gmm_%s_cohort_%s/psth_all.mat',opt.data_set,opt.brain_region)]; 
+% if ~isfolder(paths.psth_save_path)
+%     mkdir(paths.psth_save_path);
+% end
 
 % PSTH windows
 opt.min_stop = -2;
@@ -26,7 +26,7 @@ opt.max_leave = 2;
 
 %% load sig_cells
 % load(paths.sig_cells);
-load(fullfile(paths.sig_cells,sprintf('sig_cells_gmm_%s_cohort_%s.mat',opt.data_set,opt.brain_region)));
+load(fullfile(paths.sig_cells,sprintf('sig_cells_table_gmm_%s_cohort_%s.mat',opt.data_set,opt.brain_region)));
 session_all = unique(sig_cells.Session);
 load(fullfile(paths.psth_save_path))
 
@@ -151,7 +151,7 @@ for clustIdx = 1:5
         miny = min(miny,min(ylim));
         maxy = max(maxy,max(ylim));
         
-        title(sprintf('Cluster%d, %d%d vs %d0',clustIdx,rew_size,rew_size,rew_size));
+        title(sprintf('Cluster %d, %d%d vs %d0',clustIdx,rew_size,rew_size,rew_size));
         
         if rIdx==1
             ylabel('Firing rate');

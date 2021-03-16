@@ -127,7 +127,7 @@ function [sorted_peth,neuron_order,unsorted_peth_norm] = peakSortPETH(FR_decVar,
         unsorted_peth_norm = unsorted_peth;
     end
     
-    [~,index] = max(unsorted_peth'); 
+    [~,index] = max(unsorted_peth'); % max(unsorted_peth'); 
     
     [~,neuron_order] = sort(index); 
     sorted_peth = unsorted_peth_norm(neuron_order,:); 

@@ -10,8 +10,8 @@ addpath('/Users/joshstern/Documents/UchidaLab_NeuralData');
 tbin_ms = .02 * 1000;
 sessions = dir(fullfile(paths.data,'*.mat'));
 sessions = {sessions.name}; 
-mPFC_sessions = [1:8 10:13 15:18 23 25];   
-mouse_grps = {1:2,3:8,10:13,15:18,[23 25]};  % note this should be 14:18
+mPFC_sessions = [1:8 10:13 14:18 23 25];   
+mouse_grps = {1:2,3:8,10:13,14:18,[23 25]};  % note this should be 14:18
 mouse_names = ["m75","m76","m78","m79","m80"];
 session_titles = cell(numel(mouse_grps),1);
 for mIdx = 1:numel(mouse_grps)
@@ -66,10 +66,6 @@ for mIdx = 1:5
                 timeUntil_hat{mIdx}{i}{trained_rewsize}{i_feature} = arrayfun(@(iTrial) y_hat_trials{mIdx}{i}{iTrial}{timeUntil_ix}{trained_rewsize}{i_feature},(1:nTrials)','un',0);
             end
         end 
-%         % just some slight reformatting for true time
-%         timeSince_true{mIdx}{i} = y{mIdx}{i,timeSince_ix}; 
-%         timePatch_true{mIdx}{i} = y{mIdx}{i,timePatch_ix}; 
-%         timeUntil_true{mIdx}{i} = cellfun(@(x) fliplr(x),y{mIdx}{i,timePatch_ix},'un',0); 
     end
 end 
 
@@ -271,7 +267,7 @@ for mIdx = 1:nMice
                 end
                 rew_counter = rew_counter + 1; 
             end   
-        end 
+        end
         
         % ok now go back and concatenate everyone
         for f = 1:numel(nonempty_features)
@@ -301,7 +297,6 @@ for mIdx = 1:nMice
         rew_time_rews{mIdx}{i} = session_rew_time_rews;
         rew_num_rews{mIdx}{i} = session_rew_num_rews;
     end 
-%     disp([mIdx i])
 end 
 
 %% 0.iii) Visualize predictions with scatterplot 
@@ -694,7 +689,7 @@ for i_feature = 4
                 
                 for iTrial = 1:15 % nTrials_true_rewsize
                     plot(trueTime_trueRewsize(iTrial,:),gauss_smoothing(decodedTime_trueRewsize(iTrial,:),smoothing_sigma),'color',cool3(i_trained_rewsize,:),'linewidth',.5)
-                    noise = .1*randn(1,analyze_ix);
+%                     noise = .1*randn(1,analyze_ix);
                     %                     scatter(noise + trueTime_trueRewsize(iTrial,:),noise + decodedTime_trueRewsize(iTrial,:),5,cool3(i_trained_rewsize,:))
                 end
                 if mIdx == 1
@@ -900,7 +895,7 @@ for i_feature = 1
     suptitle(feature_names(i_feature))
 end
 
-%% 4b) Decoded time since reward accuracy metrics
+%% 4b) Decoded time until leave accuracy metrics
 
 analyze_ix = round(5000/tbin_ms);
 leave_detection_thresholds = .1:.1:1; % 2;
@@ -1095,7 +1090,7 @@ decoded_time_hat = timePatch_hat_sameRewsize; % which time decoding are we analy
 true_time_trials = timePatch_true; 
 analyze_ix = round(1000 / tbin_ms); % what time window
 close all
-for mIdx = 1:numel(mouse_grps)
+for mIdx = 1:numel(mouse_grps)   
     % gather decoded time variable from clusters 1 and 2
     mouse_cluster2time = cellfun(@(x) x{2}, decoded_time_hat{mIdx}(pool_sessions{mIdx}),'un',0);
     mouse_cluster2time = cat(1,mouse_cluster2time{:});
@@ -1382,7 +1377,6 @@ end
 
 
 % rew num has greater effect than rew time?
-
 
 orRd3 = .9 * cbrewer('seq','OrRd',3);
 analyze_ix = round(2000 / tbin_ms); %

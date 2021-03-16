@@ -20,10 +20,10 @@ function y_hat_trials = predict_dataset_trialed(trial_decoding_features,X_struct
                 if ~isempty(dataset_opt.features{mIdx}{i}{iFeature})
                     if strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"KMeans Clusters")
                         neurons_keep = ismember(X_struct.X_clusters{mIdx}{i},dataset_opt.features{mIdx}{i}{iFeature}.ix); % neuron cluster mask
-                        X_session_feature{i_feature} = cellfun(@(x) x(neurons_keep,:),X_struct.X{mIdx}{i,1},'UniformOutput',false); % X w/ neurons of interest
+                        X_session_feature{i_feature} = cellfun(@(x) x(neurons_keep,:),X_struct.X{mIdx}{i,1},'un',0); % X w/ neurons of interest
                     elseif strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"CellID")
                         neurons_keep = ismember(X_struct.X_cellIDs{mIdx}{i},dataset_opt.features{mIdx}{i}{iFeature}.ix); % neuron cellID mask
-                        X_session_feature{i_feature} = cellfun(@(x) x(neurons_keep,:),X_struct.X{mIdx}{i,1},'UniformOutput',false); % X w/ neurons of interest
+                        X_session_feature{i_feature} = cellfun(@(x) x(neurons_keep,:),X_struct.X{mIdx}{i,1},'un',0); % X w/ neurons of interest
                     elseif strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"Velocity")
                         X_session_feature{i_feature} = X_struct.X_vel{mIdx}{i,1};
                     elseif strcmp(dataset_opt.features{mIdx}{i}{iFeature}.type,"Position")
@@ -67,7 +67,6 @@ function y_hat_trials = predict_dataset_trialed(trial_decoding_features,X_struct
                         end
                     end
                 end 
-%                 disp(iTrial)
             end
             fprintf("%s Trial Decoding Complete \n",session_titles{mIdx}{i})
         end 

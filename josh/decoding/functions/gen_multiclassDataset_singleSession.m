@@ -8,13 +8,13 @@ function [X_dataset,y_dataset,xval_table] = gen_multiclassDataset_singleSession(
         y_dataset{mIdx} = cell(numel(mouse_grps{mIdx}),1);
         for i = 1:numel(mouse_grps{mIdx}) % iterate over sessions
             rewsize = y_rewsize{mIdx}{i};
-            X_dataset{mIdx}{i} = cell(numel(dataset_opt.vars),1);
+            X_dataset{mIdx}{i} = cell(2,1);
             y_dataset{mIdx}{i} = cell(numel(dataset_opt.vars),1);
             for iVar = 1:numel(dataset_opt.vars) % iterate over variables
                 X_dataset{mIdx}{i}{iVar} = cell(numel(dataset_opt.rewsizes),1);
                 y_dataset{mIdx}{i}{iVar} = cell(numel(dataset_opt.rewsizes),1);    
                 for iRewsize = 1:numel(dataset_opt.rewsizes)  
-                    X_dataset{mIdx}{i}{iVar}{iRewsize} = cell(numel(dataset_opt.features{mIdx}{i}),1);
+                    X_dataset{mIdx}{i}{iVar_x}{iRewsize} = cell(numel(dataset_opt.features{mIdx}{i}),1);
                     y_dataset{mIdx}{i}{iVar}{iRewsize} = cell(numel(dataset_opt.features{mIdx}{i}),1);     
                     this_rewsize = dataset_opt.rewsizes(iRewsize);
                     trials_keep = rewsize == this_rewsize; % rewsize mask  
@@ -38,7 +38,7 @@ function [X_dataset,y_dataset,xval_table] = gen_multiclassDataset_singleSession(
                                 X_session_feature = X_accel{mIdx}{i,iVar};
                             end
                             % features
-                            X_dataset{mIdx}{i}{iVar}{iRewsize}{iFeature} = X_session_feature(trials_keep); 
+                            X_dataset{mIdx}{i}{iVar_x}{iRewsize}{iFeature} = X_session_feature(trials_keep); 
                         end
                     end
                 end

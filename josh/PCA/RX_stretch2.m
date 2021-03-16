@@ -12,9 +12,9 @@ paths = struct;
 paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/all_mice';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 paths.glm_results = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results'; 
-paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/sig_cells/sig_cells_mb_cohort_PFC.mat';
+paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/gmm/sig_cells_table_gmm_mb_cohort_PFC.mat';
 load(paths.sig_cells);  
-paths.transients_table = '/Users/joshstern/Documents/UchidaLab_NeuralData/patch_foraging_neuropix/josh/structs/transients_table.mat';
+paths.transients_table = '/Users/joshstern/Documents/UchidaLab_NeuralData/patch_foraging_neuropix/josh/structs/transients_table_gmm.mat';
 load(paths.transients_table);  
 addpath(genpath('/Users/joshstern/Documents/UchidaLab_NeuralData')); 
 
@@ -131,7 +131,7 @@ for mIdx = 1:numel(mouse_grps)
         RXNil{mIdx}{i} = i_RXNil;  
         % neuron information 
         session_table = transients_table(strcmp(transients_table.Session,session_title),:); 
-        GLM_cluster{mIdx}{i} = session_table.GLM_Cluster;
+        GLM_cluster{mIdx}{i} = session_table.gmm_cluster;
         brain_region{mIdx}{i} = session_table.Region;
         transient_peak{mIdx}{i} = [session_table.Rew0_peak_pos session_table.Rew1plus_peak_pos];
     end
@@ -309,7 +309,7 @@ figure()
 for m_ix = 1:numel(vis_mice)  
     mIdx = vis_mice(m_ix); 
     ax = subplot(1,numel(vis_mice),m_ix);hold on;
-    for tt = 3:numel(trialtypes) 
+    for tt = 1:numel(trialtypes) 
         plot3(ax,RXNil_pca{mIdx,tt}(1,:),RXNil_pca{mIdx,tt}(2,:),RXNil_pca{mIdx,tt}(3,:))
     end
     grid()
@@ -451,6 +451,7 @@ for tt = [2 4 6] %  [1 3 5]
     plot3(pooled_RXNil_pca{tt}(1,pre_cue_ix + median_cue_len:end-post_leave_ix), ...
           pooled_RXNil_pca{tt}(2,pre_cue_ix + median_cue_len:end-post_leave_ix), ... 
           pooled_RXNil_pca{tt}(3,pre_cue_ix + median_cue_len:end-post_leave_ix),'linewidth',1,'color',colors{tt}) 
+
 %     % post leave
 %     plot3(pooled_RXNil_pca{tt}(1,end-post_leave_ix:end), ...
 %           pooled_RXNil_pca{tt}(2,end-post_leave_ix:end), ...
@@ -493,6 +494,7 @@ end
 xlabel("PC1");ylabel("PC2");zlabel("PC3")
 xticklabels([]);yticklabels([]);zticklabels([]) 
 grid()  
+view(0,45)
 title("RXNil Trial Population Dynamics")
 
 %% Visualize pooled traces but now separate by reward at t = 0
@@ -517,7 +519,6 @@ for i_trial_grp = 1:2
             % trial
             plot(pooled_RXNil_pca{tt}(1,pre_cue_ix + median_cue_len:end-post_leave_ix), ...
                 pooled_RXNil_pca{tt}(second_pc,pre_cue_ix + median_cue_len:end-post_leave_ix),'linewidth',1,'color',colors{tt})
-            
             
             % add some marks to make the trajectories more interpretable
             plot(pooled_RXNil_pca{tt}(1,1),pooled_RXNil_pca{tt}(second_pc,1), ...
@@ -581,7 +582,7 @@ for tt = [1 3 5]
     % last, check out evolution of angle to original state
     angle = acos(pt0' * pooled_RXNil_pca{tt}(1:3,1:end-post_leave_ix) ./ (norm(pt0)*vecnorm(pooled_RXNil_pca{tt}(1:3,1:end-post_leave_ix))));
     angle = angle * 180 / pi; % convert to degrees
-    
+
     % plot dist from ITI evolution 
     subplot(3,1,1);hold on;grid()
     plot(1:pre_cue_ix,dist_from_init(1:pre_cue_ix),'color',[.5 .5 .5],'linewidth',1.5)
@@ -617,8 +618,25 @@ for tt = [1 3 5]
     xticklabels((0:25:length(dist_from_init))*tbin_sec - (pre_cue_sec))
     xlabel("Time since Cue Onset (sec)") 
     ylabel("Angle Traversed From ITI State (degrees)")  
-%     xline(pre_cue_ix + median(median_cue_len_lens) + 50,'linewidth',1.5,'color',[.6 .6 .6])
+%     xline(pre_cue_ix + median(median_cue_len_lens) + 50,'linewidth',1.5,'color',[.6 .6 .6])    
 end 
+
+%% 
+
+closest12 = dsearchn(pooled_RXNil_pca{3}(1:3,:)',pooled_RXNil_pca{1}(1:3,:)');
+closest24 = dsearchn(pooled_RXNil_pca{3}(1:3,:)',pooled_RXNil_pca{5}(1:3,:)');
+
+figure()
+subplot(1,2,1) ;hold on
+plot(closest12,'color',[0 1 1],'linewidth',2)
+plot(closest24,'color',[1 0 1],'linewidth',2)
+h = refline(1,0); 
+h.Color = [.4 .4 .4]; 
+h.LineStyle = '--'; 
+h.LineWidth = 1.5;
+subplot(1,2,2);hold on
+plot(dist12,'color',[0 1 1],'linewidth',2)
+plot(dist24,'color',[1 0 1],'linewidth',2)
 
 %% Pad trials per session with zeros so that we can bootstrap and see trial-by-trial variability in initial point
 
@@ -736,14 +754,14 @@ time_full = cat(1,pooled_time{:})';
 patch_onset_ix = median_cue_len + pre_cue_ix; 
 
 %% 1c) Corrcoef to find timecourse of significant correlation between z-scored PRT and neural activity 
-% multiple timepoints, one PC
+% multiple timepoints, one PC 
 t_centers = (-pre_cue_sec - median_cue_len * tbin_sec+tbin_sec):tbin_sec:1.5;
 t_edges = [(-pre_cue_sec - median_cue_len * tbin_sec+tbin_sec):tbin_sec:1.5 1.5+tbin_sec] - tbin_sec / 2;
 [~,~,binned_t] = histcounts(time_full,t_edges); 
 
 tts_of_interest = [20 22 40 44]; 
 these_trials = ismember(pooled_RXNil(~isnan(pooled_RXNil)),tts_of_interest);
-pcs = 1:6;
+pcs = 1:3;
 r_zscored_prt = nan(numel(pcs),max(binned_t)); 
 p_zscored_prt = nan(numel(pcs),max(binned_t));  
 p_lm = nan(max(binned_t),1); 
@@ -789,7 +807,7 @@ for t_of_interest = 0:.1:1.5
 % t_of_interest = .8;  
     tbin_of_interest = find(abs(t_centers - t_of_interest) < tbin_sec / 2,1); 
     neural_data = pca_full(1:3,binned_t == tbin_of_interest)';
-    disp(tbin_of_interest)
+%     disp(tbin_of_interest)
     scatter3(neural_data(:,1),neural_data(:,2),neural_data(:,3),[],zscore(RXNil_zscored_prts),'.') ;hold on 
 end
 
@@ -853,13 +871,13 @@ end
 %  - Subsample trials to get nBootstraps x nTrialtypes cell array of means
 %  - How many trials to choose?
 
-nSamples = 1000; 
+nSamples = 500; 
 sample_size = 50; 
 tt_lens = round(pre_cue_ix + median_cue_len + sec1plus_median_lens + post_leave_ix + 50); 
 dist_from_init_bootstrap = cell(numel(trialtypes),1);
 grad_bootstrap = cell(numel(trialtypes),1);
 angle_bootstrap = cell(numel(trialtypes),1);
-pcs = 1:3; 
+pcs = 1:2; 
 f = waitbar(0,'Drawing bootstrapped trajectory quantifications');
 for i_tt = 1:numel(trialtypes) 
     tt = trialtypes(i_tt);
@@ -892,24 +910,75 @@ for i_tt = 1:numel(trialtypes)
         % last, check out evolution of angle to original state
         angle = acos(pt0' * sample_pca(pcs,1:end) ./ (norm(pt0)*vecnorm(sample_pca(pcs,1:end))));
         angle_bootstrap{i_tt}(b,:) = real(angle) * 180 / pi; % convert to degrees 
-        waitbar((b + (i_tt-1)*nSamples) / (numel(trialtypes)*nSamples),f)
+        % 
+        waitbar((b + (i_tt-1)*nSamples) / (numel(trialtypes)*nSamples),f) 
     end 
 end 
+
 close(f);
 
-%% 2b) Now visualize dynamics with errorbars
+%% A better metric of trajectory speed
+
+these_trials1nil = find(pooled_RXNil == 10);
+these_nanPadded_trials1nil = pooled_nanPadded_trials(these_trials1nil);
+these_trials2nil = find(pooled_RXNil == 20);
+these_nanPadded_trials2nil = pooled_nanPadded_trials(these_trials2nil);
+these_trials4nil = find(pooled_RXNil == 40);
+these_nanPadded_trials4nil = pooled_nanPadded_trials(these_trials4nil);
+
+bootstrap_12ix = nan(nSamples,size(pooled_RXNil_pca{1},2));
+bootstrap_24ix = nan(nSamples,size(pooled_RXNil_pca{5},2));
+bootstrap_12dist = nan(nSamples,size(pooled_RXNil_pca{1},2));
+bootstrap_24dist = nan(nSamples,size(pooled_RXNil_pca{5},2));
+
+nSamples = 500; 
+sample_size = 50; 
+f = waitbar(0,'Drawing bootstrapped trajectory quantifications');
+for b = 1:nSamples
+    % 1nil
+    sample_trial_ix1nil = randi(length(these_trials1nil),sample_size,1);
+    sample_trials1nil = these_nanPadded_trials1nil(sample_trial_ix1nil);
+    mean_sample_trial1nil = nanmean(cat(3,sample_trials1nil{:}),3);
+    mean_sample_trial1nil(all(isnan(mean_sample_trial1nil),2),:) = 0;
+    mean_sample_trial_norm1nil = (mean_sample_trial1nil - means) ./ stds;
+    sample_pca1nil = coeff(:,1:10)' * mean_sample_trial_norm1nil;
+    % 2nil
+    sample_trial_ix2nil = randi(length(these_trials2nil),sample_size,1);
+    sample_trials2nil = these_nanPadded_trials2nil(sample_trial_ix2nil);
+    mean_sample_trial2nil = nanmean(cat(3,sample_trials2nil{:}),3);
+    mean_sample_trial2nil(all(isnan(mean_sample_trial2nil),2),:) = 0;
+    mean_sample_trial_norm2nil = (mean_sample_trial2nil - means) ./ stds;
+    sample_pca2nil = coeff(:,1:10)' * mean_sample_trial_norm2nil;
+    % 4nil
+    sample_trial_ix4nil = randi(length(these_trials4nil),sample_size,1);
+    sample_trials4nil = these_nanPadded_trials4nil(sample_trial_ix4nil);
+    mean_sample_trial4nil = nanmean(cat(3,sample_trials4nil{:}),3);
+    mean_sample_trial4nil(all(isnan(mean_sample_trial4nil),2),:) = 0;
+    mean_sample_trial_norm4nil = (mean_sample_trial4nil - means) ./ stds;
+    sample_pca4nil = coeff(:,1:10)' * mean_sample_trial_norm4nil;
+    
+    % bootstrap closest points
+    [bootstrap_12ix(b,:),bootstrap_12dist(b,:)] = dsearchn(sample_pca2nil(1:3,:)',sample_pca1nil(1:3,:)');
+    [bootstrap_24ix(b,:),bootstrap_24dist(b,:)]  = dsearchn(sample_pca2nil(1:3,:)',sample_pca4nil(1:3,:)');
+    waitbar(b/nSamples,f) 
+end
+close(f); 
+
+%% 2c) Plot errorbar Now visualize dynamics with errorbars
 
 close all
 tt_lens = cellfun(@(x) size(x,2),pooled_RXNil_pca);
 tt_justTrial_lens = tt_lens - median_cue_len - pre_cue_ix - post_leave_ix; % just stretch this part
 median_justTrial_len = floor(median(tt_justTrial_lens)); 
 vis_ix = 150; % just look at first second
-figure() ;hold on 
-vis_trial_grps = {1:2 3:4 5:6};
+% vis_trial_grps = {1:2 3:4 5:6};
+% vis_trial_grps = {1 2 3 4 5 6};
+vis_trial_grps = {1 3 5};
 % colors_tt = {[0 1 1],[.5 .5 1],[1 0 1]}; % {[.5 1 1],[0 1 1],[.75 .75 1],[.5 .5 1],[1 .5 1],[1 0 1]}; 
 colors_tt = {[.5 1 1],[0 1 1],[.75 .75 1],[.5 .5 1],[1 .5 1],[1 0 1]};  
 
-for i_tt = 1:numel(vis_trial_grps) % [1 3 5]
+figure() ;hold on 
+for i_tt = [1 3 5]
     % distance from initial point
 %     dist_from_init_tt = cellfun(@(x) x(:,1:vis_ix),dist_from_init_bootstrap(vis_trial_grps{i_tt}),'un',0);  
 %     dist_from_init_tt = cat(1,dist_from_init_tt{:});  
@@ -940,17 +1009,19 @@ for i_tt = 1:numel(vis_trial_grps) % [1 3 5]
     xlabel("Time since Cue Onset (sec)") 
     ylabel("Distance From ITI State (A.U.)") 
     title("Quantified RNil Trial Dynamics") 
+    set(gca,'FontSize',13)
 
-    % plot gradient evolution
-    subplot(3,1,2);hold on;grid()
-    shadedErrorBar(1:pre_cue_ix,mean_grad(1:pre_cue_ix),ci_grad(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
-    shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_grad(pre_cue_ix:pre_cue_ix + median_cue_len),ci_grad(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5}) 
-    tt_len = length(mean_grad((median_cue_len+pre_cue_ix):end));
-    shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_grad((pre_cue_ix+median_cue_len):end),ci_grad((pre_cue_ix+median_cue_len):end),'lineprops',{'color',colors_tt{i_tt},'linewidth',1.5}) 
-    xticks(0:25:length(mean_grad)) 
-    xticklabels((0:25:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
-    xlabel("Time since Cue Onset (sec)") 
-    ylabel("Magnitude of Gradient (A.U.)") 
+%     % plot gradient evolution
+%     subplot(3,1,2);hold on;grid()
+%     shadedErrorBar(1:pre_cue_ix,mean_grad(1:pre_cue_ix),ci_grad(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
+%     shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_grad(pre_cue_ix:pre_cue_ix + median_cue_len),ci_grad(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5}) 
+%     tt_len = length(mean_grad((median_cue_len+pre_cue_ix):end));
+%     shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_grad((pre_cue_ix+median_cue_len):end),ci_grad((pre_cue_ix+median_cue_len):end),'lineprops',{'color',colors_tt{i_tt},'linewidth',1.5}) 
+%     xticks(0:25:length(mean_grad)) 
+%     xticklabels((0:25:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
+%     xlabel("Time since Cue Onset (sec)") 
+%     ylabel("Magnitude of Gradient (A.U.)")  
+%     ylim([0 1.5])
     
 %     % plot angle evolution
     subplot(3,1,3);hold on;grid()
@@ -962,4 +1033,94 @@ for i_tt = 1:numel(vis_trial_grps) % [1 3 5]
     xticklabels((0:25:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
     xlabel("Time since Cue Onset (sec)") 
     ylabel("Angle Traversed From ITI State (degrees)")  
-end 
+    set(gca,'FontSize',13)
+end  
+
+mean_bootstrap_12ix = mean(bootstrap_12ix); 
+ci_bootstrap_12ix = 1.96 * std(bootstrap_12ix); 
+mean_bootstrap_24ix = mean(bootstrap_24ix); 
+ci_bootstrap_24ix = 1.96 * std(bootstrap_24ix); 
+
+mean_bootstrap_12dist = mean(bootstrap_12dist); 
+ci_bootstrap_12dist = 1.96 * std(bootstrap_12dist); 
+mean_bootstrap_24dist = mean(bootstrap_24dist); 
+ci_bootstrap_24dist = 1.96 * std(bootstrap_24dist); 
+
+subplot(3,1,2);hold on; grid()
+shadedErrorBar(1:pre_cue_ix,mean_bootstrap_12ix(1:pre_cue_ix),ci_bootstrap_12ix(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
+shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_12ix(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_12ix(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
+tt_len = length(mean_bootstrap_12ix((median_cue_len+pre_cue_ix):end));
+shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_12ix((pre_cue_ix+median_cue_len):end),ci_bootstrap_12ix((pre_cue_ix+median_cue_len):end),'lineprops',{'color',colors{1},'linewidth',1.5})
+
+shadedErrorBar(1:pre_cue_ix,mean_bootstrap_24ix(1:pre_cue_ix),ci_bootstrap_24ix(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
+shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_24ix(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_24ix(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
+tt_len = length(mean_bootstrap_24ix((median_cue_len+pre_cue_ix):end));
+shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_24ix((pre_cue_ix+median_cue_len):end),ci_bootstrap_24ix((pre_cue_ix+median_cue_len):end),'lineprops',{'color',colors{5},'linewidth',1.5})
+
+xticks(0:25:length(mean_angle))
+xticklabels((0:25:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
+yticks(0:50:length(mean_angle))
+yticklabels((0:50:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
+xlabel("Time since Cue Onset (sec)")
+ylabel("Closest timepoint")
+h = refline(1,0); 
+h.Color = colors{3}; 
+h.LineStyle = '-'; 
+h.LineWidth = 2;
+set(gca,'FontSize',13)
+
+%% take mean and std error of mean for "KiNeT" quantifications
+mean_bootstrap_12ix = mean(bootstrap_12ix); 
+ci_bootstrap_12ix = 1.96 * std(bootstrap_12ix); 
+mean_bootstrap_24ix = mean(bootstrap_24ix); 
+ci_bootstrap_24ix = 1.96 * std(bootstrap_24ix); 
+
+mean_bootstrap_12dist = mean(bootstrap_12dist); 
+ci_bootstrap_12dist = 1.96 * std(bootstrap_12dist); 
+mean_bootstrap_24dist = mean(bootstrap_24dist); 
+ci_bootstrap_24dist = 1.96 * std(bootstrap_24dist); 
+
+shadedErrorBar(1:pre_cue_ix,mean_bootstrap_12ix(1:pre_cue_ix),ci_bootstrap_12ix(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
+shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_12ix(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_12ix(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
+tt_len = length(mean_bootstrap_12ix((median_cue_len+pre_cue_ix):end));
+shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_12ix((pre_cue_ix+median_cue_len):end),ci_bootstrap_12ix((pre_cue_ix+median_cue_len):end),'lineprops',{'color',[0 1 1],'linewidth',1.5})
+
+shadedErrorBar(1:pre_cue_ix,mean_bootstrap_24ix(1:pre_cue_ix),ci_bootstrap_24ix(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
+shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_24ix(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_24ix(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
+tt_len = length(mean_bootstrap_24ix((median_cue_len+pre_cue_ix):end));
+shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_24ix((pre_cue_ix+median_cue_len):end),ci_bootstrap_24ix((pre_cue_ix+median_cue_len):end),'lineprops',{'color',[1 0 1],'linewidth',1.5})
+
+xticks(0:25:length(mean_angle))
+xticklabels((0:25:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
+xlabel("Time since Cue Onset (sec)")
+ylabel("Angle Traversed From ITI State (degrees)")
+h = refline(1,0); 
+h.Color = [.4 .4 .4]; 
+h.LineStyle = '--'; 
+h.LineWidth = 1.5;
+% 
+% subplot(2,1,2); 
+% shadedErrorBar(1:pre_cue_ix,mean_bootstrap_12dist(1:pre_cue_ix),ci_bootstrap_12dist(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
+% shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_12dist(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_12dist(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
+% tt_len = length(mean_bootstrap_12dist((median_cue_len+pre_cue_ix):end));
+% shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_12dist((pre_cue_ix+median_cue_len):end),ci_bootstrap_12dist((pre_cue_ix+median_cue_len):end),'lineprops',{'color',[0 1 1],'linewidth',1.5})
+% 
+% shadedErrorBar(1:pre_cue_ix,mean_bootstrap_24dist(1:pre_cue_ix),ci_bootstrap_24dist(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
+% shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_24dist(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_24dist(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
+% tt_len = length(mean_bootstrap_24dist((median_cue_len+pre_cue_ix):end));
+% shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_24dist((pre_cue_ix+median_cue_len):end),ci_bootstrap_24dist((pre_cue_ix+median_cue_len):end),'lineprops',{'color',[1 0 1],'linewidth',1.5})
+
+% Now add significance bars using pvalue from bootstrap
+% grad_all_tts = grad_bootstrap(cell2mat(vis_trial_grps));
+% tt_lens = cellfun(@(x) size(x,2), grad_all_tts);
+% grad_all_tts = cellfun(@(x) x(:,1:min(tt_lens)),grad_all_tts,'un',0); 
+% % grad_all_tts = cat(1,grad_all_tts{:}); 
+% tt_labels = arrayfun(@(x) x+zeros(nSamples,1),cell2mat(vis_trial_grps),'un',0);
+% tt_labels = cat(1,tt_labels{:});
+% p_value = nan(min(tt_lens),2); 
+% for i_tt = 2:3 
+%     diff = grad_all_tts{1} - grad_all_tts{i_tt};
+%     for t = 1:min(tt_lens) 
+%         p_value(t,i_tt-1) = length(find(diff(:,t) > 0)) / nSamples;
+%     end
+% end

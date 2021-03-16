@@ -1055,11 +1055,14 @@ GMM = fitgmdist(score(:,1:opt.num_pcs),opt.num_clust,'RegularizationValue',gmm_o
                                                      'replicates',gmm_opt.replicates,'options',options);
 gmm_idx = cluster(GMM,score(:,1:opt.num_pcs)); 
 
+
+
 % PC1-sorted alignment
-[~,pc1_order] = sort(GMM.mu(:,1));
+% [~,pc1_order] = sort(GMM.mu(:,1));
+[~,proportion_sort] = sort(histcounts(gmm_idx),'descend');
 final_gmm_labels = nan(size(gmm_idx));
 for i_clust = 1:opt.num_clust
-    final_gmm_labels(gmm_idx == pc1_order(i_clust)) = i_clust;
+    final_gmm_labels(gmm_idx == proportion_sort(i_clust)) = i_clust;
 end 
 
 % % Visualize gmm results
@@ -1102,8 +1105,117 @@ for i_mouse = 1:numel(uniq_mouse)
 end
 
 %% plot coefficients for clusters
-vis_cluster_mean_beta(opt,beta_norm,var_name,final_gmm_labels)  
+% vis_cluster_mean_beta(opt,beta_norm,var_name,final_gmm_labels)  
+ 
+% A better coefficient visualization
+opt.tbin = 0.02; % in seconds
+opt.smooth_sigma_lickrate = 0.1; % in seconds (for smoothing lickrate trace)
 
+% basis functions for time since reward
+opt.nbasis_rew = 11; % number of raised cosine basis functions to use
+opt.basis_length_rew = 2; % in seconds; make sure basis functions divide evenly into 1 second intervals (makes analysis easier)
+t_basis_rew = 0:opt.tbin:opt.basis_length_rew;
+db = (max(t_basis_rew) - min(t_basis_rew))/(opt.nbasis_rew-1);
+c = min(t_basis_rew):db:max(t_basis_rew);
+bas_rew = nan(opt.nbasis_rew,length(t_basis_rew));
+for k = 1:opt.nbasis_rew
+  bas_rew(k,:) = (cos(max(-pi, min(pi,pi*(t_basis_rew - c(k))/(db))) ) + 1) / 2;
+end
+
+% get indices of rew kern
+kern_ix_1uL = cellfun(@(x) strcmp(x(1:7),'RewKern') && strcmp(x(end-2:end),'1uL'),var_name);
+kern_ix_2uL = cellfun(@(x) strcmp(x(1:7),'RewKern') && strcmp(x(end-2:end),'2uL'),var_name);
+kern_ix_4uL = cellfun(@(x) strcmp(x(1:7),'RewKern') && strcmp(x(end-2:end),'4uL'),var_name);
+
+% convolve w/ raised cosine basis to get response
+mean_rewResp_1uL = nan(opt.num_clust,length(t_basis_rew));
+mean_rewResp_2uL = nan(opt.num_clust,length(t_basis_rew));
+mean_rewResp_4uL = nan(opt.num_clust,length(t_basis_rew));
+sem_rewResp_1uL = nan(opt.num_clust,length(t_basis_rew));
+sem_rewResp_2uL = nan(opt.num_clust,length(t_basis_rew));
+sem_rewResp_4uL = nan(opt.num_clust,length(t_basis_rew));
+for i_cluster = 1:opt.num_clust 
+    nNeurons_cluster = length(find(final_gmm_labels == i_cluster)); 
+    mean_rewResp_1uL(i_cluster,:) = mean(beta_all_sig(kern_ix_1uL,final_gmm_labels == i_cluster)' * bas_rew);
+    mean_rewResp_2uL(i_cluster,:) = mean(beta_all_sig(kern_ix_2uL,final_gmm_labels == i_cluster)' * bas_rew);
+    mean_rewResp_4uL(i_cluster,:) = mean(beta_all_sig(kern_ix_4uL,final_gmm_labels == i_cluster)' * bas_rew);
+    sem_rewResp_1uL(i_cluster,:) = std(beta_all_sig(kern_ix_1uL,final_gmm_labels == i_cluster)' * bas_rew) / sqrt(nNeurons_cluster);
+    sem_rewResp_2uL(i_cluster,:) = std(beta_all_sig(kern_ix_2uL,final_gmm_labels == i_cluster)' * bas_rew) / sqrt(nNeurons_cluster);
+    sem_rewResp_4uL(i_cluster,:) = std(beta_all_sig(kern_ix_4uL,final_gmm_labels == i_cluster)' * bas_rew) / sqrt(nNeurons_cluster);
+end 
+
+% get time coding coefficients
+timepatch_ix = cellfun(@(x) strcmp(x(1:6),'TimeOn'),var_name); 
+totalrew_ix = cellfun(@(x) strcmp(x(1:5),'Total'),var_name); 
+timesince_ix = cellfun(@(x) strcmp(x(1:9),'TimeSince'),var_name); 
+mean_timepatch = nan(opt.num_clust,3);
+mean_totalrew = nan(opt.num_clust,3);
+mean_timesince = nan(opt.num_clust,3);
+sem_timepatch = nan(opt.num_clust,3);
+sem_totalrew = nan(opt.num_clust,3);
+sem_timesince = nan(opt.num_clust,3);
+for i_cluster = 1:opt.num_clust 
+    nNeurons_cluster = length(find(final_gmm_labels == i_cluster)); 
+    mean_timepatch(i_cluster,:) = mean(beta_all_sig(timepatch_ix,final_gmm_labels == i_cluster),2);
+    mean_totalrew(i_cluster,:) = mean(beta_all_sig(totalrew_ix,final_gmm_labels == i_cluster),2);
+    mean_timesince(i_cluster,:) = mean(beta_all_sig(timesince_ix,final_gmm_labels == i_cluster),2);  
+    sem_timepatch(i_cluster,:) = 1.96 * std(beta_all_sig(timepatch_ix,final_gmm_labels == i_cluster),[],2) / sqrt(nNeurons_cluster);
+    sem_totalrew(i_cluster,:) = 1.96 * std(beta_all_sig(totalrew_ix,final_gmm_labels == i_cluster),[],2) / sqrt(nNeurons_cluster);
+    sem_timesince(i_cluster,:) = 1.96 * std(beta_all_sig(timesince_ix,final_gmm_labels == i_cluster),[],2) / sqrt(nNeurons_cluster);  
+end 
+
+cool3 = cool(3); 
+figure() 
+for i_cluster = 1:opt.num_clust 
+    subplot(2,opt.num_clust,i_cluster) % (1:3) + 6 * (i_cluster-1)) 
+    hold on 
+%     plot(t_basis_rew,mean_rewResp_1uL(i_cluster,:),'color',cool3(1,:),'linewidth',1.5)
+%     plot(t_basis_rew,mean_rewResp_2uL(i_cluster,:),'color',cool3(2,:),'linewidth',1.5)
+%     plot(t_basis_rew,mean_rewResp_4uL(i_cluster,:),'color',cool3(3,:),'linewidth',1.5)
+    shadedErrorBar(t_basis_rew,mean_rewResp_1uL(i_cluster,:),sem_rewResp_1uL(i_cluster,:),'lineProps',{'color',cool3(1,:)})
+    shadedErrorBar(t_basis_rew,mean_rewResp_2uL(i_cluster,:),sem_rewResp_2uL(i_cluster,:),'lineProps',{'color',cool3(2,:)})
+    shadedErrorBar(t_basis_rew,mean_rewResp_4uL(i_cluster,:),sem_rewResp_4uL(i_cluster,:),'lineProps',{'color',cool3(3,:)})
+    clust_ylim = max(abs(mean_rewResp_4uL(i_cluster,:)+sem_rewResp_4uL(i_cluster,:)))+ 2 * max(abs(sem_rewResp_4uL(i_cluster,:))); 
+    yline(0,'k--','linewidth',1.5)
+%     ylim([-clust_ylim clust_ylim]) 
+    ylim([-.05,.1])
+    title(sprintf("Cluster %i",i_cluster)) 
+    ylabel("Convolved Reward Response")
+    set(gca,'FontSize',14)
+    
+    subplot(2,opt.num_clust,opt.num_clust+i_cluster); 
+    colororder(cool3);hold on
+    cluster_means = [mean_timesince(i_cluster,:) ; mean_timepatch(i_cluster,:) ; mean_totalrew(i_cluster,:)];
+    cluster_sems = [sem_timesince(i_cluster,:) ; sem_timepatch(i_cluster,:) ; sem_totalrew(i_cluster,:)];
+    b = bar(cluster_means);
+    x = [b(1).XEndPoints b(2).XEndPoints b(3).XEndPoints];
+    errorbar(x,cluster_means(:),cluster_sems(:),'k.')
+    xticks(1:3)
+    xticklabels(["Time Since Rew","Time on Patch","Total Rew"])
+    xtickangle(45)
+    ylabel("Mean Coefficient")
+    set(gca,'FontSize',14) 
+    ylim([-.1,.1])
+%     ylim([-max(abs(mean_rewResp_4uL(i_cluster,:))) max(abs(mean_rewResp_4uL(i_cluster,:)))])
+%     subplot(opt.num_clust,6,4 + 6 * (i_cluster-1)) 
+%     
+%     subplot(opt.num_clust,6,5 + 6 * (i_cluster-1)) 
+%     
+%     subplot(opt.num_clust,6,6 + 6 * (i_cluster-1)) 
+    
+end
+
+%% Pie chart to show proportion per cluster 
+% colors = lines(opt.num_clust);
+figure()
+% colororder(lines(opt.num_clust))
+p = pie(histcounts(final_gmm_labels));
+colormap(lines(opt.num_clust)) 
+for k = 2:2:(2*opt.num_clust )
+    set(p(k),'FontSize',14)
+end
+legend("Cluster 1","Cluster 2","Cluster 3","Cluster 4","Cluster 5")
+set(gca,'FontSize',14)
 %% Make the table 
 
 sig_cells = table;
@@ -1155,9 +1267,9 @@ end
 
 opt = struct;
 opt.brain_region = 'PFC';
-opt.data_set = 'mc';
+opt.data_set = 'mb';
 
 % now save to path
-save(fullfile(paths.results_save,sprintf('sig_cells_gmm_%s_cohort_%s.mat',opt.data_set,opt.brain_region)),'sig_cells');
+save(fullfile(paths.results_save,sprintf('sig_cells_table_gmm_%s_cohort_%s.mat',opt.data_set,opt.brain_region)),'sig_cells');
 
 

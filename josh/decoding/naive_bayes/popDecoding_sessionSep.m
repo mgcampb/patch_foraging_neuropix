@@ -12,9 +12,11 @@ paths = struct;
 paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/all_mice';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 paths.glm_results = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results'; 
-paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/sig_cells/sig_cells_mb_cohort_PFC.mat';
+% paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/sig_cells/sig_cells_mb_cohort_PFC.mat';
+paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/gmm/sig_cells_table_gmm_mb_cohort_PFC.mat';
 load(paths.sig_cells);  
-paths.transients_table = '/Users/joshstern/Documents/UchidaLab_NeuralData/patch_foraging_neuropix/josh/structs/transients_table.mat';
+% paths.transients_table = '/Users/joshstern/Documents/UchidaLab_NeuralData/patch_foraging_neuropix/josh/structs/transients_table.mat';
+paths.transients_table = '/Users/joshstern/Documents/UchidaLab_NeuralData/patch_foraging_neuropix/josh/structs/transients_table_gmm.mat';
 load(paths.transients_table);  
 addpath('/Users/joshstern/Documents/UchidaLab_NeuralData'); 
 % sig_cell_sessions = sig_cells.Session;  
@@ -87,7 +89,7 @@ for mIdx = 1:5
         end  
         
         session_table = transients_table(strcmp(transients_table.Session,session_title),:); 
-        glm_clusters_session = session_table.GLM_Cluster; 
+        glm_clusters_session = session_table.gmm_cluster; 
         
         % we could think about just doing a pooling step here
         X{mIdx}{i,1} = fr_mat_trials; 
@@ -300,9 +302,6 @@ models = fit_dataset_singleSession(X_dataset,y_dataset,xval_table,dataset_opt,mo
 % Now evaluate classifier performance on test folds 
 [y_true_full,y_hat_full] = predict_dataset_singleSession(X_dataset,y_dataset,models,xval_table,dataset_opt,mouse_names);
 
-%% Need new temporally precise error metric. MSE | true time and predicted time are in some interval? 
-
-
 %% Take error and information metrics from performance on heldout data
 %  Functionalize this better!
 
@@ -334,7 +333,6 @@ iRewsize = 2;
 iVar = 1;  
 vis_mice = [1 5];
 vis_confusionMat(confusion_mats,X_dataset,session_titles,mutual_information,var_bins,var_names,iVar,iRewsize,vis_features,vis_mice,dataset_opt)
-
 
 %% Evaluate time since reward decoding separated by reward number 
 % the endgame here: get confusionmat(y_true(these_ix),y_pred(these_ix))

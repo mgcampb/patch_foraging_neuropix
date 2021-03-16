@@ -28,7 +28,8 @@ paths = struct;
 paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/all_mice';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 paths.glm_results = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results'; 
-paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/sig_cells/sig_cells_mb_cohort_PFC.mat';
+% paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/sig_cells/sig_cells_mb_cohort_PFC.mat';
+paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/gmm/sig_cells_table_gmm_mb_cohort_PFC.mat';
 load(paths.sig_cells);  
 addpath('/Users/joshstern/Documents/UchidaLab_NeuralData'); 
 sig_cell_sessions = sig_cells.Session;  
@@ -81,7 +82,7 @@ for mIdx = 1:numel(mouse_grps)
         
         % get GLM cluster vector per session
         sig_cellIDs_session = sig_cells(strcmp(sig_cell_sessions,sessions{sIdx}(1:end-4)),:).CellID;   
-        sig_clusters_session = sig_cells(strcmp(sig_cell_sessions,sessions{sIdx}(1:end-4)),:).KMeansCluster;
+        sig_clusters_session = sig_cells(strcmp(sig_cell_sessions,sessions{sIdx}(1:end-4)),:).GMM_cluster;
         
         calcFR_opt.tend = max(data.sp.st);
         fr_mat = calcFRVsTime(good_cells,data,calcFR_opt);  
@@ -399,10 +400,12 @@ transient_opt.preRew_buffer = round(3 * calcFR_opt.smoothSigma_time * 1000 / tbi
 taskvar_peth = cell(3,1); 
 pvalue_peth = cell(3,1);  
 pos_peak_ix = cell(3,1); 
+neg_peak_ix = cell(3,1); 
 for iVar = 1:3 
     taskvar_peth{iVar} = nan(sum(s_nNeurons),length(var_bins{iVar})-1);  
     pvalue_peth{iVar} = nan(sum(s_nNeurons),length(var_bins{iVar})-1);   
     pos_peak_ix{iVar} = nan(sum(s_nNeurons),2); % [train test] 
+    neg_peak_ix{iVar} = nan(sum(s_nNeurons),2); % [train test] 
 end
 
 counter = 0;  
@@ -424,10 +427,12 @@ for mIdx = 1:numel(mouse_grps)
         vis_trials = 1:2:nTrials; 
         [transient_struct_tmp,taskvar_peth_cell,pvalue_peth_cell] = driscoll_transient_discovery2(fr_mat_trials{mIdx}{i},task_vars_trialed{mIdx}{i},vis_trials,tbin_ms,var_bins,transient_opt);
         pos_peak_ix{1}(i_start:i_end,1) = transient_struct_tmp.peak_ix_pos;
+        neg_peak_ix{1}(i_start:i_end,1) = transient_struct_tmp.peak_ix_neg;
         taskvar_peth{1}(i_start:i_end,:) = taskvar_peth_cell{1}; 
         pvalue_peth{1}(i_start:i_end,:) = pvalue_peth_cell{1}; 
         transient_struct_tmp = driscoll_transient_discovery2(fr_mat_trials{mIdx}{i},task_vars_trialed{mIdx}{i},sort_trials,tbin_ms,var_bins,transient_opt);
         pos_peak_ix{1}(i_start:i_end,2) = transient_struct_tmp.peak_ix_pos;
+        neg_peak_ix{1}(i_start:i_end,2) = transient_struct_tmp.peak_ix_neg;
         % Use rewsize 2, 4 uL trials for time since reward 
         rewsize24_trials = rewsize > 1; 
         sort_trials = rewsize24_trials(2:2:length(rewsize24_trials)); 
@@ -436,11 +441,13 @@ for mIdx = 1:numel(mouse_grps)
             transient_opt.vars = iVar; 
             [transient_struct_tmp,taskvar_peth_cell,pvalue_peth_cell] = driscoll_transient_discovery2(fr_mat_trials{mIdx}{i},task_vars_trialed{mIdx}{i},vis_trials,tbin_ms,var_bins,transient_opt);
             pos_peak_ix{iVar}(i_start:i_end,1) = transient_struct_tmp.peak_ix_pos;
+            neg_peak_ix{iVar}(i_start:i_end,1) = transient_struct_tmp.peak_ix_neg;
             taskvar_peth{iVar}(i_start:i_end,:) = taskvar_peth_cell{iVar};  
             disp([mIdx i length(find(isnan(taskvar_peth_cell{iVar})))])
             pvalue_peth{iVar}(i_start:i_end,:) = pvalue_peth_cell{iVar}; 
             transient_struct_tmp = driscoll_transient_discovery2(fr_mat_trials{mIdx}{i},task_vars_trialed{mIdx}{i},sort_trials,tbin_ms,var_bins,transient_opt);
             pos_peak_ix{iVar}(i_start:i_end,2) = transient_struct_tmp.peak_ix_pos;
+            neg_peak_ix{iVar}(i_start:i_end,2) = transient_struct_tmp.peak_ix_neg;
         end  
         counter = counter + 1; 
         waitbar(counter/numel(mPFC_sessions),bar) 
@@ -461,7 +468,6 @@ for iVar = 1:3
     taskvar_peth_roi{iVar} = taskvar_peth{iVar}(region_bool,:); 
     pvalue_peth_roi{iVar} = pvalue_peth{iVar}(region_bool,:); 
 end
-
 
 for iVar = 1:3 
 %     both_nonNan = all(~isnan(pos_peak_ix_roi{iVar}),2); 
@@ -524,8 +530,62 @@ for iVar = 1:3
     xlabel(sprintf("Time Since %s Train Peak",var_names(iVar))) 
     ylabel(sprintf("Time Since %s Test Peak",var_names(iVar))) 
 end
-% 
-% % cross cue sort reward responsivity?
+
+%% Visualize cross validated peak sorts for GLM clusters
+glm_cluster = transients_table.GLM_Cluster; 
+
+peak_bool = [0 1 0 1]; 
+figure()
+for i_cluster = 1:4  
+    keep_pos = find(glm_cluster == i_cluster & ~isnan(pos_peak_ix{3}(:,2))); 
+    keep_neg = find(glm_cluster == i_cluster &  ~isnan(neg_peak_ix{3}(:,2))); 
+    cluster_peaks = pos_peak_ix{3}(keep_pos,2); % transients_table.Rew1plus_peak_pos(keep_pos);
+    cluster_troughs = neg_peak_ix{3}(keep_neg,2);  % transients_table.Rew1plus_peak_neg(keep_neg);
+    [~,cluster_peaksort] = sort(cluster_peaks); 
+    [~,cluster_troughsort] = sort(cluster_troughs); 
+    
+    cluster_peth_pos = taskvar_peth{3}(keep_pos,:);
+    cluster_peth_neg = taskvar_peth{3}(keep_neg,:);
+    
+%     subplot(1,4,i_cluster)
+%     if peak_bool(i_cluster) == true 
+%         imagesc(flipud(zscore(cluster_peth_pos(cluster_peaksort,:),[],2)));
+%         title(sprintf("Cluster %i",i_cluster))
+%         ylabel("Peak Sort (X-Val)")
+%         
+%     else
+%         imagesc(flipud(zscore(cluster_peth_neg(cluster_troughsort,:),[],2)));
+%         title(sprintf("Cluster %i",i_cluster))
+%         ylabel("Trough Sort (X-Val)")
+%     end 
+%     xticks([10 20 30 40])
+%     xticklabels(["0.5" "1.0" "1.5" "2.0"])
+%     xlabel("Time since reward (sec)")
+%     set(gca,'fontsize',13)
+    
+    subplot(2,4,i_cluster)
+    imagesc(flipud(zscore(cluster_peth_pos(cluster_peaksort,:),[],2))); 
+    title(sprintf("Cluster %i",i_cluster)) 
+    if i_cluster == 1
+        ylabel("Peak Sort (X-Val)")
+    end
+    xticks([10 20 30 40])
+    xticklabels(["0.5" "1.0" "1.5" "2.0"])
+    xlabel("Time since reward (sec)")
+    set(gca,'fontsize',13)
+    subplot(2,4,i_cluster + 4) 
+    imagesc(flipud(zscore(cluster_peth_neg(cluster_troughsort,:),[],2))); 
+    if i_cluster == 1
+        ylabel("Trough Sort (X-Val)")
+    end 
+    xticks([10 20 30 40])
+    xticklabels(["0.5" "1.0" "1.5" "2.0"])
+    xlabel("Time since reward (sec)")
+    set(gca,'fontsize',13)
+end
+
+
+%% cross cue sort reward responsivity?
 % [~,cue_sort] = sort(pos_peak_ix_roi{1}(:,2));
 % cue_sort = cue_sort(ismember(cue_sort,find(~isnan(pos_peak_ix_roi{1}(:,2))))); % get rid of non significant cells 
 % for iVar = 2:3  
@@ -566,33 +626,33 @@ end
 %     ylabel(sprintf("Time Since %s Sort",var_names(iVar)))
 % end  
 % 
-% mouse_num = cell2mat(arrayfun(@(x) str2double(transients_table.Mouse{x}(2:3)), 1:length(transients_table.Mouse),'un',0))'; 
-% 
-% for glm_cluster = 1:3 
-%     figure() 
-%     glm_bool = transients_table.GLM_Cluster == glm_cluster; 
-%     mouse_num_clust = mouse_num(glm_bool); 
-%     for iVar = 1:3 
-%         sig_bool = all(~isnan(pos_peak_ix{iVar}),2); 
-%         sig_bool = sig_bool(glm_bool);
-%         subplot(1,3,iVar);hold on
-%         imagesc(log(pvalue_peth{iVar}(glm_bool,:))) 
-%         colormap('bone') 
-%         if iVar > 1
-%             gscatter(zeros(length(find(glm_bool)),1),1:length(find(glm_bool)),mouse_num_clust,[],[],[],'HandleVisibility','off')   
-%             gscatter(zeros(length(find(glm_bool)),1) + length(var_bins{iVar}),1:length(find(glm_bool)),sig_bool,[0 0 0;1 0 0],'o',10,'HandleVisibility','off')
-%         else  
-%             gscatter(zeros(length(find(glm_bool)),1),1:length(find(glm_bool)),mouse_num_clust) 
-%             gscatter(zeros(length(find(glm_bool)),1) + length(var_bins{iVar}),1:length(find(glm_bool)),sig_bool,[0 0 0;1 0 0],'o',10,'HandleVisibility','off')
-%             legend([mouse_names "No Sig Transient" "Sig Transient"])
-%         end
-%         ylim([0 length(find(glm_bool))])
-%         xticks(1:10:numel(var_bins{iVar}))
-%         xticklabels(var_bins{iVar}(1:10:end))
-%         xlabel(sprintf("Time Since %s",var_names(iVar)))
-%     end
-%     suptitle(sprintf("GLM KMeans Cluster %i",glm_cluster))
-% end
+mouse_num = cell2mat(arrayfun(@(x) str2double(transients_table.Mouse{x}(2:3)), 1:length(transients_table.Mouse),'un',0))'; 
+
+for glm_cluster = 1:5
+    figure() 
+    glm_bool = transients_table.GLM_Cluster == glm_cluster; 
+    mouse_num_clust = mouse_num(glm_bool); 
+    for iVar = 1:3 
+        sig_bool = all(~isnan(pos_peak_ix{iVar}),2); 
+        sig_bool = sig_bool(glm_bool);
+        subplot(1,3,iVar);hold on
+        imagesc(log(pvalue_peth{iVar}(glm_bool,:))) 
+        colormap('bone') 
+        if iVar > 1
+            gscatter(zeros(length(find(glm_bool)),1),1:length(find(glm_bool)),mouse_num_clust,[],[],[],'HandleVisibility','off')   
+            gscatter(zeros(length(find(glm_bool)),1) + length(var_bins{iVar}),1:length(find(glm_bool)),sig_bool,[0 0 0;1 0 0],'o',10,'HandleVisibility','off')
+        else  
+            gscatter(zeros(length(find(glm_bool)),1),1:length(find(glm_bool)),mouse_num_clust) 
+            gscatter(zeros(length(find(glm_bool)),1) + length(var_bins{iVar}),1:length(find(glm_bool)),sig_bool,[0 0 0;1 0 0],'o',10,'HandleVisibility','off')
+            legend([mouse_names "No Sig Transient" "Sig Transient"])
+        end
+        ylim([0 length(find(glm_bool))])
+        xticks(1:10:numel(var_bins{iVar}))
+        xticklabels(var_bins{iVar}(1:10:end))
+        xlabel(sprintf("Time Since %s",var_names(iVar)))
+    end
+    suptitle(sprintf("GLM KMeans Cluster %i",glm_cluster))
+end
 
 %% Now look for transient responsivity w/ shuffle testing
 
@@ -648,9 +708,76 @@ for mIdx = 1:numel(mouse_grps)
         counter = counter + 1; 
         waitbar(counter/numel(mPFC_sessions),b) 
     end 
-    fprintf("%s Transients Discovery Complete",mouse_names(mIdx))
+    fprintf("%s Transients Discovery Complete \n",mouse_names(mIdx))
 end 
 close(b);
+
+%% Visualize PETH per GLM cluster 
+% probably going to get on some ismember shit
+glm_cluster = transients_table.GLM_Cluster; 
+glm_simesince_peth = taskvar_peth{3}(~isnan(transients_table.GLM_Cluster),:); 
+keep_pos = ~isnan(transients_table.Rew1plus_peak_pos) & ~isnan(transients_table.GLM_Cluster);
+glm_rew_peaks = transients_table.Rew1plus_peak_pos(keep_pos);
+simesince_peth_pos = taskvar_peth{3}(keep_pos,:);
+keep_neg = ~isnan(transients_table.Rew1plus_peak_neg) & ~isnan(transients_table.GLM_Cluster);
+glm_rew_troughs = transients_table.Rew1plus_peak_neg(keep_neg);
+simesince_peth_neg = taskvar_peth{3}(keep_neg,:);
+
+[~,peaksort_glm] = sort(glm_rew_peaks); 
+[~,troughsort_glm] = sort(glm_rew_troughs); 
+peak_bool = [0 1 0 1]; 
+figure()
+for i_cluster = 1:4  
+    keep_pos = find(glm_cluster == i_cluster & ~isnan(transients_table.Rew1plus_peak_pos)); 
+    keep_neg = find(glm_cluster == i_cluster & ~isnan(transients_table.Rew1plus_peak_neg)); 
+    cluster_peaks = transients_table.Rew1plus_peak_pos(keep_pos);
+    cluster_troughs = transients_table.Rew1plus_peak_neg(keep_neg);
+    [~,cluster_peaksort] = sort(cluster_peaks); 
+    [~,cluster_troughsort] = sort(cluster_troughs); 
+    
+    cluster_peth_pos = taskvar_peth{3}(keep_pos,:);
+    cluster_peth_neg = taskvar_peth{3}(keep_neg,:);
+    
+    subplot(1,4,i_cluster)
+    if peak_bool(i_cluster) == true 
+        imagesc(flipud(zscore(cluster_peth_pos(cluster_peaksort,:),[],2)));
+        title(sprintf("Cluster %i",i_cluster))
+        if i_cluster == 1
+            ylabel("Peak Sort")
+        end
+    else
+        imagesc(flipud(zscore(cluster_peth_neg(cluster_troughsort,:),[],2)));
+        title(sprintf("Cluster %i",i_cluster))
+        if i_cluster == 1
+            ylabel("Trough Sort")
+        end
+    end
+    xticks([10 20 30 40])
+    xticklabels(["0.5" "1.0" "1.5" "2.0"])
+    xlabel("Time since reward (sec)")
+    set(gca,'fontsize',13)
+    
+%     subplot(2,4,i_cluster)
+%     imagesc(flipud(zscore(cluster_peth_pos(cluster_peaksort,:),[],2))); 
+%     title(sprintf("Cluster %i",i_cluster)) 
+%     if i_cluster == 1
+%         ylabel("Peak Sort")
+%     end
+%     xticks([10 20 30 40])
+%     xticklabels(["0.5" "1.0" "1.5" "2.0"])
+%     xlabel("Time since reward (sec)")
+%     set(gca,'fontsize',13)
+%     subplot(2,4,i_cluster + 4) 
+%     imagesc(flipud(zscore(cluster_peth_neg(cluster_troughsort,:),[],2))); 
+%     if i_cluster == 1
+%         ylabel("Trough Sort")
+%     end 
+%     xticks([10 20 30 40])
+%     xticklabels(["0.5" "1.0" "1.5" "2.0"])
+%     xlabel("Time since reward (sec)")
+%     set(gca,'fontsize',13)
+end
+
 
 %% Now analyze transients_table 
 
@@ -669,7 +796,7 @@ rew0_peak_neg = transients_table.Rew0_peak_neg;
 rew1plus_peak_neg = transients_table.Rew1plus_peak_neg;   
 peak_ix = [cue_peak_pos rew0_peak_pos rew1plus_peak_pos cue_peak_neg rew0_peak_neg rew1plus_peak_neg];
  
-nShuffles = 1000; 
+nShuffles = 1000;   
 new_testing = true; 
 if new_testing == true
     frac_sig = nan(size(peak_ix,2),2);
