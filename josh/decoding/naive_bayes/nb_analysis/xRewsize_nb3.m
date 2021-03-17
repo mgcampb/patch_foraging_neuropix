@@ -42,6 +42,7 @@ feature_names = cellfun(@(x) x.name, nb_results.dataset_opt.features{5}{1});
 y_true = nb_results.y_true; 
 var_bins = nb_results.var_bins;
 var_dt = diff(var_bins{1}{1}{1}(1:2));
+clu_pool_sessions = nb_results.clu_pool_sessions;
 
 %% 0) Reformat yhat into xRewsize, get RX
 %   Cell format: timeSince_hat{mIdx}{i}{trained_rewsize}{i_feature}{iTrial}
@@ -68,7 +69,7 @@ postRew_prts = cell(nMice,1);
 last_rew_ix = cell(nMice,1); 
 
 % choose which features to reformat for analysis
-trial_decoding_features = 1:5;
+trial_decoding_features = 1:6;
 
 n_cells = cell(nMice,1); 
 
@@ -149,69 +150,127 @@ clear y_hat % we now have this in an easier form to work with
 
 analyze_ix = round(2000 / tbin_ms);
 cool3 = cool(3);  
-tt = "RR";
-for i_feature = [1 2 4 5]
+tt = "R0";
+cell_threshold = true; 
+vis_features = [1 2 3 5 6];  
+xMouse_decodedTime = cell(numel(vis_features),1); 
+
+for i_feature = 1:numel(vis_features)
+    iFeature = vis_features(i_feature); 
     figure();hold on
     for m_ix = 1:numel(analysis_mice)
         mIdx = analysis_mice(m_ix); 
-        % load RX for pooled sessions (look at R0 here)
-        mouse_RX = cat(1,RX{mIdx}{:});
         
         % make sure these are the same!
         decoded_time_hat = timeSince_hat_xRewsize;
-        y_true_tmp = y_true{mIdx}(pool_sessions{mIdx},timeSince_ix);
+        if iFeature <= 3 && cell_threshold == true % introduce # cell session inclusion criterion
+            mouse_include_sessions = ismember(pool_sessions{mIdx},clu_pool_sessions{iFeature}{mIdx}); 
+            % load RX for pooled sessions (look at R0 here)
+            mouse_RX = cat(1,RX{mIdx}(mouse_include_sessions)); 
+            mouse_RX = cat(1,mouse_RX{:}); 
+            y_true_tmp = y_true{mIdx}(mouse_include_sessions,timeSince_ix);
+        else
+            % load RX for pooled sessions (look at R0 here)
+            mouse_RX = cat(1,RX{mIdx}{:});
+            y_true_tmp = y_true{mIdx}(pool_sessions{mIdx},timeSince_ix);
+        end
         true_time = cat(1,y_true_tmp{:}); 
-        pad_trueTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) nan(1,max(0,analyze_ix - length(x)))],true_time,'un',0);
-        true_time = cat(1,pad_trueTime{:});
         
-        for i_trained_rewsize = 1:numel(rewsizes) 
-            % gather decoded time variable from decoder trained on i_rewsize
-            decodedTime = cellfun(@(x) x{i_trained_rewsize}, decoded_time_hat{mIdx},'un',0);
-            decodedTime = cat(1,decodedTime{:}); 
-            decodedTime_trainedRewsize = decodedTime(:,i_feature); % with i_feature
-            decodedTime_trainedRewsize = cat(1,decodedTime_trainedRewsize{:}); 
-            % concatenate and pad to make [nTrials x analyze_ix] sized matrix that will be nice to work with
-            pad_decodedTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) ; nan(max(0,analyze_ix - length(x)),1)]',decodedTime_trainedRewsize,'UniformOutput',false);
-            decodedTime_trainedRewsize = var_dt * cat(1,pad_decodedTime{:}); % now this is a matrix
-            
-            for i_true_rewsize = 1:numel(rewsizes)
-                iRewsize_true = rewsizes(i_true_rewsize); 
-                if tt == "RR"
-                    these_trials = mouse_RX == iRewsize_true*10 + iRewsize_true; 
-                else 
-                    these_trials = mouse_RX == iRewsize_true*10; 
-                end
-                nTrials_true_rewsize = length(find(these_trials)); 
-                
-                decodedTime_hat = decodedTime_trainedRewsize(these_trials,:); 
-                
-                mean_decodedTime = nanmean(decodedTime_hat);
-                sem_decodedTime = 3 * nanstd(decodedTime_hat) / sqrt(nTrials_true_rewsize);
-                
-                subplot(numel(rewsizes),numel(analysis_mice),numel(analysis_mice) * (i_true_rewsize - 1) + m_ix);hold on
-                shadedErrorBar((1:analyze_ix)*tbin_ms/1000,mean_decodedTime,sem_decodedTime,'lineProps',{'color',cool3(i_trained_rewsize,:)})
+        if ~isempty(true_time)
+            pad_trueTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) nan(1,max(0,analyze_ix - length(x)))],true_time,'un',0);
+            true_time = cat(1,pad_trueTime{:});
 
-%                 % for single trial visualization
-%                 decodedTime_hat = decodedTime_trainedRewsize(these_trials,:);
-%                 trueTime = true_time(these_trials,:);
-%                 for iTrial = 1:15 % nTrials_true_rewsize
-%                     plot(trueTime(iTrial,:),gauss_smoothing(decodedTime_hat(iTrial,:),smoothing_sigma),'color',cool3(i_trained_rewsize,:),'linewidth',.5)
-%                 end
-                
-                ylim([0 2]) 
-                if tt == "RR" 
-                    plot([0 1],[0 1],'k--','linewidth',1.5)   
-                    plot([1 2],[0 1],'k--','linewidth',1.5)   
-                else 
-                    plot([0 2],[0,2],'k--','linewidth',1.5)   
+            for i_trained_rewsize = 1:numel(rewsizes)  
+                if iFeature <= 3 && cell_threshold == true % introduce # cell session inclusion criterion 
+                    decodedTime = cellfun(@(x) x{i_trained_rewsize}, decoded_time_hat{mIdx}(mouse_include_sessions),'un',0);
+                else
+                    % gather decoded time variable from decoder trained on i_rewsize
+                    decodedTime = cellfun(@(x) x{i_trained_rewsize}, decoded_time_hat{mIdx},'un',0);
                 end
-                if m_ix == 1
-                    ylabel(sprintf("%i uL Trials \n Decoded time",iRewsize_true))
+                decodedTime = cat(1,decodedTime{:}); 
+                decodedTime_trainedRewsize = decodedTime(:,iFeature); % with i_feature
+                decodedTime_trainedRewsize = cat(1,decodedTime_trainedRewsize{:}); 
+                % concatenate and pad to make [nTrials x analyze_ix] sized matrix that will be nice to work with
+                pad_decodedTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) ; nan(max(0,analyze_ix - length(x)),1)]',decodedTime_trainedRewsize,'UniformOutput',false);
+                decodedTime_trainedRewsize = var_dt * cat(1,pad_decodedTime{:}); % now this is a matrix
+
+                for i_true_rewsize = 1:numel(rewsizes)
+                    iRewsize_true = rewsizes(i_true_rewsize); 
+                    if tt == "RR"
+                        these_trials = mouse_RX == iRewsize_true*10 + iRewsize_true; 
+                    else 
+                        these_trials = mouse_RX == iRewsize_true*10; 
+                    end
+                    nTrials_true_rewsize = length(find(these_trials)); 
+
+                    decodedTime_hat = decodedTime_trainedRewsize(these_trials,:); 
+                    xMouse_decodedTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{m_ix} = decodedTime_hat;
+
+                    mean_decodedTime = nanmean(decodedTime_hat);
+                    sem_decodedTime = 1.96 * nanstd(decodedTime_hat) / sqrt(nTrials_true_rewsize);
+% 
+%                     subplot(numel(rewsizes),numel(analysis_mice),numel(analysis_mice) * (i_true_rewsize - 1) + m_ix);hold on
+%                     shadedErrorBar((1:analyze_ix)*tbin_ms/1000,mean_decodedTime,sem_decodedTime,'lineProps',{'color',cool3(i_trained_rewsize,:)})
+
+    %                 % for single trial visualization
+    %                 decodedTime_hat = decodedTime_trainedRewsize(these_trials,:);
+    %                 trueTime = true_time(these_trials,:);
+    %                 for iTrial = 1:15 % nTrials_true_rewsize
+    %                     plot(trueTime(iTrial,:),gauss_smoothing(decodedTime_hat(iTrial,:),smoothing_sigma),'color',cool3(i_trained_rewsize,:),'linewidth',.5)
+    %                 end
+
+                    ylim([0 2]) 
+                    if tt == "RR" 
+                        plot([0 1],[0 1],'k--','linewidth',1.5)   
+                        plot([1 2],[0 1],'k--','linewidth',1.5)   
+                    else 
+                        plot([0 2],[0,2],'k--','linewidth',1.5)   
+                    end
+                    if m_ix == 1
+                        ylabel(sprintf("%i uL Trials \n Decoded time",iRewsize_true))
+                    end 
+                    if i_true_rewsize == 1 
+                        title(sprintf("%s \n %s",feature_names(iFeature),mouse_names(mIdx)))
+                    end
+                end
+                if i_trained_rewsize == numel(rewsizes)
+                    xlabel("True time")
                 end 
-                if i_true_rewsize == 1 
-                    title(sprintf("%s \n %s",feature_names(i_feature),mouse_names(mIdx)))
-                end
             end
+        end
+    end
+end 
+
+%% 1b) Concatenate across mice (use our for loops above to collect)
+close all
+for i_feature = 1:numel(vis_features)
+    iFeature = vis_features(i_feature);
+    for i_trained_rewsize = 1:3
+        for i_true_rewsize = 1:3
+            iRewsize_true = rewsizes(i_true_rewsize); 
+            % concatenate across mice
+            decodedTime_hat = cat(1,xMouse_decodedTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{:});
+            nTrials_true_rewsize = size(decodedTime_hat,1); 
+            mean_decodedTime = nanmean(decodedTime_hat);
+            sem_decodedTime = 1.96 * nanstd(decodedTime_hat) / sqrt(nTrials_true_rewsize);
+            
+            subplot(3,numel(vis_features),numel(vis_features) * (i_true_rewsize - 1) + i_feature);hold on
+            shadedErrorBar((1:analyze_ix)*tbin_ms/1000,mean_decodedTime,sem_decodedTime,'lineProps',{'color',cool3(i_trained_rewsize,:)})
+            ylim([0 2])
+            
+            if tt == "RR"
+                plot([0 1],[0 1],'k--','linewidth',1.5)
+                plot([1 2],[0 1],'k--','linewidth',1.5)
+            else
+                plot([0 2],[0,2],'k--','linewidth',1.5)
+            end
+            if i_feature == 1
+                ylabel(sprintf("%i uL Trials \n Decoded time",iRewsize_true))
+            end
+            if i_true_rewsize == 1
+                title(sprintf("%s \n Pooled",feature_names(iFeature)))
+            end
+            
             if i_trained_rewsize == numel(rewsizes)
                 xlabel("True time")
             end
@@ -223,130 +282,236 @@ end
 analyze_ix = round(1000 / tbin_ms);
 cool3repeat = repmat(cool(3),[3,1]);  
 x = [1:3 5:7 9:11]; 
-vis_mice = [2 3 5];
-for i_feature = 1:5
+vis_features = [1 2 3 5 6]; 
+cell_threshold = true; 
+xMouse_decodedTime = cell(numel(vis_features),1);
+xMouse_trueTime = cell(numel(vis_features),1);
+for i_feature = 1:numel(vis_features)
+    iFeature = vis_features(i_feature);
     figure();hold on
     for m_ix = 1:numel(analysis_mice) 
         mIdx = analysis_mice(m_ix); 
-        % load RX for pooled sessions (look at R0 here)
-        mouse_RX = cat(1,RX{mIdx}{:});
         
         slope = nan(numel(rewsizes)^2,1);
         slope_sem = nan(numel(rewsizes)^2,1);
         
         % make sure these are the same!
-        decoded_time_hat = timePatch_hat_xRewsize;
-        y_true_tmp = y_true{mIdx}(pool_sessions{mIdx},timePatch_ix);
+        decoded_time_hat = timeSince_hat_xRewsize;
+        if iFeature <= 3 && cell_threshold == true % introduce # cell session inclusion criterion
+            mouse_include_sessions = ismember(pool_sessions{mIdx},clu_pool_sessions{iFeature}{mIdx}); 
+            % load RX for pooled sessions (look at R0 here)
+            mouse_RX = cat(1,RX{mIdx}(mouse_include_sessions)); 
+            mouse_RX = cat(1,mouse_RX{:}); 
+            y_true_tmp = y_true{mIdx}(clu_pool_sessions{iFeature}{mIdx},timeSince_ix);
+        else
+            % load RX for pooled sessions (look at R0 here)
+            mouse_RX = cat(1,RX{mIdx}{:});
+            y_true_tmp = y_true{mIdx}(pool_sessions{mIdx},timeSince_ix);
+        end
         true_time = cat(1,y_true_tmp{:}); 
-        pad_trueTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) nan(1,max(0,analyze_ix - length(x)))],true_time,'un',0);
-        true_time = var_dt * cat(1,pad_trueTime{:});
-        
-        for i_trained_rewsize = 1:numel(rewsizes) 
-            % gather decoded time variable from decoder trained on i_rewsize
-            decodedTime = cellfun(@(x) x{i_trained_rewsize}, decoded_time_hat{mIdx},'un',0);
-            decodedTime = cat(1,decodedTime{:}); 
-            decodedTime_trainedRewsize = decodedTime(:,i_feature); % with i_feature
-            decodedTime_trainedRewsize = cat(1,decodedTime_trainedRewsize{:}); 
-            % concatenate and pad to make [nTrials x analyze_ix] sized matrix that will be nice to work with
-            pad_decodedTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) ; nan(max(0,analyze_ix - length(x)),1)]',decodedTime_trainedRewsize,'UniformOutput',false);
-            decodedTime_trainedRewsize = var_dt * cat(1,pad_decodedTime{:}); % now this is a matrix
+        if ~isempty(true_time)
+            pad_trueTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) nan(1,max(0,analyze_ix - length(x)))],true_time,'un',0);
+            true_time = var_dt * cat(1,pad_trueTime{:});
             
-            for i_true_rewsize = 1:numel(rewsizes)
-                iRewsize_true = rewsizes(i_true_rewsize); 
-                these_trials = round(mouse_RX/10) == iRewsize_true; % don't care about sec1 onwards
-                nTrials_true_rewsize = length(find(these_trials)); 
+            for i_trained_rewsize = 1:numel(rewsizes)
+                % gather decoded time variable from decoder trained on i_rewsize
+                if iFeature <= 3 && cell_threshold == true % introduce # cell session inclusion criterion
+                    decodedTime = cellfun(@(x) x{i_trained_rewsize}, decoded_time_hat{mIdx}(mouse_include_sessions),'un',0);
+                else
+                    % gather decoded time variable from decoder trained on i_rewsize
+                    decodedTime = cellfun(@(x) x{i_trained_rewsize}, decoded_time_hat{mIdx},'un',0);
+                end
                 
-                decodedTime_trueRewsize = decodedTime_trainedRewsize(these_trials,:)'; 
-                trueTime_trueRewsize = true_time(these_trials,:)';
+                decodedTime = cat(1,decodedTime{:});
+                decodedTime_trainedRewsize = decodedTime(:,iFeature); % with i_feature
+                decodedTime_trainedRewsize = cat(1,decodedTime_trainedRewsize{:});
+                % concatenate and pad to make [nTrials x analyze_ix] sized matrix that will be nice to work with
+                pad_decodedTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) ; nan(max(0,analyze_ix - length(x)),1)]',decodedTime_trainedRewsize,'UniformOutput',false);
+                decodedTime_trainedRewsize = var_dt * cat(1,pad_decodedTime{:}); % now this is a matrix
                 
-                mdl = fitlm(trueTime_trueRewsize(:),decodedTime_trueRewsize(:)); %,'intercept',false);
-                slope(3 * (i_true_rewsize - 1) + i_trained_rewsize) = mdl.Coefficients.Estimate(2);
-                slope_sem(3 * (i_true_rewsize - 1) + i_trained_rewsize) = mdl.Coefficients.SE(2);
-            end  
+                for i_true_rewsize = 1:numel(rewsizes)
+                    iRewsize_true = rewsizes(i_true_rewsize);
+                    these_trials = round(mouse_RX/10) == iRewsize_true; % don't care about sec1 onwards
+                    nTrials_true_rewsize = length(find(these_trials));
+                    
+                    decodedTime_trueRewsize = decodedTime_trainedRewsize(these_trials,:)';
+                    trueTime_trueRewsize = true_time(these_trials,:)';
+                    xMouse_decodedTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{m_ix} = decodedTime_trueRewsize;
+                    xMouse_trueTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{m_ix} = trueTime_trueRewsize;
+                    
+                    mdl = fitlm(trueTime_trueRewsize(:),decodedTime_trueRewsize(:),'intercept',true);
+                    slope(3 * (i_true_rewsize - 1) + i_trained_rewsize) = mdl.Coefficients.Estimate(2);
+                    slope_sem(3 * (i_true_rewsize - 1) + i_trained_rewsize) = mdl.Coefficients.SE(2);
+                end
+            end
+            subplot(1,numel(analysis_mice),m_ix);hold on
+            for i = 1:numel(x)
+                bar(x(i),slope(i),'FaceColor',cool3repeat(i,:),'FaceAlpha',.5)
+                errorbar(x(i),slope(i),slope_sem(i),'k')
+            end
+            yline(1,'k--','linewidth',1.5)
+            xticks([2 6 10])
+            xticklabels(["1 uL","2 uL","4 uL"])
+            xlabel("Decoded Reward Size")
+            if m_ix == 1
+                ylabel("Fit slope between true and decoded time")
+            end
+            title(sprintf("%s \n %s Model Fits",feature_names(iFeature),mouse_names(mIdx)))
+            ylim([0 4])
         end
-        subplot(1,numel(analysis_mice),m_ix);hold on
-        for i = 1:numel(x)
-            bar(x(i),slope(i),'FaceColor',cool3repeat(i,:),'FaceAlpha',.5) 
-            errorbar(x(i),slope(i),slope_sem(i),'k') 
-        end 
-        yline(1,'k--','linewidth',1.5) 
-        xticks([2 6 10]) 
-        xticklabels(["1 uL","2 uL","4 uL"])
-        xlabel("Decoded Reward Size") 
-        if m_ix == 1
-            ylabel("Fit slope between true and decoded time")
-        end
-        title(sprintf("%s \n %s Model Fits",feature_names(i_feature),mouse_names(mIdx))) 
-        ylim([0 4])
     end
 end
+
+%% 2b) Pool linear fits across mice 
+
+figure();hold on
+for i_feature = 1:numel(vis_features)
+    iFeature = vis_features(i_feature);
+    slope = nan(numel(rewsizes)^2,1);
+    slope_sem = nan(numel(rewsizes)^2,1);
+    for i_trained_rewsize = 1:numel(rewsizes)
+        
+        for i_true_rewsize = 1:numel(rewsizes)
+            iRewsize_true = rewsizes(i_true_rewsize);
+            
+            decodedTime_trueRewsize = cat(2,xMouse_decodedTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{:});
+            trueTime_trueRewsize = cat(2,xMouse_trueTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{:});
+            
+            mdl = fitlm(trueTime_trueRewsize(:),decodedTime_trueRewsize(:),'intercept',true);
+            slope(3 * (i_true_rewsize - 1) + i_trained_rewsize) = mdl.Coefficients.Estimate(2);
+            slope_sem(3 * (i_true_rewsize - 1) + i_trained_rewsize) = mdl.Coefficients.SE(2);
+        end
+    end
+    subplot(1,numel(vis_features),i_feature);hold on
+    for i = 1:numel(x)
+        bar(x(i),slope(i),'FaceColor',cool3repeat(i,:),'FaceAlpha',.5)
+        errorbar(x(i),slope(i),slope_sem(i),'k')
+    end
+    yline(1,'k--','linewidth',1.5)
+    xticks([2 6 10])
+    xticklabels(["1 uL","2 uL","4 uL"])
+    xlabel("Decoded Reward Size")
+    if i_feature == 1
+        ylabel("Fit slope between true and decoded time")
+    end
+    title(sprintf("%s \n Pooled Linear Model Fits",feature_names(iFeature)))
+    ylim([0 4])
+end
+
 
 %% 3) The second part of this: constant threshold integration? Plot decoded time until leave
 % the main difference here is going to be that we will align to leave
 % analyze_ix = [4000/tbin_ms 4000/tbin_ms 15000 / tbin_ms 4000/tbin_ms 4000/tbin_ms];
 vis_rewsizes = [1 2 4];
-rdbu3 = cbrewer('div',"RdBu",10);
-rdbu3 = rdbu3([3 7 end],:);
-
+vis_features = [1 2 3 4 5];
 smoothing_sigma = 1;
-analyze_ix = round(3000 / tbin_ms);
+analyze_ix = round(2000 / tbin_ms);
 cool3 = cool(3);  
-for i_feature = 1:5
+xMouse_decodedTime = cell(numel(vis_features),1); 
+for i_feature = 1:numel(vis_features)
+    iFeature = vis_features(i_feature); 
     figure();hold on
-    for m_ix = 1:numel(analysis_mice)
+    for m_ix = [2 4] % 1:numel(analysis_mice)
         mIdx = analysis_mice(m_ix); 
-        % load RX for pooled sessions (look at R0 here)
-        mouse_RX = cat(1,RX{mIdx}{:});
-        
         % make sure these are the same!
         decoded_time_hat = timeUntil_hat_xRewsize;
-        y_true_tmp = y_true{mIdx}(pool_sessions{mIdx},timePatch_ix);
-        true_time = cat(1,y_true_tmp{:}); 
-        pad_trueTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) nan(1,max(0,analyze_ix - length(x)))],true_time,'un',0);
-        true_time = cat(1,pad_trueTime{:});
+        if iFeature <= 3 && cell_threshold == true % introduce # cell session inclusion criterion
+            mouse_include_sessions = ismember(pool_sessions{mIdx},clu_pool_sessions{iFeature}{mIdx}); 
+            % load RX for pooled sessions (look at R0 here)
+            mouse_RX = cat(1,RX{mIdx}(mouse_include_sessions)); 
+            mouse_RX = cat(1,mouse_RX{:}); 
+            y_true_tmp = y_true{mIdx}(mouse_include_sessions,timeSince_ix);
+        else
+            % load RX for pooled sessions (look at R0 here)
+            mouse_RX = cat(1,RX{mIdx}{:});
+            y_true_tmp = y_true{mIdx}(pool_sessions{mIdx},timeSince_ix);
+        end
+        true_time = cat(1,y_true_tmp{:});
         
-        for i_trained_rewsize = 1:numel(rewsizes) 
-            % gather decoded time variable from decoder trained on i_rewsize
-            decodedTime = cellfun(@(x) x{i_trained_rewsize}, decoded_time_hat{mIdx},'un',0);
-            decodedTime = cat(1,decodedTime{:}); 
-            decodedTime_trainedRewsize = decodedTime(:,i_feature); % with i_feature
-            decodedTime_trainedRewsize = cat(1,decodedTime_trainedRewsize{:}); 
-            % concatenate and pad to make [nTrials x analyze_ix] sized matrix that will be nice to work with
-            pad_decodedTime = cellfun(@(x) [nan(max(0,analyze_ix - (length(x)-1)),1) ; x(end-min((length(x)-1),analyze_ix):end)]',decodedTime_trainedRewsize,'un',0);
-            decodedTime_trainedRewsize = var_dt * cat(1,pad_decodedTime{:}); % now this is a matrix
+        if ~isempty(true_time)
+            pad_trueTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) nan(1,max(0,analyze_ix - length(x)))],true_time,'un',0);
+            true_time = cat(1,pad_trueTime{:});
             
-            for i_true_rewsize = 1:numel(rewsizes)
-                iRewsize_true = rewsizes(i_true_rewsize); 
-                these_trials = round(mouse_RX/10) == iRewsize_true;
-                nTrials_true_rewsize = length(find(these_trials)); 
+            for i_trained_rewsize = 1:numel(rewsizes)
+                % gather decoded time variable from decoder trained on i_rewsize
+                if iFeature <= 3 && cell_threshold == true % introduce # cell session inclusion criterion
+                    decodedTime = cellfun(@(x) x{i_trained_rewsize}, decoded_time_hat{mIdx}(mouse_include_sessions),'un',0);
+                else
+                    decodedTime = cellfun(@(x) x{i_trained_rewsize}, decoded_time_hat{mIdx},'un',0);
+                end
+                decodedTime = cat(1,decodedTime{:});
+                decodedTime_trainedRewsize = decodedTime(:,iFeature); % with i_feature
+                decodedTime_trainedRewsize = cat(1,decodedTime_trainedRewsize{:});
+                % concatenate and pad to make [nTrials x analyze_ix] sized matrix that will be nice to work with
+                pad_decodedTime = cellfun(@(x) [nan(max(0,analyze_ix - (length(x)-1)),1) ; x(end-min((length(x)-1),analyze_ix):end)]',decodedTime_trainedRewsize,'un',0);
+                decodedTime_trainedRewsize = var_dt * cat(1,pad_decodedTime{:}); % now this is a matrix
                 
-                decodedTime_hat = decodedTime_trainedRewsize(these_trials,:); 
-                
-                mean_decodedTime = nanmean(decodedTime_hat);
-                sem_decodedTime = 3 * nanstd(decodedTime_hat) / sqrt(nTrials_true_rewsize);
-                
-                subplot(numel(rewsizes),numel(analysis_mice),numel(analysis_mice) * (i_true_rewsize - 1) + m_ix);hold on
-                shadedErrorBar((0:analyze_ix)*tbin_ms/1000,mean_decodedTime,sem_decodedTime,'lineProps',{'color',cool3(i_trained_rewsize,:)})
-
-%                 % for single trial visualization
-%                 decodedTime_hat = decodedTime_trainedRewsize(these_trials,:);
-%                 trueTime = true_time(these_trials,:);
-%                 for iTrial = 1:15 % nTrials_true_rewsize
-%                     plot(trueTime(iTrial,:),gauss_smoothing(decodedTime_hat(iTrial,:),smoothing_sigma),'color',cool3(i_trained_rewsize,:),'linewidth',.5)
-%                 end
-                
-                ylim([0 3]) 
-                plot([3 0],[0 3],'k--','linewidth',1.5)  
-                if m_ix == 1
-                    ylabel(sprintf("%i uL Trials \n Decoded time",iRewsize_true))
-                end 
-                if i_true_rewsize == 1 
-                    title(sprintf("%s \n %s",feature_names(i_feature),mouse_names(mIdx)))
+                for i_true_rewsize = 1:numel(rewsizes)
+                    iRewsize_true = rewsizes(i_true_rewsize);
+                    these_trials = round(mouse_RX/10) == iRewsize_true;
+                    nTrials_true_rewsize = length(find(these_trials));
+                    decodedTime_hat = decodedTime_trainedRewsize(these_trials,:);
+                    xMouse_decodedTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{m_ix} = decodedTime_hat;
+                    mean_decodedTime = nanmean(decodedTime_hat);
+                    sem_decodedTime = 3 * nanstd(decodedTime_hat) / sqrt(nTrials_true_rewsize);
+                    
+%                     subplot(numel(rewsizes),numel(analysis_mice),numel(analysis_mice) * (i_true_rewsize - 1) + m_ix);hold on
+%                     shadedErrorBar((0:analyze_ix)*tbin_ms/1000,mean_decodedTime,sem_decodedTime,'lineProps',{'color',cool3(i_trained_rewsize,:)})
+%                     
+%                     %                 % for single trial visualization
+%                     %                 decodedTime_hat = decodedTime_trainedRewsize(these_trials,:);
+%                     %                 trueTime = true_time(these_trials,:);
+%                     %                 for iTrial = 1:15 % nTrials_true_rewsize
+%                     %                     plot(trueTime(iTrial,:),gauss_smoothing(decodedTime_hat(iTrial,:),smoothing_sigma),'color',cool3(i_trained_rewsize,:),'linewidth',.5)
+%                     %                 end
+%                     
+%                     ylim([0 analyze_ix * tbin_ms / 1000])
+%                     plot([analyze_ix * tbin_ms / 1000 0],[0 analyze_ix * tbin_ms / 1000],'k--','linewidth',1.5)
+%                     if m_ix == 1
+%                         ylabel(sprintf("%i uL Trials \n Decoded time",iRewsize_true))
+%                     end
+%                     if i_true_rewsize == 1
+%                         title(sprintf("%s \n %s",feature_names(iFeature),mouse_names(mIdx)))
+%                     end
+%                 
+%                     if i_trained_rewsize == numel(rewsizes)
+%                         xlabel("True time")
+%                     end
                 end
             end
-            if i_trained_rewsize == numel(rewsizes)
-                xlabel("True time")
+        end
+    end
+end
+
+%% 3b) Pool leave decoding across mice
+close all
+for i_feature = 1:numel(vis_features)
+    iFeature = vis_features(i_feature);
+    for i_trained_rewsize = 1:3
+        for i_true_rewsize = 1:3
+            iRewsize_true = rewsizes(i_true_rewsize); 
+            % concatenate across mice
+            decodedTime_hat = cat(1,xMouse_decodedTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{:});
+            nTrials_true_rewsize = size(decodedTime_hat,1); 
+            mean_decodedTime = nanmean(decodedTime_hat);
+            sem_decodedTime = 1.96 * nanstd(decodedTime_hat) / sqrt(nTrials_true_rewsize);
+            
+            subplot(3,numel(vis_features),numel(vis_features) * (i_true_rewsize - 1) + i_feature);hold on
+            shadedErrorBar((0:analyze_ix)*tbin_ms/1000,mean_decodedTime,sem_decodedTime,'lineProps',{'color',cool3(i_trained_rewsize,:)})
+            ylim([0 analyze_ix * tbin_ms / 1000])
+            plot([analyze_ix * tbin_ms / 1000 0],[0 analyze_ix * tbin_ms / 1000],'k--','linewidth',1.5)
+            xticks([0 1 2])
+            xticklabels(fliplr([0 1 2]))
+            if i_feature == 1
+                ylabel(sprintf("%i uL Trials \n Decoded time",iRewsize_true))
             end
+            if i_true_rewsize == 1
+                title(sprintf("%s \n Pooled",feature_names(iFeature)))
+            end
+            
+            if i_trained_rewsize == numel(rewsizes)
+                xlabel("True time Until Leave")
+            end 
         end
     end
 end

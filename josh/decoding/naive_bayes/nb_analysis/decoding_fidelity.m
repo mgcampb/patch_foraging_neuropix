@@ -219,7 +219,7 @@ cluster_n_cells_threshold = 15;
 clu_pool_sessions{1} = arrayfun(@(i_mouse) find(cellfun(@(x) all(x(1) > cluster_n_cells_threshold),n_cells{i_mouse})),(1:nMice)','un',0);
 clu_pool_sessions{2} = arrayfun(@(i_mouse) find(cellfun(@(x) all(x(2) > cluster_n_cells_threshold),n_cells{i_mouse})),(1:nMice)','un',0);
 clu_pool_sessions{3} = arrayfun(@(i_mouse) find(cellfun(@(x) all(x(3) > cluster_n_cells_threshold),n_cells{i_mouse})),(1:nMice)','un',0);
-
+nb_results.clu_pool_sessions = clu_pool_sessions;
 %% 3) Visualize confusion matrices in n_cell thresholded sessions 
 
 y_true = nb_results.y_true; 
