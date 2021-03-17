@@ -1,4 +1,4 @@
-function [mi_cumulative,mae_cumulative,timecourse_results] = NB_fwd_search(population,search_depth,timecourse_save_steps,mIdx,i_session,iVar,iRewsize,iFeature,X_dataset,y_dataset,models,xval_table,dataset_opt)
+function [mi_cumulative,mae_cumulative,rmse_cumulative,timecourse_results] = NB_fwd_search(population,search_depth,timecourse_save_steps,mIdx,i_session,iVar,iRewsize,iFeature,X_dataset,y_dataset,models,xval_table,dataset_opt)
 % Perform forward search, adding cells one by one to trained naive bayes
 % decoder
     
@@ -22,6 +22,7 @@ function [mi_cumulative,mae_cumulative,timecourse_results] = NB_fwd_search(popul
     % 2) Loop over cells to include  
     mi_cumulative = nan(search_depth,1); 
     mae_cumulative = nan(search_depth,1); 
+    rmse_cumulative = nan(search_depth,1); 
     timecourse_results = cell(length(timecourse_save_steps),1); % $
     timecourse_counter = 1; % $
 
@@ -30,6 +31,7 @@ function [mi_cumulative,mae_cumulative,timecourse_results] = NB_fwd_search(popul
     for added_cell = 1:search_depth
         mi_cells_left = nan(length(cells_left),1);  
         mae_cells_left = nan(length(cells_left),1);  
+        rmse_cells_left = nan(length(cells_left),1);
         h2=waitbar(0,sprintf('Iterating to find cell %i',added_cell));
         % Change position of second bar so the is not overlap
         pos_w1=get(h1,'position');
@@ -55,6 +57,7 @@ function [mi_cumulative,mae_cumulative,timecourse_results] = NB_fwd_search(popul
 
             mi_cells_left(i_cell) = MI_confusionmat(confusionmat(i_y_hat_full,this_y_true)); 
             mae_cells_left(i_cell) = nanmean(abs(i_y_hat_full-this_y_true)); 
+            rmse_cells_left(i_cell) = sqrt(nanmean((i_y_hat_full-this_y_true).^2)); 
             waitbar(i_cell / numel(cells_left),h2)
         end
         close(h2);
@@ -63,6 +66,7 @@ function [mi_cumulative,mae_cumulative,timecourse_results] = NB_fwd_search(popul
         [max_mi,cell_new_ix] = max(mi_cells_left);  
         mi_cumulative(added_cell) = max_mi; % save mutual information that got us
         mae_cumulative(added_cell) =  mae_cells_left(cell_new_ix);
+        rmse_cumulative(added_cell) = rmse_cells_left(cell_new_ix); 
         cell_new = cells_left(cell_new_ix); % grab the cell
         cells_left = setdiff(cells_left,cell_new); % remove it from the cells left to add
         cells_picked = [cells_picked cell_new]; % add it to cells picked

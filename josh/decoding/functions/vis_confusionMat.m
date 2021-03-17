@@ -9,7 +9,7 @@ function vis_confusionMat(confusion_mats,X_dataset,session_titles,mutual_informa
             for m_ix = 1:numel(vis_mice)
                 mIdx = vis_mice(m_ix); 
                 figure()
-                for i = 1:numel(X_dataset{mIdx})
+                for i = 2 % 1:numel(X_dataset{mIdx})
                     for i_feature = 1:numel(vis_features) 
                         iFeature = vis_features(i_feature); 
                         subplot(numel(vis_features),numel(X_dataset{mIdx}),i + numel(X_dataset{mIdx}) * (i_feature-1)) 

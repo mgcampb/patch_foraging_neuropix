@@ -17,7 +17,7 @@ function [cond_means,confusion_mats,mutual_information,MAE, ...
     accuracy_mean_givenHat = cell(nMice,1); 
     accuracy_sem_givenTrue = cell(nMice,1); 
     accuracy_sem_givenHat = cell(nMice,1); 
-    for mIdx = 1:nMice 
+    for mIdx = 5 % 1:nMice 
         nSessions = numel(y_hat_full{mIdx});
         abs_error_mean_givenTrue{mIdx} = cell(nSessions,1); 
         abs_error_mean_givenHat{mIdx} = cell(nSessions,1); 
@@ -32,7 +32,7 @@ function [cond_means,confusion_mats,mutual_information,MAE, ...
         confusion_mats{mIdx} = cell(nSessions,1);
         mutual_information{mIdx} = cell(nSessions,1); 
         MAE{mIdx} = cell(nSessions,1); 
-        for i = 1:nSessions
+        for i = 2 % 1:nSessions
             abs_error_mean_givenTrue{mIdx}{i} = cell(numel(dataset_opt.vars),1); 
             abs_error_mean_givenHat{mIdx}{i} = cell(numel(dataset_opt.vars),1); 
             abs_error_sem_givenTrue{mIdx}{i} = cell(numel(dataset_opt.vars),1); 

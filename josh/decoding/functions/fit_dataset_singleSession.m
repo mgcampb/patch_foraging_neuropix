@@ -8,9 +8,9 @@ function models = fit_dataset_singleSession(X_dataset,y_dataset,xval_table,datas
     
     models = cell(numel(X_dataset),1);
     zero_sigma = 0.5;
-    for mIdx = 1:numel(X_dataset) 
+    for mIdx = 5 % 1:numel(X_dataset) 
         models{mIdx} = cell(numel(X_dataset{mIdx}),1);
-        for i = 1:numel(X_dataset{mIdx})
+        for i = 2 % 1:numel(X_dataset{mIdx})
             models{mIdx}{i} = cell(numel(dataset_opt.vars),1);
             for iVar = 1:numel(dataset_opt.vars) % iterate over the variables we are decoding
                 models{mIdx}{i}{iVar} = cell(numel(dataset_opt.rewsizes),1);

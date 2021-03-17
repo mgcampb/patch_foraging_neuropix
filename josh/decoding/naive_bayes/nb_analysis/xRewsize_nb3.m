@@ -146,10 +146,11 @@ clear y_hat % we now have this in an easier form to work with
 
 
 %% 1) Mean + sem visualization of gain modulation
-smoothing_sigma = 1;
+
 analyze_ix = round(2000 / tbin_ms);
 cool3 = cool(3);  
-for i_feature = [1 2 5]
+tt = "RR";
+for i_feature = [1 2 4 5]
     figure();hold on
     for m_ix = 1:numel(analysis_mice)
         mIdx = analysis_mice(m_ix); 
@@ -157,8 +158,8 @@ for i_feature = [1 2 5]
         mouse_RX = cat(1,RX{mIdx}{:});
         
         % make sure these are the same!
-        decoded_time_hat = timePatch_hat_xRewsize;
-        y_true_tmp = y_true{mIdx}(pool_sessions{mIdx},timePatch_ix);
+        decoded_time_hat = timeSince_hat_xRewsize;
+        y_true_tmp = y_true{mIdx}(pool_sessions{mIdx},timeSince_ix);
         true_time = cat(1,y_true_tmp{:}); 
         pad_trueTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) nan(1,max(0,analyze_ix - length(x)))],true_time,'un',0);
         true_time = cat(1,pad_trueTime{:});
@@ -175,7 +176,11 @@ for i_feature = [1 2 5]
             
             for i_true_rewsize = 1:numel(rewsizes)
                 iRewsize_true = rewsizes(i_true_rewsize); 
-                these_trials = round(mouse_RX/10) == iRewsize_true;
+                if tt == "RR"
+                    these_trials = mouse_RX == iRewsize_true*10 + iRewsize_true; 
+                else 
+                    these_trials = mouse_RX == iRewsize_true*10; 
+                end
                 nTrials_true_rewsize = length(find(these_trials)); 
                 
                 decodedTime_hat = decodedTime_trainedRewsize(these_trials,:); 
@@ -194,7 +199,12 @@ for i_feature = [1 2 5]
 %                 end
                 
                 ylim([0 2]) 
-                plot([0 2],[0,2],'k--','linewidth',1.5)  
+                if tt == "RR" 
+                    plot([0 1],[0 1],'k--','linewidth',1.5)   
+                    plot([1 2],[0 1],'k--','linewidth',1.5)   
+                else 
+                    plot([0 2],[0,2],'k--','linewidth',1.5)   
+                end
                 if m_ix == 1
                     ylabel(sprintf("%i uL Trials \n Decoded time",iRewsize_true))
                 end 
@@ -340,3 +350,4 @@ for i_feature = 1:5
         end
     end
 end
+

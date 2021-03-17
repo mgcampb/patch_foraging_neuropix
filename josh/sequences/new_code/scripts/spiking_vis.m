@@ -110,7 +110,7 @@ end
 colors = cool(3); 
 rew_vis_time = 250; 
 % close all
-for iTrial = 1
+for iTrial = 1:10
     iTrial_rew_ts = [1000 * (patchstop_sec(iTrial) - patchcue_sec(iTrial) + pre_cue_sec) ; 1000 * ((patchstop_sec(iTrial) - patchcue_sec(iTrial) + pre_cue_sec) +  rew_sec(rew_sec > patchstop_sec(iTrial) & rew_sec < patchleave_sec(iTrial)) - patchstop_sec(iTrial))]; 
     n_rews = numel(iTrial_rew_ts);
     figure() 

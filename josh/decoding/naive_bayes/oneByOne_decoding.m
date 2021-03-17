@@ -1,15 +1,13 @@
 %% The final codedown: Decode time since reward, adding one cell at a time
-prog;return; %Put this line at the start of a script
 paths = struct;
 paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/all_mice';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
 paths.glm_results = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results'; 
-paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/sig_cells/sig_cells_mb_cohort_PFC.mat';
+paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/gmm/sig_cells_table_gmm_mb_cohort_PFC.mat';
 load(paths.sig_cells);  
-paths.transients_table = '/Users/joshstern/Documents/UchidaLab_NeuralData/patch_foraging_neuropix/josh/structs/transients_table.mat';
+paths.transients_table = '/Users/joshstern/Documents/UchidaLab_NeuralData/patch_foraging_neuropix/josh/structs/transients_table_gmm.mat';
 load(paths.transients_table);  
 addpath('/Users/joshstern/Documents/UchidaLab_NeuralData'); 
-% sig_cell_sessions = sig_cells.Session;  
 
 % analysis options
 calcFR_opt = struct;
@@ -43,7 +41,7 @@ X_clusters = cell(numel(mouse_grps),1); % one vector of GLM cluster identities p
 X_peak_pos = cell(numel(mouse_grps),1); % one vector of positive peak indices per session
 X_cellIDs = cell(numel(mouse_grps),1);  
 brain_region = cell(numel(mouse_grps),1); 
-for mIdx = 1:5
+for mIdx = 5
     X{mIdx} = cell(numel(mouse_grps{mIdx}),3);  
     X_vel{mIdx} = cell(numel(mouse_grps{mIdx}),3);  
     X_accel{mIdx} = cell(numel(mouse_grps{mIdx}),3);  
@@ -52,7 +50,7 @@ for mIdx = 1:5
     X_peak_pos{mIdx} = cell(numel(mouse_grps{mIdx}),1);  
     X_cellIDs{mIdx} = cell(numel(mouse_grps{mIdx}),1);   
     brain_region{mIdx} = cell(numel(mouse_grps{mIdx}),1); 
-    for i = 1:numel(mouse_grps{mIdx})   
+    for i = 2
         sIdx = mouse_grps{mIdx}(i);   
         session = sessions{sIdx}(1:end-4);
         session_title = session([1:2 end-2:end]);
@@ -81,7 +79,7 @@ for mIdx = 1:5
         end  
         
         session_table = transients_table(strcmp(transients_table.Session,session_title),:); 
-        glm_clusters_session = session_table.GLM_Cluster; 
+        glm_clusters_session = session_table.gmm_cluster; 
         
         % we could think about just doing a pooling step here
         X{mIdx}{i,1} = fr_mat_trials; 
@@ -108,7 +106,7 @@ RXX = cell(numel(mouse_grps),1);
 rew_time = cell(numel(mouse_grps),1);  
 rew_num = cell(numel(mouse_grps),1);  
 xval_table = cell(numel(mouse_grps),1);  
-for mIdx = 1:5
+for mIdx = 5
     y{mIdx} = cell(numel(mouse_grps{mIdx}),3); % 3 variables to decode 
     y_rewsize{mIdx} = cell(numel(mouse_grps{mIdx}),1); % one vector of rewsizes per sesion   
     RX{mIdx} = cell(numel(mouse_grps{mIdx}),1);
@@ -116,7 +114,7 @@ for mIdx = 1:5
     rew_time{mIdx} = cell(numel(mouse_grps{mIdx}),1);
     rew_num{mIdx} = cell(numel(mouse_grps{mIdx}),1);
     xval_table{mIdx} = cell(numel(mouse_grps{mIdx}),1); 
-    for i = 1:numel(mouse_grps{mIdx}) 
+    for i = 2 % 1:numel(mouse_grps{mIdx}) 
         sIdx = mouse_grps{mIdx}(i);  
         session = sessions{sIdx}(1:end-4); 
         data = load(fullfile(paths.data,sessions{sIdx}));  
@@ -237,16 +235,16 @@ dataset_opt = struct;
 % select the features to add in different
 dataset_opt.features = cell(numel(mouse_grps),1); 
 % iterate within sessions, add cellIDs
-for mIdx = 1:numel(mouse_grps) 
+for mIdx = 5 % 1:numel(mouse_grps) 
     dataset_opt.features{mIdx} = cell(numel(mouse_grps{mIdx}),1); 
-    for i_session = 1:numel(mouse_grps{mIdx})  
+    for i_session = 2 % 1:numel(mouse_grps{mIdx})  
         sIdx = mouse_grps{mIdx}(i_session);   
         session = sessions{sIdx}(1:end-4);
         session_title = session([1:2 end-2:end]); 
         % First feature: all GLM selected neurons
         dataset_opt.features{mIdx}{i_session}{1} = struct;
         dataset_opt.features{mIdx}{i_session}{1}.type = "KMeans Clusters";
-        dataset_opt.features{mIdx}{i_session}{1}.ix = [1 2 3]; % indices within the feature type we selected
+        dataset_opt.features{mIdx}{i_session}{1}.ix = 1:5; % indices within the feature type we selected
         dataset_opt.features{mIdx}{i_session}{1}.shuffle = false; % shuffle?
         dataset_opt.features{mIdx}{i_session}{1}.name = "All Clusters"; % name for visualizations  
         % Second feature: all PFC cells
@@ -287,7 +285,7 @@ close all
 vis_features = 1:2;
 iRewsize = 2; 
 iVar = 1;  
-vis_mice = [4 5];
+vis_mice = 5;
 vis_confusionMat(confusion_mats,X_dataset,session_titles,mutual_information,MAE,var_bins,var_names,iVar,iRewsize,vis_features,vis_mice,dataset_opt)
 
 %% Forward search over cells
@@ -307,7 +305,7 @@ fwd_mi_cumulative = cell(3,1);
 fwd_mae_cumulative = cell(3,1); 
 fwd_timecourse_results = cell(3,1); 
 
-for i_cluster = 1:3
+for i_cluster = [1 2 4]
     population = find(X_clusters{mIdx}{i}(~isnan(X_clusters{mIdx}{i})) == i_cluster);
     i_search_depth = min(length(population),search_depth); 
     [fwd_mi_cumulative{i_cluster},fwd_mae_cumulative{i_cluster},fwd_timecourse_results{i_cluster}] = NB_fwd_search(population,i_search_depth,timecourse_save_steps,... 
@@ -383,7 +381,7 @@ for i_cluster = 1:3
     for i_savept = 1:numel(timecourse_save_steps)   
         if ~isempty(fwd_timecourse_results{i_cluster}{i_savept}) % if we didnt have enough cells
             shadedErrorBar(x,fwd_timecourse_results{i_cluster}{i_savept}.yhat_mean_timecourse,... 
-                             fwd_timecourse_results{i_cluster}{i_savept}.yhat_std_timecourse,...
+                             fwd_timecourse_results{i_cluster}{i_savept}.yhat_sem_timecourse,...
                              'lineProps',{'color',min(1,shading(i_savept) * cmap(i_cluster,:)),... 
                                           'linewidth',2})
         end  
@@ -408,8 +406,8 @@ for i_cluster = 1:3
     subplot(1,numel(timecourse_save_steps),i_cluster)
     for i_savept = 1:numel(timecourse_save_steps)   
         if ~isempty(fwd_timecourse_results{i_cluster}{i_savept}) % if we didnt have enough cells
-            shadedErrorBar(x,fwd_timecourse_results{i_cluster}{i_savept}.mae_mean_timecourse,... 
-                             fwd_timecourse_results{i_cluster}{i_savept}.mae_std_timecourse,...
+            shadedErrorBar(x,fwd_timecourse_results{i_cluster}{i_savept}.rmse_mean_timecourse,... 
+                             fwd_timecourse_results{i_cluster}{i_savept}.rmse_sem_timecourse,...
                              'lineProps',{'color',min(1,shading(i_savept) * cmap(i_cluster,:)),... 
                                           'linewidth',2})
         end  
@@ -522,7 +520,7 @@ iFeature = 2; % All cells or GLM cells
 % Use all transient-selected mPFC cells as population of interest 
 rew1_sig_transient_bool = ~isnan(X_peak_pos{mIdx}{i_session}(:,2)); 
 PFC_bool = strcmp(brain_region{mIdx}{i_session},"PFC"); 
-midresp_bool = X_peak_pos{mIdx}{i_session}(:,2) > .5 & X_peak_pos{mIdx}{i_session}(:,2) < 1.5
+midresp_bool = X_peak_pos{mIdx}{i_session}(:,2) > .2 & X_peak_pos{mIdx}{i_session}(:,2) < 1.8;
 population = find(rew1_sig_transient_bool & PFC_bool & midresp_bool);
 search_depth = 30; 
 n_searches = 10;
