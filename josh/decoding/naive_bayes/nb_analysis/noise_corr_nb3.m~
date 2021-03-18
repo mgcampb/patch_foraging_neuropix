@@ -169,9 +169,8 @@ end
 decoded_time_hat = timeSince_hat; % which time decoding are we analyzing
 analyze_ix = round(2000 / tbin_ms); % what time window
 
-trialtypes = [10 20 40 11 22 44];  
+trialtypes = [11 22 44];  
 
-xMouse_noise_corr = cell(numel(trialtypes),1);
 
 for m_ix = 1:numel(analysis_mice) 
     mIdx = analysis_mice(m_ix); 
@@ -199,8 +198,7 @@ for m_ix = 1:numel(analysis_mice)
         
         non_nan = ~isnan(cluster2noise_tt); 
         cluster1noise_tt = cluster1noise_tt(non_nan); 
-        cluster2noise_tt = cluster2noise_tt(non_nan);  
-        xMouse_noise_corr{i_tt} = [xMouse_noise_corr{i_tt} ;[cluster1noise_tt cluster2noise_tt]];
+        cluster2noise_tt = cluster2noise_tt(non_nan); 
         
         subplot(numel(trialtypes),numel(analysis_mice),numel(analysis_mice) * (i_tt - 1) + m_ix);hold on
 %         scatter(cluster1noise_tt(:),cluster2noise_tt(:),2,'.') 
@@ -223,40 +221,6 @@ for m_ix = 1:numel(analysis_mice)
         
     end
 end
-
-%% 1c) Plot pooled across mice
-
-for i_tt = 1:numel(trialtypes)
-    subplot(1,numel(trialtypes),i_tt);hold on
-    binscatter(xMouse_noise_corr{i_tt}(:,1),xMouse_noise_corr{i_tt}(:,2),50,'XLimits',[-4 4],'YLimits',[-4 4])  
-    [r,p] = corrcoef(xMouse_noise_corr{i_tt}(:,1),xMouse_noise_corr{i_tt}(:,2)); 
-    xlim([-2.5 4])
-    ylim([-2.5 4])
-    title(sprintf("%i Trials \n r = %.3f p = %.3f",trialtypes(i_tt),r(2),p(2)))
-    ax = gca;
-    ax.ColorScale = 'log';
-    set(gca,'fontsize',13)
-    if i_tt == 1
-        ylabel("Cluster 2 Noise")
-    end
-    xlabel("Cluster 1 Noise")
-end
-
-%% 1d) Plot pooled across trialtypes and mice 
-
-figure()
-xTT_xMouse_noise_corr = cat(1,xMouse_noise_corr{:}); 
-b = binscatter(xTT_xMouse_noise_corr(:,1),xTT_xMouse_noise_corr(:,2),50,'XLimits',[-4 4],'YLimits',[-4 4]); 
-[r,p] = corrcoef(xTT_xMouse_noise_corr(:,1),xTT_xMouse_noise_corr(:,2));
-xlim([-3 4])
-ylim([-3 4])
-title(sprintf("Decoded Time Since Reward Noise Correlation \n r = %.3f p = %.3f",r(2),p(2)))
-ax = gca;
-ax.ColorScale = 'log';
-colormap('parula') 
-set(gca,'fontsize',13)
-ylabel("Cluster 2 Noise")
-xlabel("Cluster 1 Noise")
 
 
 %% 2) Compare noise correlation to shuffled data 

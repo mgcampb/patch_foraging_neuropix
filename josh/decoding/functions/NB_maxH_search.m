@@ -1,6 +1,6 @@
 function [mi_cumulative,mae_cumulative,timecourse_results,peak_distns] = NB_maxH_search(population,n_searches,search_depth,timecourse_save_steps,...
                                                                             mIdx,i_session,iVar,iRewsize,iFeature,...
-                                                                            X_dataset,y_dataset,models,xval_table,dataset_opt,peak_times)
+                                                                            X_dataset,y_dataset,models,xval_table,dataset_opt,peak_times,H_bins)
 % NB_MAXH_SEARCH Add cells one-by-one to Naive Bayes decoding, selecting new
 %               cells to maximize entropy of peak time distribution
 
@@ -46,7 +46,7 @@ function [mi_cumulative,mae_cumulative,timecourse_results,peak_distns] = NB_maxH
             H_cells_left = nan(length(cells_left),1); % calculate resulting H per added cells_picked 
             for i_cell = 1:numel(cells_left)
                 cells_picked_tmp = [cells_picked cells_left(i_cell)];   
-                H_cells_left(i_cell) = calc_shannonH(peak_times(cells_picked_tmp));
+                H_cells_left(i_cell) = calc_shannonH(peak_times(cells_picked_tmp),H_bins);
             end
             
             % Add cell to maximize entropy of peak time distn

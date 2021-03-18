@@ -39,6 +39,7 @@ X_accel = cell(numel(mouse_grps),1); % one per task variable
 X_pos = cell(numel(mouse_grps),1); % one per task variable
 X_clusters = cell(numel(mouse_grps),1); % one vector of GLM cluster identities per session 
 X_peak_pos = cell(numel(mouse_grps),1); % one vector of positive peak indices per session
+X_peak_neg = cell(numel(mouse_grps),1); % one vector of positive peak indices per session
 X_cellIDs = cell(numel(mouse_grps),1);  
 brain_region = cell(numel(mouse_grps),1); 
 for mIdx = 5
@@ -92,6 +93,7 @@ for mIdx = 5
         X_accel{mIdx}{i,2} = accel_trials; 
         X_clusters{mIdx}{i} = glm_clusters_session;   
         X_peak_pos{mIdx}{i} = [session_table.Rew0_peak_pos session_table.Rew1plus_peak_pos];
+        X_peak_neg{mIdx}{i} = [session_table.Rew0_peak_neg session_table.Rew1plus_peak_neg];
         X_cellIDs{mIdx}{i} = good_cells;  
         brain_region{mIdx}{i} = session_table.Region;
     end
@@ -303,12 +305,13 @@ timecourse_save_steps = [1 7 15]; % save timecourse information per 10 timesteps
 
 fwd_mi_cumulative = cell(3,1); 
 fwd_mae_cumulative = cell(3,1); 
+fwd_rmse_cumulative = cell(3,1); 
 fwd_timecourse_results = cell(3,1); 
 
 for i_cluster = [1 2 4]
     population = find(X_clusters{mIdx}{i}(~isnan(X_clusters{mIdx}{i})) == i_cluster);
     i_search_depth = min(length(population),search_depth); 
-    [fwd_mi_cumulative{i_cluster},fwd_mae_cumulative{i_cluster},fwd_timecourse_results{i_cluster}] = NB_fwd_search(population,i_search_depth,timecourse_save_steps,... 
+    [fwd_mi_cumulative{i_cluster},fwd_mae_cumulative{i_cluster},fwd_rmse_cumulative{i_cluster},fwd_timecourse_results{i_cluster}] = NB_fwd_search(population,i_search_depth,timecourse_save_steps,... 
                                                                                                        mIdx,i_session,iVar,iRewsize,iFeature,... 
                                                                                                        X_dataset,y_dataset,models,xval_table,dataset_opt); 
 end
@@ -516,12 +519,16 @@ iVar = 1; % time since reward
 iRewsize = 2; % 4 uL 
 mIdx = 5;  
 i_session = 2; 
-iFeature = 2; % All cells or GLM cells
+session_glm_clusters = X_clusters{mIdx}{i_session}(~isnan(X_clusters{mIdx}{i_session})); 
+iFeature = 1; % All cells or GLM cells
 % Use all transient-selected mPFC cells as population of interest 
-rew1_sig_transient_bool = ~isnan(X_peak_pos{mIdx}{i_session}(:,2)); 
+% pos_rew_transient = X_peak_pos{mIdx}{i_session}(session_glm_clusters == 2,2); 
+% neg_rew_transient = X_peak_neg{mIdx}{i_session}(session_glm_clusters == 1,2); 
 PFC_bool = strcmp(brain_region{mIdx}{i_session},"PFC"); 
-midresp_bool = X_peak_pos{mIdx}{i_session}(:,2) > .2 & X_peak_pos{mIdx}{i_session}(:,2) < 1.8;
-population = find(rew1_sig_transient_bool & PFC_bool & midresp_bool);
+midresp_bool = X_peak_pos{mIdx}{i_session}(:,2) > .4 & X_peak_pos{mIdx}{i_session}(:,2) < 1.6;
+population = find(PFC_bool & midresp_bool); 
+pos_rew_transient = X_peak_pos{mIdx}{i_session}(:,2); % note to keep this in size [total n cells, 1] (not pop size)
+% population = find(session_glm_clusters == 1); 
 search_depth = 30; 
 n_searches = 10;
 timecourse_save_steps = [1 5 10 15 20 25 30]; % save timecourse information per 10 timesteps
@@ -531,16 +538,17 @@ timecourse_save_steps = [1 5 10 15 20 25 30]; % save timecourse information per 
                                     = NB_rnd_search(population,n_searches,search_depth,timecourse_save_steps,... 
                                                     mIdx,i_session,iVar,iRewsize,iFeature,... 
                                                     X_dataset,y_dataset,models,xval_table,dataset_opt);
-
+discr_bins = 0:.1:2; 
+h_bins = 0:numel(discr_bins); 
 % Now perform peak time entropy maximization search
 % discretize peak time so that entropy of peak time is maybe more meaningful 
-rew1plus_peak_time = X_peak_pos{mIdx}{i_session}(:,2); 
-[~,~,discr_rew1plus_peak] = histcounts(rew1plus_peak_time,0:.2:2);
+[~,~,discr_pos_rew_transient] = histcounts(pos_rew_transient,discr_bins);
+% [~,~,discr_neg_rew_transient] = histcounts(neg_rew_transient,0:.2:2);
 
 [maxH_mi_cumulative,maxH_mae_cumulative,maxH_timecourse_results,maxH_peak_distns]... 
                                     = NB_maxH_search(population,n_searches,search_depth,timecourse_save_steps,... 
                                                     mIdx,i_session,iVar,iRewsize,iFeature,... 
-                                                    X_dataset,y_dataset,models,xval_table,dataset_opt,discr_rew1plus_peak);
+                                                    X_dataset,y_dataset,models,xval_table,dataset_opt,discr_pos_rew_transient,h_bins);
 
 %% Visualize rnd vs maxH adding
 bin_dt = diff(var_bins{1}(1:2));   
@@ -564,11 +572,11 @@ xlabel("Search depth")
 ylabel("MAE (sec)")  
 
 subplot(2,2,[1 3]) 
-rand_peak_distns = arrayfun(@(x) cellfun(@(y) discr_rew1plus_peak(y),rnd_cells_chosen{x},'un',0),(1:n_searches)','un',0);
+rand_peak_distns = arrayfun(@(x) cellfun(@(y) discr_pos_rew_transient(y),rnd_cells_chosen{x},'un',0),(1:n_searches)','un',0);
 x = 1:search_depth;
-rand_H = arrayfun(@(y) cellfun(@(x) calc_shannonH(x),rand_peak_distns{y}),(1:n_searches)','un',0);
+rand_H = arrayfun(@(y) cellfun(@(x) calc_shannonH(x,h_bins),rand_peak_distns{y}),(1:n_searches)','un',0);
 rand_H = cat(2,rand_H{:});
-maxH_H = arrayfun(@(y) cellfun(@(x) calc_shannonH(x),maxH_peak_distns{y}),(1:n_searches)','un',0); 
+maxH_H = arrayfun(@(y) cellfun(@(x) calc_shannonH(x,h_bins),maxH_peak_distns{y}),(1:n_searches)','un',0); 
 maxH_H = cat(2,maxH_H{:});
 
 shadedErrorBar(x,mean(maxH_H'),std(maxH_H'),'lineprops',{'linewidth',1.5,'color',cmap(1,:)}) 

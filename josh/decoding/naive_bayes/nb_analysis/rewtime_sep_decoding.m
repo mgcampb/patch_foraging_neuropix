@@ -37,7 +37,7 @@ for mIdx = 1:numel(analysis_sessions)
         session_titles{mIdx}{i} = session_title;
     end
 end  
-
+clu_pool_sessions = nb_results.clu_pool_sessions;
 feature_names = cellfun(@(x) x.name, nb_results.dataset_opt.features{5}{1});
 var_dt = diff(nb_results.var_bins{1}{1}{1}(1:2));
 
@@ -224,7 +224,7 @@ clear y_hat % we now have this in an easier form to work with
 
 %% 1) Visualize decoding separated by reward timing
 
-analyze_ix = round([3000 3000 5000 3000 3000] / tbin_ms); %
+analyze_ix = round([3000 3000 3000 3000 3000] / tbin_ms); %
 vis_rewsizes = [1 2 4]; 
 vis_rewtimes = 0:2;
 smoothing_sigma = 1;
@@ -242,65 +242,158 @@ cool9_cell{1} = cool9_darkening(1:3,:);
 cool9_cell{2} = cool9_darkening(4:6,:);
 cool9_cell{3} = cool9_darkening(7:9,:);
 
-decoded_hat_rews = timeSince_hat_rews;
-this_var_name = "Time Since Rew";
+decoded_hat_rews = timePatch_hat_rews;
+this_var_name = "Time On Patch";
+cell_threshold = true; 
+vis_features = [1 2 5]; 
 
-for i_feature = [1 2 3 5]
-    figure()
+xMice_decoded_hat_rews = cell(numel(vis_features),1); 
+
+for i_feature = 1:numel(vis_features)
+    iFeature = vis_features(i_feature); 
+%     figure()
     for m_ix = 1:numel(analysis_mice)  
-        mIdx = analysis_mice(m_ix); 
-        % decoded time since reward per reward event
-        mouse_decoded_hat_rews = cellfun(@(x) x{i_feature}, decoded_hat_rews{mIdx},'un',0);
-        mouse_decoded_hat_rews = cat(1,mouse_decoded_hat_rews{:}); 
-        
-        % ok now turn these into matrix of size [nRews analyze_ix]
-        pad_decoded_hat_rews = cellfun(@(x) [x(1:min(length(x),analyze_ix(mIdx))) ; nan(max(0,analyze_ix(mIdx) - length(x)),1)]',mouse_decoded_hat_rews,'un',0);
-        if this_var_name ~= "Total Reward"
-            mouse_decoded_hat_rews = var_dt * cat(1,pad_decoded_hat_rews{:}); % now this is a matrix
-        else 
-            mouse_decoded_hat_rews = cat(1,pad_decoded_hat_rews{:}); % now this is a matrix 
+        mIdx = analysis_mice(m_ix);  
+        if iFeature <= 3 && cell_threshold == true % introduce # cell session inclusion criterion
+            mouse_include_sessions = ismember(pool_sessions{mIdx},clu_pool_sessions{iFeature}{mIdx});
+            % decoded time since reward per reward event
+            mouse_decoded_hat_rews = cellfun(@(x) x{i_feature}, decoded_hat_rews{mIdx}(mouse_include_sessions),'un',0);
+            mouse_decoded_hat_rews = cat(1,mouse_decoded_hat_rews{:});
+
+            % reward size, time, number per reward event
+            mouse_rewsize_rews = cat(1,rewsize_rews{mIdx}(mouse_include_sessions));
+            mouse_rewsize_rews = cat(1,mouse_rewsize_rews{:}); 
+            mouse_rew_time_rews = cat(1,rew_time_rews{mIdx}(mouse_include_sessions));
+            mouse_rew_time_rews = cat(1,mouse_rew_time_rews{:}); 
+            mouse_rew_num_rews = cat(1,rew_num_rews{mIdx}(mouse_include_sessions));
+            mouse_rew_num_rews = cat(1,mouse_rew_num_rews{:}); 
+        else
+            % decoded time since reward per reward event
+            mouse_decoded_hat_rews = cellfun(@(x) x{iFeature}, decoded_hat_rews{mIdx},'un',0);
+            mouse_decoded_hat_rews = cat(1,mouse_decoded_hat_rews{:});
+            % reward size, time, number per reward event
+            mouse_rewsize_rews = cat(1,rewsize_rews{mIdx}{:});
+            mouse_rew_time_rews = cat(1,rew_time_rews{mIdx}{:});
+            mouse_rew_num_rews = cat(1,rew_num_rews{mIdx}{:});
         end
         
-        % reward size, time, number per reward event
-        mouse_rewsize_rews = cat(1,rewsize_rews{mIdx}{:});
-        mouse_rew_time_rews = cat(1,rew_time_rews{mIdx}{:}); 
-        mouse_rew_num_rews = cat(1,rew_num_rews{mIdx}{:}); 
-        
-        for i_rewsize = 1:numel(vis_rewsizes)
-            iRewsize = vis_rewsizes(i_rewsize); 
-            subplot(numel(vis_rewsizes),numel(analysis_mice),numel(analysis_mice) * (i_rewsize - 1) + m_ix);hold on
-            
-            for i_rewtime = 1:numel(vis_rewtimes)
-                these_trials = mouse_rewsize_rews == iRewsize & mouse_rew_time_rews == vis_rewtimes(i_rewtime) & ismember(mouse_rew_num_rews,[1 2]); 
-                tt_nTrials = length(find(these_trials));  
-                if tt_nTrials > 1
-                    tt_mouse_decoded_hat_rews = mouse_decoded_hat_rews(these_trials,:); 
-
-                    tt_mean = nanmean(tt_mouse_decoded_hat_rews); 
-                    tt_sem = 1.96 * nanstd(tt_mouse_decoded_hat_rews) / sqrt(tt_nTrials);
-                    shadedErrorBar((1:analyze_ix(mIdx))*tbin_ms/1000,tt_mean,tt_sem,'lineProps',{'color',cool9_cell{i_rewsize}(i_rewtime,:)})
+        if ~isempty(mouse_decoded_hat_rews)
+            % ok now turn these into matrix of size [nRews analyze_ix]
+            pad_decoded_hat_rews = cellfun(@(x) [x(1:min(length(x),analyze_ix(mIdx))) ; nan(max(0,analyze_ix(mIdx) - length(x)),1)]',mouse_decoded_hat_rews,'un',0);
+            if this_var_name ~= "Total Reward"
+                mouse_decoded_hat_rews = var_dt * cat(1,pad_decoded_hat_rews{:}); % now this is a matrix
+            else
+                mouse_decoded_hat_rews = cat(1,pad_decoded_hat_rews{:}); % now this is a matrix
+            end
+            for i_rewsize = 1:numel(vis_rewsizes)
+                iRewsize = vis_rewsizes(i_rewsize);
+                subplot(numel(vis_rewsizes),numel(analysis_mice),numel(analysis_mice) * (i_rewsize - 1) + m_ix);hold on
+                for i_rewtime = 1:numel(vis_rewtimes)
+                    these_trials = mouse_rewsize_rews == iRewsize & mouse_rew_time_rews == vis_rewtimes(i_rewtime) & ismember(mouse_rew_num_rews,[1 2 3]);
+                    tt_nTrials = length(find(these_trials));
+                    if tt_nTrials > 1
+                        tt_mouse_decoded_hat_rews = mouse_decoded_hat_rews(these_trials,:);
+                        xMice_decoded_hat_rews{i_feature}{i_rewsize}{i_rewtime}{m_ix} = tt_mouse_decoded_hat_rews;
+                        tt_mean = nanmean(tt_mouse_decoded_hat_rews);
+                        tt_sem = 1.96 * nanstd(tt_mouse_decoded_hat_rews) / sqrt(tt_nTrials);
+%                         shadedErrorBar((1:analyze_ix(mIdx))*tbin_ms/1000,tt_mean,tt_sem,'lineProps',{'color',cool9_cell{i_rewsize}(i_rewtime,:)})
+                    end
                 end
+                
+%                 % subplot formatting
+%                 ylim([0 analyze_ix(mIdx) *tbin_ms/1000])
+%                 xlim([0 analyze_ix(mIdx) *tbin_ms/1000])
+%                 if i_rewsize == 1
+%                     title(mouse_names(mIdx))
+%                 end
+%                 if i_rewsize == numel(vis_rewsizes)
+%                     xlabel(sprintf("True %s (sec)",this_var_name))
+%                 end
+%                 
+%                 if m_ix == 1
+%                     ylabel(sprintf("%i uL \n Decoded %s (sec)",iRewsize,this_var_name))
+%                     legend(["t = 0","t = 1","t = 2"])
+%                 end
+%                 set(gca,'fontsize',12)
             end
-            
-            % subplot formatting
-            ylim([0 analyze_ix(mIdx) *tbin_ms/1000])
-            xlim([0 analyze_ix(mIdx) *tbin_ms/1000])
-            if i_rewsize == 1
-                title(mouse_names(mIdx))
-            end
-            if i_rewsize == numel(vis_rewsizes)
-                xlabel(sprintf("True %s (sec)",this_var_name))
-            end
-            
-            if m_ix == 1
-                ylabel(sprintf("%i uL \n Decoded %s (sec)",iRewsize,this_var_name))
-                legend(["t = 0","t = 1","t = 2"])
-            end
-            set(gca,'fontsize',12)
         end
     end
-    suptitle(feature_names(i_feature))
+    suptitle(feature_names(iFeature))
 end
+
+%% 1b) Visualize pooled across mice 
+
+rmse_mean_1sec = nan(numel(vis_features),numel(vis_rewsizes),numel(vis_rewtimes)); 
+rmse_sem_1sec = nan(numel(vis_features),numel(vis_rewsizes),numel(vis_rewtimes)); 
+mae_mean_1sec = nan(numel(vis_features),numel(vis_rewsizes),numel(vis_rewtimes)); 
+mae_sem_1sec = nan(numel(vis_features),numel(vis_rewsizes),numel(vis_rewtimes)); 
+figure()
+for i_feature = 1:numel(vis_features)
+    iFeature = vis_features(i_feature);
+    for i_rewsize = 1:numel(vis_rewsizes)
+        iRewsize = vis_rewsizes(i_rewsize);
+        subplot(numel(vis_rewsizes),numel(vis_features),numel(vis_features) * (i_rewsize - 1) + i_feature);hold on
+        for i_rewtime = 1:numel(vis_rewtimes)
+            tt_mouse_decoded_hat_rews = cat(1,xMice_decoded_hat_rews{i_feature}{i_rewsize}{i_rewtime}{:});
+            tt_nTrials = size(tt_mouse_decoded_hat_rews,1);
+            tt_mean = nanmean(tt_mouse_decoded_hat_rews);
+            tt_sem = 1.96 * nanstd(tt_mouse_decoded_hat_rews) / sqrt(tt_nTrials);
+            shadedErrorBar((1:analyze_ix(mIdx))*tbin_ms/1000,tt_mean,tt_sem,'lineProps',{'color',cool9_cell{i_rewsize}(i_rewtime,:)})
+            % calculate rmse 
+            iRewtime = vis_rewtimes(i_rewtime);   
+            if isequal(decoded_hat_rews,timePatch_hat_rews) || isequal(decoded_hat_rews,timeSince_hat_rews) 
+                decoded_1sec = tt_mouse_decoded_hat_rews(:,1:50);
+                if isequal(decoded_hat_rews,timePatch_hat_rews) % time on patch
+                    true_time = (iRewtime+tbin_ms/1000):(tbin_ms/1000):(iRewtime+1); 
+                else
+                    true_time = (tbin_ms/1000):(tbin_ms/1000):1; % time since reward
+                end 
+                rmse_mean_1sec(i_feature,i_rewsize,i_rewtime) = sqrt(nanmean((decoded_1sec - true_time).^2,'all'));
+                rmse_sem_1sec(i_feature,i_rewsize,i_rewtime) = 1.96 * nanstd((decoded_1sec - true_time).^2,[],'all') / sqrt(numel(decoded_1sec));
+                mae_mean_1sec(i_feature,i_rewsize,i_rewtime) = nanmean(abs(decoded_1sec - true_time),'all');
+                mae_sem_1sec(i_feature,i_rewsize,i_rewtime) = 1.96 * nanstd(abs(decoded_1sec - true_time),[],'all') / sqrt(numel(decoded_1sec));
+            end
+        end
+        
+        % subplot formatting
+        ylim([0 analyze_ix(mIdx) * tbin_ms/1000])
+        xlim([0 analyze_ix(mIdx) * tbin_ms/1000])
+        if i_rewsize == 1
+            title(feature_names(iFeature))
+        end
+        if i_rewsize == numel(vis_rewsizes)
+            xlabel(sprintf("True %s (sec)",this_var_name))
+        end
+        
+        if i_feature == 1
+            ylabel(sprintf("%i uL \n Decoded %s (sec)",iRewsize,this_var_name))
+            legend(["t = 0","t = 1","t = 2"])
+        end
+        set(gca,'fontsize',12)
+    end
+end 
+
+%% 1c) Quantify errors in first second following reward in terms of RMSE
+colors = [lines(4);0 .9 .9 ; .2 .2 .2]; 
+these_colors = colors(vis_features,:);
+i_rewsize = 3;
+this_rmse_mean_1sec = squeeze(mae_mean_1sec(:,i_rewsize,:));
+this_rmse_sem_1sec = squeeze(mae_sem_1sec(:,i_rewsize,:));
+figure() 
+colororder(these_colors)
+b = bar(this_rmse_mean_1sec');
+x = arrayfun(@(i_feature) b(i_feature).XEndPoints,1:numel(vis_features),'un',0);
+x = cat(2,x{:});
+hold on;
+this_rmse_mean_1sec= this_rmse_mean_1sec'; 
+this_rmse_sem_1sec = this_rmse_sem_1sec';
+errorbar(x,this_rmse_mean_1sec(:),this_rmse_sem_1sec(:),'k.','linewidth',1.5)
+xticklabels(["t = 0","t = 1","t = 2"])
+ylabel(sprintf("%s MAE",this_var_name))
+title(sprintf("%s MAE in First Second After Reward \n Separated by Reward Time",this_var_name))
+legend(feature_names(vis_features)) 
+ylim([0 1.5])   
+set(gca,'fontsize',13) 
 
 %% 2) Visualize decoding separated by reward number
 
@@ -308,12 +401,12 @@ analyze_ix = round([2000 2000 2000 2000 2000] / tbin_ms); %
 vis_rewsizes = [1 2 4]; 
 vis_rewnums = 1:3;
 smooth_sigma = 1;
-smoothing = true; 
+smoothing = false; 
 
-decoded_hat_rews = totalRew_hat_rews;
-this_var_name = "Total Reward";
+decoded_hat_rews = timeSince_hat_rews;
+this_var_name = "Time Since Rew";
 close all
-for i_feature = 4
+for i_feature = 1
     figure()
     for m_ix = 1:numel(analysis_mice)  
         mIdx = analysis_mice(m_ix); 
@@ -402,79 +495,129 @@ analyze_ix = round(3000 / tbin_ms); %
 vis_rewsizes = [1 2 4]; 
 trialtypes = {[100, 110, 101, 111],[200,220,202,222],[400,440,404,444]};
 smooth_sigma = 1;
-smoothing = true; 
+smoothing = false; 
 
-decoded_hat = totalRews_hat;
-this_var_name = "Total Reward";
+decoded_hat = timeSince_hat;
+this_var_name = "Time Since Rew";
 close all
-for i_feature = 1:5
+cell_threshold = true; 
+vis_features = [1 2 5];
+xMouse_decoded_hat = cell(numel(vis_features),1); 
+for i_feature = 1:numel(vis_features) 
+    iFeature = vis_features(i_feature); 
     figure()
     for m_ix = 1:numel(analysis_mice)  
-        mIdx = analysis_mice(m_ix); 
-        % decoded time since reward per reward event
-        mouse_decoded_hat = cellfun(@(x) x{i_feature}, decoded_hat{mIdx},'un',0);
-        mouse_decoded_hat = cat(1,mouse_decoded_hat{:}); 
-        
-        % ok now turn these into matrix of size [nRews analyze_ix]
-        pad_decoded_hat = cellfun(@(x) [x(1:min(length(x),analyze_ix)) ; nan(max(0,analyze_ix - length(x)),1)]',mouse_decoded_hat,'un',0);
-        if this_var_name ~= "Total Reward"
-            mouse_decoded_hat = var_dt * cat(1,pad_decoded_hat{:}); % now this is a matrix
-        else 
-            mouse_decoded_hat = 1 + cat(1,pad_decoded_hat{:}); % now this is a matrix 
+        mIdx = analysis_mice(m_ix);
+        if iFeature <= 3 && cell_threshold == true % introduce # cell session inclusion criterion
+            mouse_include_sessions = ismember(pool_sessions{mIdx},clu_pool_sessions{iFeature}{mIdx});
+            % decoded time since reward per reward event
+            mouse_decoded_hat = cellfun(@(x) x{iFeature}, decoded_hat{mIdx}(mouse_include_sessions),'un',0);
+            mouse_decoded_hat = cat(1,mouse_decoded_hat{:});
+            % reward size, time, number per reward event
+            mouse_RXX = cat(1,RXX{mIdx}(mouse_include_sessions));
+            mouse_RXX = cat(1,mouse_RXX{:});
+        else
+            % decoded time since reward per reward event
+            mouse_decoded_hat = cellfun(@(x) x{iFeature}, decoded_hat{mIdx},'un',0);
+            mouse_decoded_hat = cat(1,mouse_decoded_hat{:});
+            % reward size, time, number per reward event
+            mouse_RXX = cat(1,RXX{mIdx}{:});
         end
         
-        % smooth?
-        if smoothing == true
-            smoothed = arrayfun(@(iTrial) gauss_smoothing(mouse_decoded_hat(iTrial,:),smooth_sigma),(1:size(mouse_decoded_hat,1))','un',0);
-            mouse_decoded_hat = cat(1,smoothed{:});
-        end
-        
-        % reward size, time, number per reward event
-        mouse_RXX = cat(1,RXX{mIdx}{:});
-        
-        for i_rewsize = 1:numel(vis_rewsizes)
-            iRewsize = vis_rewsizes(i_rewsize); 
-            subplot(numel(vis_rewsizes),numel(analysis_mice),numel(analysis_mice) * (i_rewsize - 1) + m_ix);hold on
-            
-            for i_tt = 1:numel(trialtypes{i_rewsize})
-                these_trials = mouse_RXX == trialtypes{i_rewsize}(i_tt); % & ismember(mouse_rew_time_rews,0:1) ; 
-                tt_nTrials = length(find(these_trials));  
-                if tt_nTrials > 1
-                    tt_mouse_decoded_hat = mouse_decoded_hat(these_trials,:); 
-
-                    tt_mean = nanmean(tt_mouse_decoded_hat); 
-                    tt_sem = 1.96 * nanstd(tt_mouse_decoded_hat) / sqrt(tt_nTrials);
-                    shadedErrorBar((1:analyze_ix)*tbin_ms/1000,tt_mean,tt_sem,'lineProps',{'color',cool12_cell{i_rewsize}(i_tt,:)})
-                end
-            end
-            
-            % subplot formatting 
+        if ~isempty(mouse_decoded_hat)
+            % ok now turn these into matrix of size [nRews analyze_ix]
+            pad_decoded_hat = cellfun(@(x) [x(1:min(length(x),analyze_ix)) ; nan(max(0,analyze_ix - length(x)),1)]',mouse_decoded_hat,'un',0);
             if this_var_name ~= "Total Reward"
-                ylim([0 analyze_ix * tbin_ms/1000])
-                xlim([0 analyze_ix *tbin_ms/1000])
-            else  
-                ylim([0 6])
-                xlim([0 analyze_ix *tbin_ms/1000])
+                mouse_decoded_hat = var_dt * cat(1,pad_decoded_hat{:}); % now this is a matrix
+            else
+                mouse_decoded_hat = 1 + cat(1,pad_decoded_hat{:}); % now this is a matrix
             end
-            if i_rewsize == 1
-                title(mouse_names(mIdx))
-            end 
             
-            if i_rewsize == numel(vis_rewsizes) 
-                if this_var_name ~= "Total Reward"
-                    xlabel(sprintf("True %s (sec)",this_var_name))
-                else 
-                    xlabel("Time Since Reward (sec)")
+            % smooth?
+            if smoothing == true
+                smoothed = arrayfun(@(iTrial) gauss_smoothing(mouse_decoded_hat(iTrial,:),smooth_sigma),(1:size(mouse_decoded_hat,1))','un',0);
+                mouse_decoded_hat = cat(1,smoothed{:});
+            end
+
+            for i_rewsize = 1:numel(vis_rewsizes)
+                iRewsize = vis_rewsizes(i_rewsize);
+                subplot(numel(vis_rewsizes),numel(analysis_mice),numel(analysis_mice) * (i_rewsize - 1) + m_ix);hold on
+                
+                for i_tt = 1:numel(trialtypes{i_rewsize})
+                    these_trials = mouse_RXX == trialtypes{i_rewsize}(i_tt); % & ismember(mouse_rew_time_rews,0:1) ;
+                    tt_nTrials = length(find(these_trials));
+                    if tt_nTrials > 1
+                        tt_mouse_decoded_hat = mouse_decoded_hat(these_trials,:);
+                        xMouse_decoded_hat{i_feature}{i_rewsize}{i_tt}{m_ix} = tt_mouse_decoded_hat; 
+                        tt_mean = nanmean(tt_mouse_decoded_hat);
+                        tt_sem = 1.96 * nanstd(tt_mouse_decoded_hat) / sqrt(tt_nTrials);
+                        shadedErrorBar((1:analyze_ix)*tbin_ms/1000,tt_mean,tt_sem,'lineProps',{'color',cool12_cell{i_rewsize}(i_tt,:)})
+                    end
                 end
+                
+                % subplot formatting
+                if this_var_name ~= "Total Reward"
+                    ylim([0 analyze_ix * tbin_ms/1000])
+                    xlim([0 analyze_ix *tbin_ms/1000])
+                else
+                    ylim([0 6])
+                    xlim([0 analyze_ix *tbin_ms/1000])
+                end
+                if i_rewsize == 1
+                    title(mouse_names(mIdx))
+                end
+                
+                if i_rewsize == numel(vis_rewsizes)
+                    xlabel("Time On Patch (sec)")
+                end
+                
+                if m_ix == 1
+                    ylabel(sprintf("%i uL \n Decoded %s (sec)",iRewsize,this_var_name))
+                    %                 legend(["Rew 1","Rew 2","Rew 3"])
+                end
+                set(gca,'fontsize',12)
             end
-            
-            if m_ix == 1
-                ylabel(sprintf("%i uL \n Decoded %s (sec)",iRewsize,this_var_name))
-%                 legend(["Rew 1","Rew 2","Rew 3"])
-            end
-            set(gca,'fontsize',12)
         end
     end
-    suptitle(feature_names(i_feature))
+    suptitle(feature_names(iFeature))
 end 
+
+%% Visualize pooled RXX 
+figure()    
+for i_feature = 1:numel(vis_features)
+    iFeature = vis_features(i_feature);
+    for i_rewsize = 1:numel(vis_rewsizes)
+        iRewsize = vis_rewsizes(i_rewsize);
+        subplot(numel(vis_rewsizes),numel(vis_features),numel(vis_features) * (i_rewsize - 1) + i_feature);hold on
+        
+        for i_tt = 1:numel(trialtypes{i_rewsize})
+            tt_mouse_decoded_hat = cat(1,xMouse_decoded_hat{i_feature}{i_rewsize}{i_tt}{:});
+            tt_nTrials = size(tt_mouse_decoded_hat,1);
+            tt_mean = nanmean(tt_mouse_decoded_hat);
+            tt_sem = 1.96 * nanstd(tt_mouse_decoded_hat) / sqrt(tt_nTrials);
+            shadedErrorBar((1:analyze_ix)*tbin_ms/1000,tt_mean,tt_sem,'lineProps',{'color',cool12_cell{i_rewsize}(i_tt,:)})
+        end
+        
+        % subplot formatting
+        if this_var_name ~= "Total Reward"
+            ylim([0 analyze_ix * tbin_ms/1000])
+            xlim([0 analyze_ix *tbin_ms/1000])
+        else
+            ylim([0 6])
+            xlim([0 analyze_ix *tbin_ms/1000])
+        end
+        if i_rewsize == 1
+            title(feature_names(iFeature))
+        end
+        
+        if i_rewsize == numel(vis_rewsizes)
+            xlabel("Time On Patch (sec)")
+        end
+        
+        if i_feature == 1
+            ylabel(sprintf("%i uL \n Decoded %s (sec)",iRewsize,this_var_name))
+        end
+        set(gca,'fontsize',13)
+    end
+end
 
