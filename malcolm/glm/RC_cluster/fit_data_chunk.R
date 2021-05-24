@@ -33,15 +33,23 @@ cat("done. (Elapsed time = ",difftime(Sys.time(),start_time,units="sec")," sec)\
 beta = matrix()
 length(beta) = length(cellID) * (dim(x)[2]+1)
 dim(beta) = c(length(cellID), dim(x)[2]+1)
+devratio = matrix()
+length(devratio) = length(cellID)
+dim(devratio) = c(length(cellID),1)
+nulldev = matrix()
+length(nulldev) = length(cellID)
+dim(nulldev) = c(length(cellID),1)
 for (i in 1:length(cellID)) {
 	cat("Fitting cell ",i,"/",length(cellID),": ",cellID[i],"...",sep="")
 	y = y_all[,i]
 	fit = cv.glmnet(x, y, family = "poisson", alpha = alpha)
 	beta[i,] = matrix(coef(fit, s = "lambda.1se"))
+	devratio[i] = matrix(fit$glmnet.fit$dev[fit$lambda==fit$lambda.1se])
+	nulldev[i] = fit$glmnet.fit$nulldev
 	cat("done. (Elapsed time = ",difftime(Sys.time(),start_time,units="sec")," sec)\n",sep="")
 }
 
 # write data
 cat("Writing output...")
-writeMat(paste(save_folder,"chunk",sprintf("%03d",chunk_idx),".mat",sep=""),beta=beta,session=session,cellID=cellID)
+writeMat(paste(save_folder,"chunk",sprintf("%03d",chunk_idx),".mat",sep=""),beta=beta,devratio=devratio,nulldev=nulldev,session=session,cellID=cellID)
 cat("done. (Elapsed time = ",difftime(Sys.time(),start_time,units="sec")," sec)\n",sep="")

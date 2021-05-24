@@ -2,6 +2,12 @@
 % output by Display_Probe_Track in SHARP-Track code
 % MGC 8/19/2020
 
+paths = struct;
+paths.allenCCF = 'C:\code\allenCCF';
+paths.npy_matlab = 'C:\code\npy-matlab';
+addpath(genpath(paths.allenCCF));
+addpath(genpath(paths.npy_matlab));
+
 data_dir = 'G:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data\';
 
 data_set_all = dir(fullfile(data_dir,'*.mat'));

@@ -1,39 +1,84 @@
+% script to compute spike time cross correlation between pairs of cells
+% MGC 4/13/2021
+
+d = datetime; d.Format = 'uuuuMMdd-HHmmss'; % output saved by date
+
+paths = struct;
 paths.data = 'G:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
+paths.results = fullfile('C:\data\patch_foraging_neuropix\spike_time_cross_correlation',char(d));
+if ~isfolder(paths.results)
+    mkdir(paths.results);
+end
+paths.spikes = 'C:\code\spikes'; % spikes repo
+addpath(genpath(paths.spikes));
+paths.malcolm_functions = 'C:\code\patch_foraging_neuropix\malcolm\functions';
+addpath(genpath(paths.malcolm_functions));
+paths.sig_cells = 'C:\data\patch_foraging_neuropix\sig_cells';
 
-session = '80_20200317';
+opt = struct;
+opt.binsize = 0.001; % in seconds
+opt.num_lags = 200; % for cross correlation
+opt.max_dist = 200; % in microns
+opt.session = '80_20200317';
+opt.sig_cells = 'sig_cells_table_20210413'; % which sig_cells table to use
 
-%%
-dat = load(fullfile(paths.data,session));
+%% load sig_cells table
+load(fullfile(paths.sig_cells,opt.sig_cells));
 
-%%
-good_cells = dat.sp.cids(dat.sp.cgs==2);
+%% load data
+dat = load(fullfile(paths.data,opt.session));
+good_cells = 
 
-%%
+%% get spike depths
+[spikeAmps, spikeDepths, templateDepths, tempAmps, tempsUnW, templateDuration, waveforms] = ...
+    templatePositionsAmplitudes(dat.sp.temps,dat.sp.winv,dat.sp.ycoords,dat.sp.spikeTemplates,dat.sp.tempScalingAmps);
 
+
+
+%% get pairs
+
+% all possible pairs
+pairs_idx = combntns(1:numel(good_cells),2);
+
+% only keep pairs within the specified distance
+spike_dist = abs(diff(spikeDepths(pairs_idx),[],2));
+keep_pair = spike_dist<opt.max_dist;
+pairs_idx = pairs_idx(keep_pair,:);
+
+% allocate matrix for xcorr results
+N_pairs = size(pairs_idx,1);
+xcorr_all = nan(N_pairs,opt.num_lags*2+1);
+
+
+%% compute spike time cross correlations
+
+% window for computing cross correlation
 minT = 0;
 maxT = max(dat.sp.st);
-binsize = 0.001;
-num_lags = 200;
-N_pairs = numel(good_cells)*(numel(good_cells)-1)/2;
-xcorr_all = nan(N_pairs,num_lags*2+1);
-
-pairs_idx = combntns(1:numel(good_cells),2)
 
 tic
 pb = ParforProgressbar(N_pairs);
-parfor i = 1:N
+parfor i = 1:N_pairs
+    
+    fprintf('computing xcorr for pair %d/%d\n',i,N_pairs);
+    
+    cell1 = good_cells(pairs_idx(i,1));
+    cell2 = good_cells(pairs_idx(i,2));
+    
     st1 = dat.sp.st(dat.sp.clu==cell1);
     st2 = dat.sp.st(dat.sp.clu==cell2);
 
-    st1_bin = histcounts(st1,minT:binsize:maxT);
-    st2_bin = histcounts(st2,minT:binsize:maxT);
+    st1_bin = histcounts(st1,minT:opt.binsize:maxT);
+    st2_bin = histcounts(st2,minT:opt.binsize:maxT);
 
-    st_xcorr = xcorr(st1_bin,st2_bin,num_lags);
-    st_xcorr(num_lags+1)=0;
+    st_xcorr = xcorr(st1_bin,st2_bin,opt.num_lags);
+    st_xcorr(opt.num_lags+1)=0;
     xcorr_all(i,:) = st_xcorr;
+    
+    pb.increment();
+
 end
 toc
 
 %%
-figure;
-stairs(-num_lags:num_lags,xcorr_all(300,:));
+save(fullfile(paths.results,opt.session),'xcorr_all','pairs_idx','opt','good_cells');

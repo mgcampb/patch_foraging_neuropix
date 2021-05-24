@@ -1,15 +1,15 @@
 addpath(genpath('C:\code\patch_foraging_neuropix\malcolm\functions\'));
 
 paths = struct;
-paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20201110_all_sessions';
-paths.data = 'H:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
+paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20201114_all_sessions_model_comparison';
+paths.data = 'G:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
 paths.figs = 'C:\figs\patch_foraging_neuropix\glm_example_cell_model_fits';
 if ~isfolder(paths.figs)
     mkdir(paths.figs);
 end
 
-opt.session = '76_20200307';
-opt.example_cell_id = 'rand';
+opt.session = '80_20200317';
+opt.example_cell_id = 368;
 opt.tbin = 0.02;
 opt.smooth_sigma_fr = 0.05; % in seconds, for smoothing firing rate trace of example cell
 opt.rew_size = [1 2 4];
@@ -66,7 +66,7 @@ for i = 1:numel(opt.rew_size)
 end
 
 %% plot regressor matrix
-hfig = figure('Position',[100 100 2200 1200]);
+hfig = figure('Position',[100 100 1100 600]);
 hfig.Name = sprintf('%s c%d regressor matrix snippet',opt.session,opt.example_cell_id);
 imagesc(opt.tbin*(opt.snippet(1):opt.snippet(2)),1:67,fit.X_full(opt.snippet(1):opt.snippet(2),:)')
 yticks(1:67);
@@ -74,16 +74,18 @@ yticklabels(fit.var_name(2:end))
 xticks((opt.snippet(1):(10/opt.tbin):opt.snippet(2))*opt.tbin);
 xticklabels((opt.snippet(1):(10/opt.tbin):opt.snippet(2))*opt.tbin);
 xlabel('time (sec)');
+hbar=colorbar;
+ylabel(hbar,'z-score');
 set(gca,'TickLabelInterpreter','none')
-set(gca,'FontSize',14);
-save_figs(paths.figs,hfig,'png');
+%set(gca,'FontSize',14);
+save_figs(paths.figs,hfig,'pdf');
 
 %% plot real and predicted neural activity
 hfig = figure('Position',[100 100 2200 400]);
 hfig.Name = sprintf('%s c%d firing rate true and predicted snippet',opt.session,opt.example_cell_id);
 
 subplot(2,1,1); hold on;
-plot(opt.tbin*(opt.snippet(1):opt.snippet(2)),y(opt.snippet(1):opt.snippet(2)),'k-');
+stairs(opt.tbin*(opt.snippet(1):opt.snippet(2)),y(opt.snippet(1):opt.snippet(2)),'k-');
 for j = 1:numel(patch_times)
     plot([patch_times(j) patch_times(j)]*opt.tbin,ylim,'b-');
 end
@@ -116,6 +118,7 @@ set(gca,'FontSize',14);
 title(sprintf('corr=%0.2f',corr(ypred,ysmooth)));
 
 save_figs(paths.figs,hfig,'png');
+save_figs(paths.figs,hfig,'pdf');
 
 %% model fit coefficients
 beta_this = fit.beta_all(2:end,cellidx);

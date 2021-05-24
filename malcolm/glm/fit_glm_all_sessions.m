@@ -19,7 +19,7 @@ paths.glmnet = 'C:\code\glmnet_matlab_from_cluster';
 addpath(genpath(paths.glmnet));
 paths.spikes = 'C:\code\spikes';
 addpath(genpath(paths.spikes));
-paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20210210_model_comparison_new_glmnet';
+paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20210512';
 if ~isfolder(paths.results)
     mkdir(paths.results);
 end
@@ -337,6 +337,7 @@ for session_idx = 1:numel(session_all)
     opt_glmnet = glmnetSet;
     opt_glmnet.alpha = opt.alpha; % alpha for elastic net
     run_times = nan(Ncells,1);
+    
     parfor cIdx = 1:Ncells
 
         tic
