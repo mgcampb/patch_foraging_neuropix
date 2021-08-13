@@ -1,5 +1,5 @@
 paths = struct;
-paths.data = 'C:\data\patch_foraging_neuropix\waveforms';
+paths.data = 'C:\data\patch_foraging_neuropix\waveforms\waveform_cluster';
 paths.data_proc = 'G:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
 
 paths.malcolm_functions = 'C:\code\patch_foraging_neuropix\malcolm\functions';

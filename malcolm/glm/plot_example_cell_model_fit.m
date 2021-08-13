@@ -1,9 +1,9 @@
 addpath(genpath('C:\code\patch_foraging_neuropix\malcolm\functions\'));
 
 paths = struct;
-paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20201114_all_sessions_model_comparison';
+paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\20210514_accel';
 paths.data = 'G:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
-paths.figs = 'C:\figs\patch_foraging_neuropix\glm_example_cell_model_fits';
+paths.figs = 'C:\figs\patch_foraging_neuropix\glm_example_cell_model_fits\20210514_accel';
 if ~isfolder(paths.figs)
     mkdir(paths.figs);
 end
@@ -134,3 +134,43 @@ title(sprintf('%s c%d',opt.session,opt.example_cell_id),'Interpreter','none');
 set(gca,'TickLabelInterpreter','none')
 set(gca,'FontSize',14);
 save_figs(paths.figs,hfig,'png');
+
+
+%% plot regressor matrix with some rows as lines instead of heatmap for clarity
+hfig = figure('Position',[100 100 1100 1000]);
+hfig.Name = sprintf('%s c%d regressor matrix snippet - heatmap and lines',opt.session,opt.example_cell_id);
+
+plot_col = cool(3);
+
+idx_plot = opt.snippet(1):opt.snippet(2);
+tplot = opt.tbin*idx_plot;
+Xplot = fit.X_full(idx_plot,:);
+patch_times_this = [tplot(1); patch_times*opt.tbin; tplot(end)+1];
+ha = tight_subplot(29,1,0.01);
+for i = 1:9
+    axes(ha(i)); hold on;
+    for j = 1:numel(patch_times)+1
+        patch_this = tplot>=patch_times_this(j) & tplot<patch_times_this(j+1);
+        plot(tplot(patch_this),Xplot(patch_this,i),'k-');
+    end
+    xticks([]);
+    yticks([]);
+    box off;
+    ylh = ylabel(fit.var_name(i+1));
+    set(ylh,'Rotation',0,'HorizontalAlignment','right');
+end
+for i = 10:29
+    axes(ha(i)); hold on;
+    for j = 1:numel(patch_times)+1
+        patch_this = tplot>=patch_times_this(j) & tplot<patch_times_this(j+1);
+        rew_size_this = find(max(Xplot(patch_this,[16 36 56]))>0);
+        plot(tplot(patch_this),Xplot(patch_this,i+(rew_size_this-1)*20),'-','Color',plot_col(rew_size_this,:));
+    end
+    xticks([]);
+    yticks([]);
+    box off;
+    ylh = ylabel(fit.var_name(i+1));
+    set(ylh,'Rotation',0,'HorizontalAlignment','right');
+end
+
+save_figs(paths.figs,hfig,'pdf');

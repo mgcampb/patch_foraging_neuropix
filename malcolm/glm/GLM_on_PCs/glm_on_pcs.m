@@ -1,28 +1,20 @@
-% script to prepare data to fit GLMs on cluster with glmnet (R version)
-% MGC 2/12/21
+% script to fit GLM to PCs
+% MGC 6/26/2021
 
-% based on fit_glm_all_sessions.m
-
-% 5/14/2021 Add acceleration and acceleration^2
-% 5/17/2021 Add ability to select subsets of variables
-% 8/9/2021 Add (1) squared DVs and (2) patch leave kernels
-
-run_name = 'tmp';
+run_name = '20210626';
 
 restoredefaultpath;
 paths = struct;
 paths.data = 'G:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
+paths.glmnet = 'C:\code\glmnet_matlab_from_cluster';
+addpath(genpath(paths.glmnet));
 paths.malcolm_functions = 'C:\code\patch_foraging_neuropix\malcolm\functions';
 addpath(genpath(paths.malcolm_functions));
 paths.spikes = 'C:\code\spikes';
 addpath(genpath(paths.spikes));
-paths.results = fullfile('C:\data\patch_foraging_neuropix\GLM_input\',run_name);
+paths.results = fullfile('C:\data\patch_foraging_neuropix\GLM_on_PCs\',run_name);
 if ~isfolder(paths.results)
     mkdir(paths.results);
-end
-paths.results_for_R = fullfile(paths.results,'for_R');
-if ~isfolder(paths.results_for_R)
-    mkdir(paths.results_for_R);
 end
 
 % all sessions to analyze:
@@ -40,24 +32,17 @@ opt.rew_size = [1 2 4];
 
 opt.tbin = 0.02; % in seconds
 opt.smooth_sigma_lickrate = 0.1; % in seconds (for smoothing lickrate trace)
-opt.smooth_sigma_vel = 0.1; % in seconds, for smoothing velocity
+opt.smooth_sigma_vel = 0.1; % in seconds, for smoothing velocity before computing accel (vel is fed unsmoothed into GLM)
 
 % basis functions for patch stop
 opt.nbasis_patch_stop = 6;
 opt.basis_length_patch_stop = 1;
-
-% basis functions for patch leave
-opt.nbasis_patch_leave = 6;
-opt.basis_length_patch_leave = 1;
 
 % basis functions for time since reward
 opt.nbasis_rew = 11; % number of raised cosine basis functions to use
 opt.basis_length_rew = 2; % in seconds; make sure basis functions divide evenly into 1 second intervals (makes analysis easier)
 opt.cut_off_kernel_sequence_after_each_reward = true; % whether to cut off the sequence of kernels when a new reward arrives
 opt.include_first_reward = true; % whether or not to include first reward in reward kernels
-
-% whether or not to include squared terms for continuous variables
-opt.include_squared_terms = true;
 
 % whether or not to zscore predictors
 % glmnet handles this for us, so turning this off for now. 
@@ -77,7 +62,16 @@ opt.alpha = 0.9; % weighting of L1 and L2 penalties in elastic net regularizatio
 opt.numFolds = 5; % split up trials into (roughly) equally sized fold, assigning (roughly) equal numbers of each reward size to each fold
 
 % which groups of variables to include
-opt.var_grps_to_include = {'all'}; % any subset of {'SessionTime','Behav','PatchStopKern','PatchLeaveKern','RewKern','DVs'} or {'all'} for full model
+opt.var_grps_to_include = {'SessionTime','Behav','PatchKern','RewKern','DVs'}; % any subset of {'SessionTime','Behav','PatchKern','RewKern','DVs'}
+
+% smooth sigma in sec for computing firing rate matrix
+opt.smoothSigma_time = 0.1;
+
+% whether or not to only use cortex cells for PCA
+opt.cortexOnly = 1;
+
+% number of PCs to fit GLM to 
+opt.num_pcs = 10;
 
 
 %% raised cosine basis for time since patch stop
@@ -88,16 +82,6 @@ c = min(t_basis_patch_stop):db:max(t_basis_patch_stop);
 bas_patch_stop = nan(opt.nbasis_patch_stop,length(t_basis_patch_stop));
 for k = 1:opt.nbasis_patch_stop
   bas_patch_stop(k,:) = (cos(max(-pi, min(pi,pi*(t_basis_patch_stop - c(k))/(db))) ) + 1) / 2;
-end
-
-%% raised cosine basis for time since patch leave
-
-t_basis_patch_leave = 0:opt.tbin:opt.basis_length_patch_leave;
-db = (max(t_basis_patch_leave) - min(t_basis_patch_leave))/(opt.nbasis_patch_leave-1);
-c = min(t_basis_patch_leave):db:max(t_basis_patch_leave);
-bas_patch_leave = nan(opt.nbasis_patch_leave,length(t_basis_patch_leave));
-for k = 1:opt.nbasis_patch_leave
-  bas_patch_leave(k,:) = (cos(max(-pi, min(pi,pi*(t_basis_patch_leave - c(k))/(db))) ) + 1) / 2;
 end
 
 %% raised cosine basis for time since reward
@@ -181,82 +165,49 @@ for session_idx = 1:numel(session_all)
     base_var = [1]; % whether or not to use each variable in the "base" model
 
     % SESSION TIME
-    if any(strcmp(opt.var_grps_to_include,'SessionTime')) || strcmp(opt.var_grps_to_include,'all')
-        X = [X t'];
-        var_name = [var_name,'SessionTime'];
-        base_var = [base_var 1];
-        
-        % always included squared session time (will switch to kernels soon)
-        X = [X t'.^2];
-        var_name = [var_name,'SessionTime^2'];
-        base_var = [base_var 1];   
+    if any(strcmp(opt.var_grps_to_include,'SessionTime'))
+        X_this = [t' t.^2'];
+        X = [X X_this];
+        var_name = [var_name,'SessionTime','SessionTime^2'];
+        base_var = [base_var 1 1];
     end
     
     % BEHAVIORAL VARIABLES
-    if any(strcmp(opt.var_grps_to_include,'Behav')) || strcmp(opt.var_grps_to_include,'all')
-        
+    if any(strcmp(opt.var_grps_to_include,'Behav'))
         % PATCH POSITION
         if isfield(dat,'patch_pos')
             dat.patch_pos(isnan(dat.patch_pos)) = -4;
-            dat.patch_pos = dat.patch_pos + 4; % shift to be positive so better behaved (patch starts at -4)
-            X = [X dat.patch_pos'];
-            var_name = [var_name,'Position'];
-            base_var = [base_var 1];
-            if opt.include_squared_terms
-                X = [X dat.patch_pos'.^2];
-                var_name = [var_name,'Position^2'];
-                base_var = [base_var 1];
-            end
+            X_this = [dat.patch_pos' dat.patch_pos'.^2];
+            X = [X X_this];
+            var_name = [var_name,'Position','Position^2'];
+            base_var = [base_var 1 1];
         end
 
         % RUNNING SPEED
-        % smooth velocity
-        vel_smooth = gauss_smoothing(dat.vel,opt.smooth_sigma_vel/opt.tbin);
-        X = [X vel_smooth'];
-        var_name = [var_name,'Speed'];
-        base_var = [base_var 1];
-        if opt.include_squared_terms
-            X = [X vel_smooth'.^2];
-            var_name = [var_name,'Speed^2'];
-            base_var = [base_var 1];   
-        end
+        % running speed and running speed squared
+        X_this = [dat.vel' dat.vel'.^2];
+        X = [X X_this];
+        var_name = [var_name,'Speed','Speed^2'];
+        base_var = [base_var 1 1];
 
         % ACCELERATION
+        % smooth velocity first before taking derivative; otherwise super noisy
+        vel_smooth = gauss_smoothing(dat.vel,opt.smooth_sigma_vel/opt.tbin);
         accel = diff(vel_smooth)/opt.tbin;
         accel = [accel accel(end)];
-        X = [X accel'];
-        var_name = [var_name,'Accel'];
-        base_var = [base_var 1];
-        if opt.include_squared_terms
-            X = [X accel'.^2];
-            var_name = [var_name,'Accel^2'];
-            base_var = [base_var 1];
-        end
-     
+        X_this = [accel' accel'.^2];
+        X = [X X_this];
+        var_name = [var_name,'Accel','Accel^2'];
+        base_var = [base_var 1 1];
+
+        % LICK RATE
         if ~all(isnan(dat.lick_ts))
-            % LICK RATE
             lickcounts = histc(dat.lick_ts,t)/opt.tbin;
             lickrate = gauss_smoothing(lickcounts,opt.smooth_sigma_lickrate/opt.tbin);
-            X = [X lickrate];
+            X_this = lickrate;
+            X = [X X_this];
             var_name = [var_name,'LickRate'];
             base_var = [base_var 1];
-            if opt.include_squared_terms
-                X = [X lickrate.^2];
-                var_name = [var_name,'LickRate^2'];
-                base_var = [base_var 1];
-            end
-            
-            % DERIVATIVE OF LICK RATE
-            lickrate_deriv = diff(lickrate)/opt.tbin;
-            lickrate_deriv = [lickrate_deriv; lickrate_deriv(end)];
-            X = [X lickrate_deriv];
-            var_name = [var_name,'dLickRate'];
-            base_var = [base_var 1];
-            if opt.include_squared_terms
-                X = [X lickrate_deriv.^2];
-                var_name = [var_name,'dLickRate^2'];
-                base_var = [base_var 1];
-            end            
         end
     end
 
@@ -265,8 +216,8 @@ for session_idx = 1:numel(session_all)
 
         rew_size_this = opt.rew_size(rIdx);
         
-        % TIME SINCE PATCH STOP KERNELS(patch onset)
-        if any(strcmp(opt.var_grps_to_include,'PatchStopKern')) || strcmp(opt.var_grps_to_include,'all')
+        % TIME SINCE PATCH STOP (patch onset)
+        if any(strcmp(opt.var_grps_to_include,'PatchKern'))
             patch_stop_binary = histc(dat.patchCSL(rew_size_patch==rew_size_this,2),t);
             patch_stop_conv = nan(numel(patch_stop_binary),opt.nbasis_patch_stop);
             for i = 1:opt.nbasis_patch_stop
@@ -280,26 +231,9 @@ for session_idx = 1:numel(session_all)
             end
             base_var = [base_var ones(1,opt.nbasis_patch_stop)];
         end
-        
-        % TIME TO PATCH LEAVE KERNELS - shared across reward sizes
-        if any(strcmp(opt.var_grps_to_include,'PatchLeaveKern')) || strcmp(opt.var_grps_to_include,'all')
-            patch_leave_binary = histc(dat.patchCSL(rew_size_patch==rew_size_this,3),t);
-            patch_leave_conv = nan(numel(patch_leave_binary),opt.nbasis_patch_leave);
-            for i = 1:opt.nbasis_patch_leave
-                conv_this = conv(fliplr(patch_leave_binary),bas_patch_leave(i,:));
-                conv_this = fliplr(conv_this(end-numel(patch_leave_binary)+1:end));
-                patch_leave_conv(:,i) = conv_this;
-            end
-            X_this = patch_leave_conv;
-            X = [X X_this];
-            for i = 1:opt.nbasis_patch_leave
-                var_name = [var_name,sprintf('PatchLeaveKern%d_%duL',i,rew_size_this)];
-            end
-            base_var = [base_var ones(1,opt.nbasis_patch_leave)];
-        end
-        
+
         % TIME SINCE REWARD KERNELS
-        if any(strcmp(opt.var_grps_to_include,'RewKern')) || strcmp(opt.var_grps_to_include,'all')
+        if any(strcmp(opt.var_grps_to_include,'RewKern'))
             rew_ts_this = dat.rew_ts(dat.rew_size==rew_size_this);
             if ~opt.include_first_reward
                 rew_ts_this = rew_ts_this(min(abs(rew_ts_this-dat.patchCSL(:,2)'),[],2)>0.01);
@@ -330,36 +264,17 @@ for session_idx = 1:numel(session_all)
 
 
         % DECISION VARIABLES (DVs)
-        if any(strcmp(opt.var_grps_to_include,'DVs')) || strcmp(opt.var_grps_to_include,'all')
-            
-            % TIME ON PATCH
+        if any(strcmp(opt.var_grps_to_include,'DVs'))
+            % time on patch
             t_on_patch = zeros(size(t));
             t_on_patch(in_patch) = t(in_patch) - dat.patchCSL(patch_num(in_patch),2)';
             t_on_patch(~ismember(patch_num,find(rew_size_patch==rew_size_this)))=0;
-            X = [X t_on_patch'];
-            var_name = [var_name,sprintf('TimeOnPatch_%duL',rew_size_this)];
-            base_var = [base_var 0];
-            if opt.include_squared_terms
-                X = [X t_on_patch'.^2];
-                var_name = [var_name,sprintf('TimeOnPatch^2_%duL',rew_size_this)];
-                base_var = [base_var 0];
-            end
-            
-            % TOTAL REWARD
+            % total rewards on patch so far
             tot_rew = zeros(size(t));
             for i = 1:size(dat.patchCSL,1)
                 tot_rew(patch_num==i) = cumsum(rew_binary(patch_num==i));
             end
-            X = [X tot_rew'];
-            var_name = [var_name,sprintf('TotalRew_%duL',rew_size_this)];
-            base_var = [base_var 0];
-            if opt.include_squared_terms
-                X = [X tot_rew'.^2];
-                var_name = [var_name,sprintf('TotalRew^2_%duL',rew_size_this)];
-                base_var = [base_var 0];
-            end
-            
-            % TIME SINCE REWARD
+            % time since reward
             t_since_rew = zeros(size(t));
             for i = 2:numel(t)
                 if rew_binary(i)
@@ -370,15 +285,11 @@ for session_idx = 1:numel(session_all)
             end
             t_since_rew(~in_patch)=0;
             t_since_rew(~ismember(patch_num,find(rew_size_patch==rew_size_this)))=0;
-            X = [X t_since_rew'];
-            var_name = [var_name,sprintf('TimeSinceRew_%duL',rew_size_this)];
-            base_var = [base_var 0];
-            if opt.include_squared_terms
-                X = [X t_since_rew'.^2];
-                var_name = [var_name,sprintf('TimeSinceRew^2_%duL',rew_size_this)];
-                base_var = [base_var 0];
-            end
-        end        
+            X_this = [t_on_patch' tot_rew' t_since_rew'];
+            X = [X X_this];
+            var_name = [var_name,sprintf('TimeOnPatch_%duL',rew_size_this),sprintf('TotalRew_%duL',rew_size_this),sprintf('TimeSinceRew_%duL',rew_size_this)];
+            base_var = [base_var 0 0 0];
+        end
     end
     
     %% subselect data to fit GLM to (in patch times)
@@ -400,20 +311,16 @@ for session_idx = 1:numel(session_all)
     %% remove cells that don't pass minimum firing rate cutoff
 
     T = size(spikecounts,1)*opt.tbin;
-    %N = sum(spikecounts);
-    Nbin = size(spikecounts,1);
-    N = nan(3,size(spikecounts,2));
-    N(1,:) = sum(spikecounts(1:floor(Nbin/3),:));
-    N(2,:) = sum(spikecounts(floor(Nbin/3):floor(2*Nbin/3),:));
-    N(3,:) = sum(spikecounts(floor(2*Nbin/3):end,:));
+    N = sum(spikecounts);
     fr = N/T;
-    keep_cell = mean(fr)>opt.min_fr & all(fr>opt.min_fr/2);
+    keep_cell = fr>opt.min_fr;
+    if opt.cortexOnly == 1
+        keep_cell = keep_cell & strcmp(brain_region_rough,'PFC')';
+    end
     spikecounts = spikecounts(:,keep_cell);
     good_cells = good_cells_all(keep_cell);
     brain_region_rough = brain_region_rough(keep_cell);
     depth_from_surface = depth_from_surface(keep_cell);
-    % anatomy = anatomy_all(keep_cell,:));
-    Ncells = numel(good_cells);
 
     %% Create fold indices (for cross validation)
 
@@ -429,28 +336,45 @@ for session_idx = 1:numel(session_all)
     end
     foldid = trial_grp(IC);
     
-    %% Compute cross-validated null deviance per observation for each cell
+    %% compute PCA
+
+    opt.tstart = 0;
+    opt.tend = max(dat.sp.st)+opt.tbin;
     
-    nulldev = nan(numel(good_cells),opt.numFolds);
-    for cIdx = 1:numel(good_cells)
-        for fIdx = 1:opt.numFolds
-            y = spikecounts(foldid==fIdx,cIdx); % spikecounts from test fold
-            mu = mean(spikecounts(foldid~=fIdx,cIdx)); % mean over training folds
-            term1 = y.*log(y./mu);
-            term1(isnan(term1)) = 0; % 0*log(0) defined to be 0
-            nulldev(cIdx,fIdx) = sum(2*(term1-y+mu))/numel(y); % per observation
-        end
+    % compute firing rate mat
+    fr_mat = calcFRVsTime(good_cells,dat,opt);
+
+    % take zscore
+    fr_mat_zscore = zscore(fr_mat,[],2); % z-score is across whole session including out-of-patch times - is this weird??
+
+    % use whole session
+    [coeffs,score,~,~,expl] = pca(fr_mat_zscore');
+    
+    score_in_patch = score(in_patch,:);
+    
+    %% regress PCs on X
+    
+    beta_all = nan(size(X,2)+1,opt.num_pcs);
+    
+    % options for glmnet
+    opt_glmnet = glmnetSet;
+    opt_glmnet.alpha = opt.alpha; % alpha for elastic net
+    
+    for pcIdx = 1:opt.num_pcs
+    
+        y = score_in_patch(:,pcIdx);
+
+        fit = cvglmnet(X_full,y,'gaussian',opt_glmnet,[],[],foldid);
+        beta_all(:,pcIdx) = cvglmnetCoef(fit);
     end
-    nulldev = mean(nulldev,2);
     
     %% save results
     save(fullfile(paths.results,sprintf('%s',opt.session)),'opt',...
         'var_name','base_var','X_full','Xmean','Xstd','spikecounts','good_cells',...
         'trial_grp','foldid','bas_patch_stop','t_basis_patch_stop','bas_rew','t_basis_rew',...
         'anatomy','depth_from_surface','fr','good_cells_all','brain_region_rough',...
-        'patch_num','rew_size_patch','nulldev');
-    alpha = opt.alpha;
-    save(fullfile(paths.results_for_R,sprintf('%s',opt.session)),'alpha','X_full','spikecounts','good_cells','foldid','base_var');
+        'patch_num','rew_size_patch',...
+        'beta_all','opt_glmnet','score_in_patch');
 
 end
 toc

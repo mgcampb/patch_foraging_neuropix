@@ -1,14 +1,13 @@
+%% 6/2/2021 eliminated k means sections
+
 addpath(genpath('C:\code\patch_foraging_neuropix\malcolm\functions\'));
 
 run_name = '20210526_full';
+run_name_base = '2021';
 
 paths = struct;
 paths.results = fullfile('C:\data\patch_foraging_neuropix\GLM_output',run_name);
-% paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20210212_R_test\sessions';
-% paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20210208_original_vars';
-% paths.results = 'C:\data\patch_foraging_neuropix\GLM_output\run_20210210_model_comparison_new_glmnet';
 paths.figs = fullfile('C:\figs\patch_foraging_neuropix\glm_pca_on_model_coefficients',run_name);
-
 paths.waveforms = 'C:\data\patch_foraging_neuropix\waveforms\waveform_cluster';
 
 paths.sig_cells = 'C:\data\patch_foraging_neuropix\sig_cells';
@@ -21,8 +20,20 @@ opt.brain_region = 'PFC'; % 'PFC' or 'Sub-PFC'
 opt.data_set = 'mb';
 opt.pval_thresh = 2; % 0.05;
 
-opt.num_clust = 5; % for k means or GMM
-opt.num_pcs = 10; % for k means or GMM
+% soft normalization
+opt.soft_norm = false;
+opt.soft_norm_const = 0.001; % add to denominator if opt.soft_norm = true
+
+opt.num_clust = 5; % for GMM clustering
+opt.num_pcs = 3; % for GMM clustering
+
+% GMM opt
+gmm_opt = statset;
+gmm_opt.Display = 'off';
+gmm_opt.MaxIter = 10000;
+gmm_opt.Lambda = 1;
+gmm_opt.Replicates = 100;
+gmm_opt.TolFun = 1e-6;
 
 paths.figs = fullfile(paths.figs,opt.brain_region);
 if ~isfolder(paths.figs)
@@ -62,7 +73,6 @@ beta_all_sig = [];
 beta_including_base_var = [];
 cellID_uniq = [];
 num_cells_glm_total = 0;
-num_cells_glm_in_brain_region_total = 0;
 num_cells_total = 0;
 for i = 1:numel(session_all)
     fprintf('Session %d/%d: %s\n',i,numel(session_all),session_all{i});
@@ -74,7 +84,6 @@ for i = 1:numel(session_all)
     
     keep_cell = strcmp(fit.brain_region_rough,opt.brain_region);
     good_cells_this = fit.good_cells(keep_cell);
-    num_cells_glm_in_brain_region_total = num_cells_glm_in_brain_region_total+numel(good_cells_this);
     
     % sig = fit.pval_full_vs_base(keep_cell)<opt.pval_thresh & sum(abs(fit.beta_all(fit.base_var==0,keep_cell))>0)'>0;
     sig = sum(abs(fit.beta_all(fit.base_var==0,keep_cell))>0)'>0;
@@ -97,9 +106,15 @@ end
 var_name = fit.var_name(fit.base_var==0)';
 
 %% perform PCA
-beta_norm = zscore(beta_all_sig);
+if opt.soft_norm
+    beta_norm = (beta_all_sig-repmat(nanmean(beta_all_sig),size(beta_all_sig,1),1))./(repmat(nanstd(beta_all_sig),size(beta_all_sig,1),1)+opt.soft_norm_const);
+else
+    beta_norm = zscore(beta_all_sig);
+end
 % beta_norm = beta_all_sig;
 [coeff,score,~,~,expl] = pca(beta_norm');
+
+keyboard;
 
 %% visualize normalized beta matrix
 hfig = figure('Position',[50 50 650 400],'Renderer','painters');
@@ -213,65 +228,6 @@ axis square
 
 if opt.save_figs; saveas(hfig,fullfile(paths.figs,hfig.Name),'png'); end
 
-%% k means on top n PCs
-
-rng(1);
-kmeans_idx = kmeans(score(:,1:opt.num_pcs),opt.num_clust);
-% kmeans_idx = kmeans(beta_all_sig',opt.num_clust);
-
-% reorder cluster numbers to match MB dataset
-if strcmp(opt.data_set,'mc') && strcmp(opt.brain_region,'PFC')
-    kmeans_idx2 = kmeans_idx;
-    kmeans_idx(kmeans_idx2==1) = 3;
-    kmeans_idx(kmeans_idx2==2) = 1;
-    kmeans_idx(kmeans_idx2==3) = 2;
-end
-
-hfig = figure; hold on;
-hfig.Name = sprintf('k means on top 2 PCs %s cohort %s',opt.data_set,opt.brain_region);
-
-plot_col = lines(opt.num_clust);
-for i = 1:opt.num_clust
-    my_scatter(score(kmeans_idx==i,1),score(kmeans_idx==i,2),plot_col(i,:),0.7);
-end
-xlabel('PC1');
-ylabel('PC2');
-set(gca,'FontSize',14);
-title('k means');
-
-if opt.save_figs; saveas(hfig,fullfile(paths.figs,hfig.Name),'png'); end
-
-%% k means - 3D plot
-
-rng(1);
-kmeans_idx = kmeans(score(:,1:opt.num_pcs),opt.num_clust);
-% kmeans_idx = kmeans(beta_all_sig',opt.num_clust);
-
-% reorder cluster numbers to match MB dataset
-if strcmp(opt.data_set,'mc') && strcmp(opt.brain_region,'PFC')
-    kmeans_idx2 = kmeans_idx;
-    kmeans_idx(kmeans_idx2==1) = 3;
-    kmeans_idx(kmeans_idx2==2) = 1;
-    kmeans_idx(kmeans_idx2==3) = 2;
-end
-
-hfig = figure; hold on;
-hfig.Name = sprintf('k means on top 3 PCs %s cohort %s',opt.data_set,opt.brain_region);
-
-plot_col = lines(opt.num_clust);
-for i = 1:opt.num_clust
-    scatter3(score(kmeans_idx==i,1),score(kmeans_idx==i,2),score(kmeans_idx==i,3),[],plot_col(i,:)) %,'MarkerFaceAlpha',0.7);
-end
-xlabel('PC1');
-ylabel('PC2');
-zlabel('PC3');
-set(gca,'FontSize',14);
-title('k means');
-view([45 45]);
-grid on;
-
-if opt.save_figs; saveas(hfig,fullfile(paths.figs,hfig.Name),'png'); end
-
 %% GMM clustering
 sig_cells_table = load(fullfile(paths.sig_cells,'sig_cells_table_20210413.mat'));
 clust_orig = sig_cells_table.sig_cells.GMM_cluster; % original GMM clusters
@@ -279,12 +235,6 @@ clust_orig = sig_cells_table.sig_cells.GMM_cluster; % original GMM clusters
 X = score(:,1:opt.num_pcs); % the first N PCs of z-scored coefficient matrix
 
 rng(3); % for reproducibility
-gmm_opt = statset; % GMM options
-gmm_opt.Display = 'off';
-gmm_opt.MaxIter = 10000;
-gmm_opt.Lambda = .2;
-gmm_opt.Replicates = 100;
-gmm_opt.TolFun = 1e-6;
 gm = fitgmdist(X,opt.num_clust,'RegularizationValue',gmm_opt.Lambda,'Replicates',gmm_opt.Replicates,'Options',gmm_opt); % fit GM model
 clust_gmm = cluster(gm,X); % hard clustering
 
@@ -305,7 +255,6 @@ clust_orig = clust_gmm;
 rng(3);
 num_clust = 10;
 bic_all = nan(num_clust,1);
-gmm_opt.Replicates = 100;
 for j = 1:num_clust
     gm = fitgmdist(X,j,'RegularizationValue',gmm_opt.Lambda,'Replicates',gmm_opt.Replicates,'Options',gmm_opt); % fit GM model
     % clust_gmm = cluster(gm,X); % hard clustering
@@ -336,46 +285,6 @@ xlabel('PC1'); ylabel('PC2'); zlabel('PC3');
 view(11,33);
 grid on;
 
-if opt.save_figs; saveas(hfig,fullfile(paths.figs,hfig.Name),'pdf'); end
-
-%% plot coefficients for kmeans clusters
-
-hfig = figure('Position',[50 50 1500 1250]);
-hfig.Name = sprintf('k means avg cluster coefficients %s cohort %s',opt.data_set,opt.brain_region);
-
-plot_col = cool(3);
-for i = 1:opt.num_clust
-    subplot(opt.num_clust,1,i); hold on;
-    mean_this = mean(beta_norm(:,kmeans_idx==i),2);
-    sem_this = std(beta_norm(:,kmeans_idx==i),[],2)/sqrt(sum(kmeans_idx==i));
-    for j = 1:size(mean_this,1)
-        if contains(var_name{j},'1uL')
-            plot_col_this = plot_col(1,:);
-        elseif contains(var_name{j},'2uL')
-            plot_col_this = plot_col(2,:);
-        elseif contains(var_name{j},'4uL')
-            plot_col_this = plot_col(3,:);
-        end
-        if contains(var_name{j},'RewKern')
-            errorbar(j,mean_this(j),sem_this(j),'o','Color',plot_col_this,'MarkerFaceColor',plot_col_this);
-        else
-            errorbar(j,mean_this(j),sem_this(j),'v','Color',plot_col_this,'MarkerFaceColor',plot_col_this);
-        end
-    end
-    plot(xlim,[0 0],'k:');
-    xticks([]);
-    ylabel('Coeff');
-    title(sprintf('Average of cluster %d (n = %d cells)',i,sum(kmeans_idx==i)));
-    set(gca,'FontSize',14);
-end
-
-xticks(1:numel(var_name));
-xticklabels(var_name);
-xtickangle(90);
-set(gca,'TickLabelInterpreter','none');
-set(gca,'FontSize',14);
-
-if opt.save_figs; saveas(hfig,fullfile(paths.figs,hfig.Name),'png'); end
 if opt.save_figs; saveas(hfig,fullfile(paths.figs,hfig.Name),'pdf'); end
 
 %% plot coefficients for GMM clusters
@@ -424,73 +333,6 @@ end
 
 if opt.save_figs; saveas(hfig,fullfile(paths.figs,hfig.Name),'png'); end
 if opt.save_figs; saveas(hfig,fullfile(paths.figs,hfig.Name),'pdf'); end
-
-%% Consistency of kmeans clusters
-
-% num_iter = 1000;
-% num_clust = 1:15;
-% 
-% pct_all = nan(numel(num_clust),1);
-% D_all = nan(numel(num_clust),1);
-% for ii = 1:numel(num_clust)
-%     clust_all = nan(size(score,1),num_iter);
-%     D_this = nan(num_iter,1);
-%     for iter = 1:num_iter
-%         [kmeans_idx,~,~,D] = kmeans(score(:,1:2),num_clust(ii));
-% 
-%         % reorder cluster numbers to be consistent across reps
-%         % order by mean on PC1
-%         means = nan(opt.num_clust,1);
-%         for i = 1:opt.num_clust
-%             means(i) = mean(score(kmeans_idx==i,1));
-%         end
-%         [~,sort_idx] = sort(means);
-%         kmeans_idx2 = nan(size(kmeans_idx));
-%         for i = 1:opt.num_clust
-%             kmeans_idx2(kmeans_idx==sort_idx(i)) = i;
-%         end
-%         clust_all(:,iter) = kmeans_idx2;
-%         D_this(iter) = mean(min(D,[],2));
-%     end
-% 
-%     D_all(ii) = mean(D_this);
-%     
-%     pct_clust = nan(size(clust_all,1),1);
-%     for i = 1:numel(pct_clust)
-%         pct_clust(i) = sum(clust_all(i,:)==mode(clust_all(i,:)))/num_iter;
-%     end
-%     
-%     pct_all(ii) = mean(pct_clust);
-% end
-% 
-% % take second derivative
-% secondDeriv = nan(numel(D_all)-2,1);
-% for ii = 2:numel(D_all)-1
-%     secondDeriv(ii-1) = D_all(ii+1)+D_all(ii-1)-2*D_all(ii);
-% end
-% [~,max_idx] = max(secondDeriv);
-% max_idx = max_idx+1;
-% 
-% hfig = figure('Position',[300 300 900 400]);
-% hfig.Name = sprintf('Picking num clusters %s cohort %s',opt.data_set,opt.brain_region);
-% 
-% subplot(1,2,1);
-% plot(pct_all,'ko');
-% ylabel('Avg. fraction in same cluster');
-% xlabel('Num. clusters');
-% set(gca,'FontSize',14);
-% box off;
-% 
-% subplot(1,2,2); hold on;
-% plot(D_all,'ko');
-% p = plot([max_idx max_idx],ylim,'b--');
-% legend(p,'Max. curvature');
-% ylabel('Avg. distance to nearest centroid');
-% xlabel('Num. clusters');
-% set(gca,'FontSize',14);
-% box off;
-% 
-% saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 
 %% plot example cell coefficients
 session_ex = '80_20200317';
@@ -1027,3 +869,60 @@ sig_cells.UniqueID = cellID_uniq;
 sig_cells.GMM_cluster = clust_gmm;
 sig_cells.WaveformType = cell_waveform;
 save(fullfile(paths.sig_cells,sprintf('sig_cells_table_%s',run_name)),'sig_cells');
+
+%% Umap
+
+rng(3);
+[X,~,clust_umap] = run_umap(score);
+
+
+
+%% GMM clustering of UMAP score
+
+
+
+rng(3);
+num_clust = 20;
+bic_all = nan(num_clust,1);
+for j = 1:num_clust
+    gm = fitgmdist(X,j,'RegularizationValue',gmm_opt.Lambda,'Replicates',gmm_opt.Replicates,'Options',gmm_opt); % fit GM model
+    % clust_gmm = cluster(gm,X); % hard clustering
+    bic_all(j) = gm.BIC;
+end
+
+hfig = figure('Position',[300 300 320 400]);
+hfig.Name = sprintf('BIC vs num clusters, UMAP');
+plot(bic_all,'ko-','MarkerFaceColor','k');
+xlim([0 num_clust+1]);
+box off;
+xlabel('Num. clusters');
+ylabel('BIC');
+
+%% 
+
+
+%%
+clust_kmeans = kmeans(X,20);
+%%
+num_clust = 10;
+
+gmm_opt = statset; % GMM options
+gmm_opt.Display = 'off';
+gmm_opt.MaxIter = 10000;
+gmm_opt.Lambda = .1;
+gmm_opt.Replicates = 100;
+gmm_opt.TolFun = 1e-6;
+
+gm = fitgmdist(X,num_clust,'RegularizationValue',gmm_opt.Lambda,'Replicates',gmm_opt.Replicates,'Options',gmm_opt); % fit GM model
+clust_gmm = cluster(gm,X); % hard clustering
+
+%%
+plot_col = hsv(num_clust);
+plot_sym = {'o','x','^','v','*'};
+figure; hold on;
+for i = 1:num_clust
+    plot(X(clust_gmm==i,1),X(clust_gmm==i,2),plot_sym{mod(i,numel(plot_sym))+1},'Color',plot_col(i,:));
+end
+legend(num2str((1:num_clust)'));
+
+%%

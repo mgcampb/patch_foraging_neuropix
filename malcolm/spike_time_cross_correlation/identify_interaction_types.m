@@ -139,6 +139,19 @@ end
 pairs_table.Waveform1 = waveform1;
 pairs_table.Waveform2 = waveform2;
 
+%% create table of all possible pairs by waveform and GMM cluster
+
+% by waveform:
+[tab_all_wv,~,~,labels] = crosstab([pairs_table.Waveform1; pairs_table.Waveform2],[pairs_table.Waveform2; pairs_table.Waveform1]);
+[labels(:,1),sort_idx1] = sort(labels(:,1));
+[labels(:,2),sort_idx2] = sort(labels(:,2));
+tab_all_wv = tab_all_wv(sort_idx1,:);
+tab_all_wv = tab_all_wv(:,sort_idx2);
+tab_all_wv = tab_all_wv(1:2,1:2); % get rid of triphasic
+
+% by GMM cluster:
+tab_all_gmm = crosstab([pairs_table.GMM_Cluster1; pairs_table.GMM_Cluster2],[pairs_table.GMM_Cluster2; pairs_table.GMM_Cluster1]);
+
 %% pick out short-latency excitatory interactions (clusters 4 and 5)
 exc = cluster_gmm==4 | cluster_gmm==5;
 
@@ -151,18 +164,66 @@ pairs_exc2 = pairs_table_inter(cluster_gmm==5,:);
 wv1 = [pairs_exc1.Waveform1; pairs_exc2.Waveform2]; % postsynaptic
 wv2 = [pairs_exc1.Waveform2; pairs_exc2.Waveform1]; % presynaptic
 
-[tab,~,~,labels]=crosstab(wv1,wv2);
+[tab,~,pval,labels]=crosstab(wv1,wv2);
 [labels(:,1),sort_idx1] = sort(labels(:,1));
 [labels(:,2),sort_idx2] = sort(labels(:,2));
 tab = tab(sort_idx1,:);
 tab = tab(:,sort_idx2);
+tab = tab(1:2,1:2); % get rid of triphasic;
+labels = labels(1:2,1);
+
+hfig = figure('Position',[400 400 500 400]);
+hfig.Name = 'Short latency excitatory interactions by waveform type';
+imagesc(100*tab./tab_all_wv);
+xticks([1 2]);
+yticks([1 2]);
+xticklabels(labels);
+yticklabels(labels);
+xlabel('Waveform Type, Presynaptic');
+ylabel('Waveform Type, Postsynaptic');
+set(gca,'FontSize',12);
+hb = colorbar;
+ylabel(hb,'% pairs');
+title('Short-latency Excitatory');
+set(hb,'FontSize',12);
+
+% text of each fraction on each square
+for i = 1:2
+    for j = 1:2
+        text(j,i,sprintf('%d/%d',tab(i,j),tab_all_wv(i,j)),'HorizontalAlignment','center');
+    end
+end
+
+saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 
 %% exc interactions by glm cluster
 clu1 = [pairs_exc1.GMM_Cluster1; pairs_exc2.GMM_Cluster2]; % postsynaptic
 clu2 = [pairs_exc1.GMM_Cluster2; pairs_exc2.GMM_Cluster1]; % presynaptic
 
-[tab,~,~,labels]=crosstab(clu1,clu2);
+[tab,~,pval,labels]=crosstab(clu1,clu2);
+tab = [tab; zeros(1,size(labels,1))];
 
+hfig = figure('Position',[400 400 500 400]);
+hfig.Name = 'Short latency excitatory interactions by GLM cluster';
+imagesc(100*tab(1:4,1:4)./tab_all_gmm(1:4,1:4));
+xticks(1:5);
+yticks(1:5);
+xlabel('GLM Cluster, Presynaptic');
+ylabel('GLM Cluster, Postsynaptic');
+set(gca,'FontSize',12);
+hb = colorbar;
+ylabel(hb,'% pairs');
+title('Short-latency Excitatory');
+set(hb,'FontSize',12);
+
+% text of each fraction on each square
+for i = 1:4
+    for j = 1:4
+        text(j,i,sprintf('%d/%d',tab(i,j),tab_all_gmm(i,j)),'HorizontalAlignment','center');
+    end
+end
+
+saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 
 
 %% pick out biphasic interactions (clusters 1 and 3)
@@ -177,39 +238,89 @@ pairs_biphas2 = pairs_table_inter(cluster_gmm==3,:);
 wv1 = [pairs_biphas1.Waveform1; pairs_biphas2.Waveform2]; % postsynaptic
 wv2 = [pairs_biphas1.Waveform2; pairs_biphas2.Waveform1]; % presynaptic
 
-[tab,~,~,labels]=crosstab(wv1,wv2);
+[tab,~,pval,labels]=crosstab(wv1,wv2);
 [labels(:,1),sort_idx1] = sort(labels(:,1));
 [labels(:,2),sort_idx2] = sort(labels(:,2));
 tab = tab(sort_idx1,:);
 tab = tab(:,sort_idx2);
+tab = tab(1:2,1:2);
+labels = labels(1:2,1);
+
+hfig = figure('Position',[400 400 500 400]);
+hfig.Name = 'Biphasic interactions by waveform type';
+imagesc(100*tab./tab_all_wv);
+xticks([1 2]);
+yticks([1 2]);
+xticklabels(labels);
+yticklabels(labels);
+xlabel('Waveform Type, Presynaptic');
+ylabel('Waveform Type, Postsynaptic');
+set(gca,'FontSize',12);
+hb = colorbar;
+ylabel(hb,'% pairs');
+title('Biphasic');
+set(hb,'FontSize',12);
+
+% text of each fraction on each square
+for i = 1:2
+    for j = 1:2
+        text(j,i,sprintf('%d/%d',tab(i,j),tab_all_wv(i,j)),'HorizontalAlignment','center');
+    end
+end
+
+saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 
 %% biphas interactions by glm cluster
 clu1 = [pairs_biphas1.GMM_Cluster1; pairs_biphas2.GMM_Cluster2]; % postsynaptic
 clu2 = [pairs_biphas1.GMM_Cluster2; pairs_biphas2.GMM_Cluster1]; % presynaptic
 
-[tab,~,~,labels]=crosstab(clu1,clu2);
+[tab,~,pval,labels]=crosstab(clu1,clu2);
 
-%% pick out zero lag interactions (cluster 2)
-zerolag = cluster_gmm==2;
+hfig = figure('Position',[400 400 500 400]);
+hfig.Name = 'Biphasic interactions by GLM cluster';
+imagesc(100*tab(1:4,1:4)./tab_all_gmm(1:4,1:4));
+xticks(1:5);
+yticks(1:5);
+xlabel('GLM Cluster, Presynaptic');
+ylabel('GLM Cluster, Postsynaptic');
+set(gca,'FontSize',12);
+hb = colorbar;
+ylabel(hb,'% pairs');
+title('Biphasic');
+set(hb,'FontSize',12);
 
-pairs_table_inter = pairs_table(interacting_pairs,:);
-pairs_zerolag = pairs_table_inter(zerolag,:);
-pairs_zerolag1 = pairs_table_inter(cluster_gmm==2,:);
+% text of each fraction on each square
+for i = 1:4
+    for j = 1:4
+        text(j,i,sprintf('%d/%d',tab(i,j),tab_all_gmm(i,j)),'HorizontalAlignment','center');
+    end
+end
 
-%% zero-lag exc by waveform
-wv1 = [pairs_zerolag1.Waveform1]; % postsynaptic
-wv2 = [pairs_zerolag1.Waveform2]; % presynaptic
+saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 
-[tab,~,~,labels]=crosstab(wv1,wv2);
-[labels(:,1),sort_idx1] = sort(labels(:,1));
-[labels(:,2),sort_idx2] = sort(labels(:,2));
-tab = tab(sort_idx1,:);
-tab = tab(:,sort_idx2);
+%% IGNORE ZERO LAG INTERACTIONS FOR NOW (until can confirm are not artifacts)
 
-%% zero-lag exc by glm cluster
-clu1 = [pairs_zerolag1.GMM_Cluster1]; % postsynaptic
-clu2 = [pairs_zerolag1.GMM_Cluster2]; % presynaptic
-
-[tab,~,~,labels]=crosstab(clu1,clu2);
+% %% pick out zero lag interactions (cluster 2)
+% zerolag = cluster_gmm==2;
+% 
+% pairs_table_inter = pairs_table(interacting_pairs,:);
+% pairs_zerolag = pairs_table_inter(zerolag,:);
+% pairs_zerolag1 = pairs_table_inter(cluster_gmm==2,:);
+% 
+% %% zero-lag exc by waveform
+% wv1 = [pairs_zerolag1.Waveform1]; % postsynaptic
+% wv2 = [pairs_zerolag1.Waveform2]; % presynaptic
+% 
+% [tab,~,pval,labels]=crosstab(wv1,wv2);
+% [labels(:,1),sort_idx1] = sort(labels(:,1));
+% [labels(:,2),sort_idx2] = sort(labels(:,2));
+% tab = tab(sort_idx1,:);
+% tab = tab(:,sort_idx2);
+% 
+% %% zero-lag exc by glm cluster
+% clu1 = [pairs_zerolag1.GMM_Cluster1]; % postsynaptic
+% clu2 = [pairs_zerolag1.GMM_Cluster2]; % presynaptic
+% 
+% [tab,~,pval,labels]=crosstab(clu1,clu2);
 
 

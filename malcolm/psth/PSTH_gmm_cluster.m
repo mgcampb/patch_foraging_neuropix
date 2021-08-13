@@ -7,13 +7,13 @@ addpath(genpath('C:\code\patch_foraging_neuropix\malcolm\functions'));
 paths = struct;
 paths.data = 'G:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
 paths.sig_cells = 'C:\data\patch_foraging_neuropix\sig_cells';
-paths.figs = 'C:\figs\patch_foraging_neuropix\psth_gmm_cluster\Sub-PFC';
+paths.figs = 'C:\figs\patch_foraging_neuropix\psth_gmm_cluster\PFC\20210526_full';
 if ~isfolder(paths.figs)
     mkdir(paths.figs);
 end
 
 opt = struct;
-opt.brain_region = 'Sub-PFC';
+opt.brain_region = 'PFC';
 opt.data_set = 'mb';
 
 % PSTH windows
@@ -24,7 +24,7 @@ opt.max_leave = 2;
 
 %% load sig_cells
 
-load(fullfile(paths.sig_cells,'sig_cells_subPFC'));
+load(fullfile(paths.sig_cells,'sig_cells_table_20210526_full'));
 session_all = unique(sig_cells.Session);
 
 %%
@@ -174,6 +174,75 @@ end
 saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 saveas(hfig,fullfile(paths.figs,hfig.Name),'pdf');
 
+%% avg psth around patch stop: RX trials by session
+
+opt.rew_size = [1 2 4];
+plot_col = cool(3);
+
+
+
+for sIdx = 1:numel(session_all)
+    hfig = figure('Position',[200 200 800 450]);
+    hfig.Name = sprintf('PSTH patch stop GMM cluster RR vs R0 %s cohort %s %s',opt.data_set,opt.brain_region,session_all{sIdx});
+
+    num_clust = 5;
+    for clustIdx = 1:num_clust
+
+        psth_clust = psth_all(sig_cells.GMM_cluster==clustIdx & strcmp(sig_cells.Session,session_all{sIdx}));
+        
+        if isempty(psth_clust)
+            continue;
+        end
+
+        miny = 100;
+        maxy = 0;
+
+        for rIdx = 1:numel(opt.rew_size)
+            rew_size = opt.rew_size(rIdx);
+            meanRR = [];
+            meanR0 = [];
+            t = opt.min_stop:0.01:opt.max_stop;
+            for cIdx = 1:numel(psth_clust)
+                keep_trial = psth_clust{cIdx}.rew_barcode(:,1)==rew_size & psth_clust{cIdx}.rew_barcode(:,2)==rew_size & psth_clust{cIdx}.rew_barcode(:,3)>-1;
+                meanRR = [meanRR; nanmean(psth_clust{cIdx}.psth_stop(keep_trial,:),1)];
+
+                keep_trial = psth_clust{cIdx}.rew_barcode(:,1)==rew_size & psth_clust{cIdx}.rew_barcode(:,2)==0 & psth_clust{cIdx}.rew_barcode(:,3)>-1;
+                meanR0 = [meanR0; nanmean(psth_clust{cIdx}.psth_stop(keep_trial,:),1)];
+            end
+
+            subplot(numel(opt.rew_size),num_clust,clustIdx+num_clust*(rIdx-1)); hold on;
+            shadedErrorBar(t,nanmean(meanRR,1),nanstd(meanRR,[],1)/sqrt(size(meanRR,1)),'lineprops',{'Color',plot_col(rIdx,:)});
+            shadedErrorBar(t,nanmean(meanR0,1),nanstd(meanR0,[],1)/sqrt(size(meanR0,1)),'lineprops','k');
+            xlim([0 2]);
+            miny = min(miny,min(ylim));
+            maxy = max(maxy,max(ylim));
+
+            if rIdx==1
+                title(sprintf('Cluster %d',clustIdx));
+            end
+
+            if rIdx==2 && clustIdx==1
+                ylabel('Firing rate');
+            end
+            if rIdx==3 && clustIdx==3
+                xlabel('Time from patch stop (s)');
+            end
+
+
+        end
+
+        subplot(numel(opt.rew_size),num_clust,clustIdx); ylim([miny maxy]); plot([1 1],ylim,'k--');
+        subplot(numel(opt.rew_size),num_clust,clustIdx+num_clust); ylim([miny maxy]); plot([1 1],ylim,'k--');
+        subplot(numel(opt.rew_size),num_clust,clustIdx+num_clust*2); ylim([miny maxy]); plot([1 1],ylim,'k--');
+
+    end
+
+    saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
+    saveas(hfig,fullfile(paths.figs,hfig.Name),'pdf');
+    
+    close(hfig);
+end
+
 %% avg psth around patch stop: RXX trials
 
 hfig = figure;
@@ -184,7 +253,7 @@ plot_col = cool(3);
 ctr = 1;
 for clustIdx = 1:3
 
-    psth_clust = psth_all(sig_cells.KMeansCluster==clustIdx);
+    psth_clust = psth_all(sig_cells.GMM_cluster==clustIdx);
     
     miny = 100;
     maxy = 0;
@@ -252,7 +321,7 @@ plot_col = cool(3);
 
 for clustIdx = 1:3
 
-    psth_clust = psth_all(sig_cells.KMeansCluster==clustIdx);
+    psth_clust = psth_all(sig_cells.GMM_cluster==clustIdx);
     
 
     subplot(3,1,clustIdx); hold on;
