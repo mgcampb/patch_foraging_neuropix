@@ -5,7 +5,7 @@ paths = struct;
 paths.base = 'C:\data\patch_foraging_neuropix';
 paths.GLM_input = fullfile(paths.base,'GLM_input');
 paths.GLM_output = fullfile(paths.base,'GLM_output');
-run_name = '20210526_full';
+run_name = '20210813_squared_terms';
 
 paths.chunks = fullfile(paths.GLM_output,run_name,'chunks');
 chunks = dir(fullfile(paths.chunks,'*.mat'));
@@ -31,23 +31,17 @@ for i = 1:numel(session_uniq)
     chunks_this = chunks(strcmp(session,session_uniq{i}));
     beta_all = [];
     good_cells_beta = [];
-    devratio = [];
-    nulldev = [];
     dev = [];
     for j = 1:numel(chunks_this)
         dat = load(fullfile(paths.chunks,chunks_this{j}));
         cellID_this = reshape(dat.cellID,numel(dat.cellID),1);
         beta_all = [beta_all dat.beta'];
         good_cells_beta = [good_cells_beta; cellID_this];
-        devratio = [devratio; dat.devratio];
-        nulldev = [nulldev; dat.nulldev];
         dev = [dev; dat.dev];
     end
     
     [good_cells_beta,sort_idx] = sort(good_cells_beta);
     beta_all = beta_all(:,sort_idx);
-    devratio = devratio(sort_idx);
-    nulldev = nulldev(sort_idx);
     dev = dev(sort_idx);
     keep = ismember(dat_input.good_cells,good_cells_beta);
     good_cells = dat_input.good_cells(keep);
@@ -55,6 +49,6 @@ for i = 1:numel(session_uniq)
     depth_from_surface = dat_input.depth_from_surface(keep);
     spikecounts = dat_input.spikecounts(:,keep);
     assert(all(good_cells==good_cells_beta'),'cell IDs do not match');
-    save(fullfile(paths.save,session_uniq{i}),'beta_all','devratio','nulldev','dev',...
+    save(fullfile(paths.save,session_uniq{i}),'beta_all','dev',...
         'good_cells','brain_region_rough','depth_from_surface','spikecounts','-append');
 end
