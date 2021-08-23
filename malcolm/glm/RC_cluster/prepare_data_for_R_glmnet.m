@@ -7,7 +7,7 @@
 % 5/17/2021 Add ability to select subsets of variables
 % 8/9/2021 Add (1) squared DVs and (2) patch leave kernels
 
-run_name = 'tmp';
+run_name = '20210816_50ms_bins';
 
 restoredefaultpath;
 paths = struct;
@@ -38,7 +38,7 @@ opt = struct;
 
 opt.rew_size = [1 2 4];
 
-opt.tbin = 0.02; % in seconds
+opt.tbin = 0.05; % in seconds
 opt.smooth_sigma_lickrate = 0.1; % in seconds (for smoothing lickrate trace)
 opt.smooth_sigma_vel = 0.1; % in seconds, for smoothing velocity
 
@@ -145,7 +145,7 @@ for session_idx = 1:numel(session_all)
 
     %% compute binned spikecounts for each cell
     
-    t = dat.velt;
+    t = min(dat.velt):opt.tbin:max(dat.velt);
     spikecounts_whole_session = nan(numel(t),numel(good_cells_all));
     for cIdx = 1:numel(good_cells_all)
         spike_t = dat.sp.st(dat.sp.clu==good_cells_all(cIdx));
@@ -198,12 +198,13 @@ for session_idx = 1:numel(session_all)
         % PATCH POSITION
         if isfield(dat,'patch_pos')
             dat.patch_pos(isnan(dat.patch_pos)) = -4;
-            dat.patch_pos = dat.patch_pos + 4; % shift to be positive so better behaved (patch starts at -4)
-            X = [X dat.patch_pos'];
+            patch_pos = interp1(dat.velt,dat.patch_pos,t);
+            patch_pos = patch_pos + 4; % shift to be positive so better behaved (patch starts at -4)
+            X = [X patch_pos'];
             var_name = [var_name,'Position'];
             base_var = [base_var 1];
             if opt.include_squared_terms
-                X = [X dat.patch_pos'.^2];
+                X = [X patch_pos'.^2];
                 var_name = [var_name,'Position^2'];
                 base_var = [base_var 1];
             end
@@ -211,7 +212,8 @@ for session_idx = 1:numel(session_all)
 
         % RUNNING SPEED
         % smooth velocity
-        vel_smooth = gauss_smoothing(dat.vel,opt.smooth_sigma_vel/opt.tbin);
+        vel = interp1(dat.velt,dat.vel,t);
+        vel_smooth = gauss_smoothing(vel,opt.smooth_sigma_vel/opt.tbin);
         X = [X vel_smooth'];
         var_name = [var_name,'Speed'];
         base_var = [base_var 1];

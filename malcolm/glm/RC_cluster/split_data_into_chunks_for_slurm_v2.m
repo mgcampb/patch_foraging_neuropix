@@ -6,8 +6,8 @@
 
 
 paths = struct;
-paths.data = 'C:\data\patch_foraging_neuropix\GLM_output\20210526_full';
-paths.output = 'C:\data\patch_foraging_neuropix';
+paths.data = 'C:\data\patch_foraging_neuropix\GLM_output\20210816_50ms_bins';
+paths.output = 'C:\data\patch_foraging_neuropix\data_chunks';
 
 opt = struct;
 opt.target_num_cells_per_chunk = 10; % added hack to make this 5 for m78 because fitting takes forever (long PRTs)
@@ -48,4 +48,4 @@ for i = 1:numel(session_all)
 end
 
 %% save
-save(fullfile(paths.output,sprintf('data_chunks_%d_cells.mat',opt.target_num_cells_per_chunk)),'session','cellID');
+save(fullfile(paths.output,sprintf('data_chunks_%d_cells_50ms.mat',opt.target_num_cells_per_chunk)),'session','cellID');

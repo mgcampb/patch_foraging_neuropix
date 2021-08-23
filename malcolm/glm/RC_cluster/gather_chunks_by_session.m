@@ -23,6 +23,15 @@ end
 
 %% now gather chunks by session
 session_uniq = unique(session);
+
+% for combining sessions
+beta_concat = [];
+dev_all = [];
+nulldev_all = [];
+cellID_all = [];
+brain_region_rough_all = [];
+depth_from_surface_all = [];
+
 for i = 1:numel(session_uniq)
     fprintf('Processing session %d/%d: %s\n',i,numel(session_uniq),session_uniq{i});
     
@@ -51,4 +60,33 @@ for i = 1:numel(session_uniq)
     assert(all(good_cells==good_cells_beta'),'cell IDs do not match');
     save(fullfile(paths.save,session_uniq{i}),'beta_all','dev',...
         'good_cells','brain_region_rough','depth_from_surface','spikecounts','-append');
+    
+    % concat over sessions
+    beta_concat = [beta_concat beta_all];
+    dev_all = [dev_all; dev];
+    nulldev_all = [nulldev_all; dat_input.nulldev(keep)];
+    brain_region_rough_all = [brain_region_rough_all; brain_region_rough];
+    depth_from_surface_all = [depth_from_surface_all; depth_from_surface];
+    
+    cellID_this = cell(numel(good_cells),1);
+    for j = 1:numel(good_cells)
+        cellID_this{j} = sprintf('%s_c%d',dat_input.opt.session,good_cells(j));
+    end
+    cellID_all = [cellID_all; cellID_this];
 end
+
+%% save concatenated data
+
+beta_all = beta_concat;
+dev = dev_all;
+nulldev = nulldev_all;
+dev_expl = 100*(1-dev./nulldev);
+cellID = cellID_all;
+brain_region_rough = brain_region_rough_all;
+depth_from_surface = depth_from_surface_all;
+
+if ~isfolder(fullfile(paths.save,'combined'))
+    mkdir(fullfile(paths.save,'combined'));
+end
+
+save(fullfile(paths.save,'combined','GLM_coeffs'),'beta_all','dev','nulldev','dev_expl','cellID','brain_region_rough','depth_from_surface');
