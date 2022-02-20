@@ -8,9 +8,9 @@ if ~isfolder(paths.figs)
 end
 
 opt = struct;
-opt.brain_region = 'STR';
-opt.data_set = 'mc';
-opt.pval_thresh = 0.05;
+opt.brain_region = 'PFC';
+opt.data_set = 'mb';
+opt.pval_thresh = 2.0;
 
 %%
 session_all = dir(fullfile(paths.results,'*.mat'));

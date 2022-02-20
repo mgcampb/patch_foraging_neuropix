@@ -5,7 +5,7 @@ paths.data = 'G:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
 paths.output = 'C:\data\patch_foraging_neuropix';
 
 opt = struct;
-opt.target_num_cells_per_chunk = 3;
+opt.target_num_cells_per_chunk = 10;
 
 % all sessions to analyze:
 session_all = dir(fullfile(paths.data,'*.mat'));
