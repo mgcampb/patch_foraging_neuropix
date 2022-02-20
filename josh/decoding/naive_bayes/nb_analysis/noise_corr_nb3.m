@@ -61,7 +61,7 @@ RX = cell(nMice,1);
 RXX = cell(nMice,1); 
 
 % choose which features to reformat for analysis
-trial_decoding_features = 1:2;
+trial_decoding_features = [1 2 5];
 
 for mIdx = 1:numel(analysis_sessions)
     for i_i = 1:numel(analysis_sessions{mIdx})
@@ -128,18 +128,22 @@ for m_ix = 1:numel(analysis_mice)
     mouse_cluster1time = cat(1,mouse_cluster1time{:});
     mouse_cluster2time = cellfun(@(x) x{2}, decoded_time_hat{mIdx},'un',0);
     mouse_cluster2time = cat(1,mouse_cluster2time{:});
+    mouse_allclusters_time = cellfun(@(x) x{3}, decoded_time_hat{mIdx},'un',0);
+    mouse_allclusters_time = cat(1,mouse_allclusters_time{:});
     % concatenate and pad to make [nTrials x analyze_ix] sized matrix that will be nice to work with
     pad_cluster1time = cellfun(@(x) [x(1:min(length(x),analyze_ix)) ; nan(max(0,analyze_ix - length(x)),1)]',mouse_cluster1time,'un',0);
     mouse_cluster1time = var_dt * cat(1,pad_cluster1time{:}); % now this is a matrix
     pad_cluster2time = cellfun(@(x) [x(1:min(length(x),analyze_ix)) ; nan(max(0,analyze_ix - length(x)),1)]',mouse_cluster2time,'un',0);
     mouse_cluster2time = var_dt * cat(1,pad_cluster2time{:}); % now this is a matrix
+    pad_allclusters_time = cellfun(@(x) [x(1:min(length(x),analyze_ix)) ; nan(max(0,analyze_ix - length(x)),1)]',mouse_allclusters_time,'un',0);
+    mouse_allclusters_time = var_dt * cat(1,pad_cluster2time{:}); % now this is a matrix
     % also get true time
     y_true_tmp = y_true{mIdx}(pool_sessions{mIdx},time_true_ix);
     true_time = cat(1,y_true_tmp{:});
     pad_trueTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) nan(1,max(0,analyze_ix - length(x)))],true_time,'un',0);
     true_time = var_dt * cat(1,pad_trueTime{:});
 
-    subplot(numel(analysis_mice),3,1 + 3 * (m_ix - 1));
+    subplot(numel(analysis_mice),4,1 + 4 * (m_ix - 1));
     imagesc(true_time); caxis([0 1]) 
     caxis([0 max(true_time,[],'all')])
     title(sprintf("%s \n Time on Patch",mouse_names(mIdx)))
@@ -147,7 +151,7 @@ for m_ix = 1:numel(analysis_mice)
     xticklabels([1 25 50] * tbin_ms / 1000) 
     xlabel("True Time on Patch") 
     ylabel("Trials")
-    subplot(numel(analysis_mice),3,2 + 3 * (m_ix - 1));
+    subplot(numel(analysis_mice),4,2 + 4 * (m_ix - 1));
     imagesc(mouse_cluster1time); % - mean(mouse_cluster1time,1)); caxis([0 1]) 
     caxis([0 max(true_time,[],'all')])
     title(sprintf("%s \n Cluster1-Decoded Time on Patch",mouse_names(mIdx)))
@@ -155,10 +159,18 @@ for m_ix = 1:numel(analysis_mice)
     xticklabels([1 25 50] * tbin_ms / 1000) 
     xlabel("True Time on Patch") 
     ylabel("Trials")
-    subplot(numel(analysis_mice),3,3 + 3 * (m_ix - 1));
+    subplot(numel(analysis_mice),4,3 + 4 * (m_ix - 1));
     imagesc(mouse_cluster2time); %  - mean(mouse_cluster2time,1));
     caxis([0 max(true_time,[],'all')])
     title(sprintf("%s \n Cluster2-Decoded Time on Patch",mouse_names(mIdx))) 
+    xticks([1 25 50])
+    xticklabels([1 25 50] * tbin_ms / 1000) 
+    xlabel("True Time on Patch") 
+    ylabel("Trials")
+    subplot(numel(analysis_mice),4,4 + 4 * (m_ix - 1));
+    imagesc(mouse_allclusters_time); %  - mean(mouse_cluster2time,1));
+    caxis([0 max(true_time,[],'all')])
+    title(sprintf("%s \n All Clusters-Decoded Time on Patch",mouse_names(mIdx))) 
     xticks([1 25 50])
     xticklabels([1 25 50] * tbin_ms / 1000) 
     xlabel("True Time on Patch") 
@@ -172,7 +184,7 @@ analyze_ix = round(2000 / tbin_ms); % what time window
 trialtypes = [10 20 40 11 22 44];  
 
 xMouse_noise_corr = cell(numel(trialtypes),1);
-
+analysis_mice = [2 3 5];
 for m_ix = 1:numel(analysis_mice) 
     mIdx = analysis_mice(m_ix); 
     % gather decoded time variable from clusters 1 and 2
@@ -180,11 +192,16 @@ for m_ix = 1:numel(analysis_mice)
     mouse_cluster1time = cat(1,mouse_cluster1time{:});
     mouse_cluster2time = cellfun(@(x) x{2}, decoded_time_hat{mIdx},'un',0);
     mouse_cluster2time = cat(1,mouse_cluster2time{:});
+    mouse_allclusters_time = cellfun(@(x) x{3}, decoded_time_hat{mIdx},'un',0);
+    mouse_allclusters_time = cat(1,mouse_allclusters_time{:});
+    
     % concatenate and pad to make [nTrials x analyze_ix] sized matrix that will be nice to work with
     pad_cluster1time = cellfun(@(x) [x(1:min(length(x),analyze_ix)) ; nan(max(0,analyze_ix - length(x)),1)]',mouse_cluster1time,'un',0);
     mouse_cluster1time = var_dt * cat(1,pad_cluster1time{:}); % now this is a matrix
     pad_cluster2time = cellfun(@(x) [x(1:min(length(x),analyze_ix)) ; nan(max(0,analyze_ix - length(x)),1)]',mouse_cluster2time,'un',0);
     mouse_cluster2time = var_dt * cat(1,pad_cluster2time{:}); % now this is a matrix
+    pad_allclusters_time = cellfun(@(x) [x(1:min(length(x),analyze_ix)) ; nan(max(0,analyze_ix - length(x)),1)]',mouse_allclusters_time,'un',0);
+    mouse_allclusters_time = var_dt * cat(1,pad_allclusters_time{:}); % now this is a matrix
     % Mouse trial types
     mouse_RX = cat(1,RX{mIdx}{:});
     
@@ -196,16 +213,25 @@ for m_ix = 1:numel(analysis_mice)
         cluster1noise_tt = cluster1time_tt - mean(cluster1time_tt,2);
         cluster2time_tt = mouse_cluster2time(these_trials,:)'; 
         cluster2noise_tt = cluster2time_tt - mean(cluster2time_tt,2);
+        allclusters_time_tt = mouse_allclusters_time(these_trials,:)'; 
+        allclusters_noise_tt = allclusters_time_tt - mean(allclusters_time_tt,2);
         
         non_nan = ~isnan(cluster2noise_tt); 
         cluster1noise_tt = cluster1noise_tt(non_nan); 
         cluster2noise_tt = cluster2noise_tt(non_nan);  
-        xMouse_noise_corr{i_tt} = [xMouse_noise_corr{i_tt} ;[cluster1noise_tt cluster2noise_tt]];
+        allclusters_noise_tt = allclusters_noise_tt(non_nan);
+%         disp(max(xMouse_noise_corr{i_tt},[],'all'))
+        xMouse_noise_corr{i_tt} = [xMouse_noise_corr{i_tt} ;[cluster1noise_tt cluster2noise_tt allclusters_noise_tt]];
         
         subplot(numel(trialtypes),numel(analysis_mice),numel(analysis_mice) * (i_tt - 1) + m_ix);hold on
+        rdBu = cbrewer('div','RdBu',500);
+        rdBu = flipud(rdBu(75:425,:));
+        colormap(rdBu)
 %         scatter(cluster1noise_tt(:),cluster2noise_tt(:),2,'.') 
         [r,p] = corrcoef(cluster1noise_tt(:),cluster2noise_tt(:));
-        binscatter(cluster1noise_tt(:),cluster2noise_tt(:),50,'XLimits',[-2 4],'YLimits',[-2 4])  
+%         binscatter(cluster1noise_tt(:),cluster2noise_tt(:),50,'XLimits',[-2 4],'YLimits',[-2 4])  
+        scatter(cluster1noise_tt(:),cluster2noise_tt(:),5,allclusters_noise_tt(:))  
+        
         if m_ix == 1 
             ylabel(sprintf("%i Trials \n Cluster 2 Noise",trialtypes(i_tt)))
         end 
@@ -225,13 +251,16 @@ for m_ix = 1:numel(analysis_mice)
 end
 
 %% 1c) Plot pooled across mice
-
+rdBu = cbrewer('div','RdBu',500);
+rdBu = flipud(rdBu(75:425,:));
+colormap(rdBu)
+% set(gca,'ColorScale','log')
 for i_tt = 1:numel(trialtypes)
     subplot(1,numel(trialtypes),i_tt);hold on
-    binscatter(xMouse_noise_corr{i_tt}(:,1),xMouse_noise_corr{i_tt}(:,2),50,'XLimits',[-4 4],'YLimits',[-4 4])  
+    scatter(xMouse_noise_corr{i_tt}(:,1),xMouse_noise_corr{i_tt}(:,2),5,xMouse_noise_corr{i_tt}(:,3))  
     [r,p] = corrcoef(xMouse_noise_corr{i_tt}(:,1),xMouse_noise_corr{i_tt}(:,2)); 
-    xlim([-2.5 4])
-    ylim([-2.5 4])
+%     xlim([-2.5 4])
+%     ylim([-2.5 4])
     title(sprintf("%i Trials \n r = %.3f p = %.3f",trialtypes(i_tt),r(2),p(2)))
     ax = gca;
     ax.ColorScale = 'log';
@@ -245,18 +274,27 @@ end
 %% 1d) Plot pooled across trialtypes and mice 
 
 figure()
+rdBu = cbrewer('div','RdBu',500);
+rdBu = flipud(rdBu(75:425,:));
+
 xTT_xMouse_noise_corr = cat(1,xMouse_noise_corr{:}); 
-b = binscatter(xTT_xMouse_noise_corr(:,1),xTT_xMouse_noise_corr(:,2),50,'XLimits',[-4 4],'YLimits',[-4 4]); 
+scatter(xTT_xMouse_noise_corr(:,1),xTT_xMouse_noise_corr(:,2),5,xTT_xMouse_noise_corr(:,3)); 
+colormap(rdBu)
+% scatter(xTT_xMouse_noise_corr(:,1),xTT_xMouse_noise_corr(:,2)) %  ,50,'XLimits',[-4 4],'YLimits',[-4 4]); 
 [r,p] = corrcoef(xTT_xMouse_noise_corr(:,1),xTT_xMouse_noise_corr(:,2));
 xlim([-3 4])
 ylim([-3 4])
+% xticks([])
+% yticks([])
 title(sprintf("Decoded Time Since Reward Noise Correlation \n r = %.3f p = %.3f",r(2),p(2)))
 ax = gca;
-ax.ColorScale = 'log';
-colormap('parula') 
-set(gca,'fontsize',13)
+caxis([-1,1])
+% ax.ColorScale = 'log';
+% colormap('parula') 
+set(gca,'fontsize',16)
 ylabel("Cluster 2 Noise")
 xlabel("Cluster 1 Noise")
+colorbar()
 
 
 %% 2) Compare noise correlation to shuffled data 

@@ -282,7 +282,7 @@ for mIdx = 1:numel(mouse_grps)
     % concatenate to perform dimensionality reduction 
     tt_starts = [0 cumsum(cellfun(@(x) size(x,2), roi_m_RXNil_mean))];
     roi_m_RXNil_mean_full = cat(2,roi_m_RXNil_mean{:}); 
-    [coeff,score,~,~,explained] = pca(roi_m_RXNil_mean_full');  
+    [coeff,score,~,~,explained] = pca(zscore(roi_m_RXNil_mean_full,[],2)');  
     for tt = 1:numel(trialtypes)
         RXNil_pca{mIdx,tt} = score(tt_starts(tt)+1:tt_starts(tt+1),:)';
     end
@@ -304,7 +304,7 @@ for mIdx = 1:numel(mouse_grps)
 end
 
 %% Now visualize
-vis_mice = [2 4 5]; 
+vis_mice = [1 2 4 5]; 
 figure()
 for m_ix = 1:numel(vis_mice)  
     mIdx = vis_mice(m_ix); 
@@ -328,6 +328,9 @@ pooled_s_ix = xMice_s_ix(pool_mice); % add 10 * mIdx so we can differentiate bet
 pooled_s_ix = cat(1,pooled_s_ix{:});  
 pooled_s_ix_neurons = xMice_s_ix_neurons(pool_mice); 
 pooled_s_ix_neurons = cat(1,pooled_s_ix_neurons{:}); 
+pooled_GLM_cluster = GLM_cluster(pool_mice); 
+pooled_GLM_cluster = cat(1,pooled_GLM_cluster{:}); 
+pooled_GLM_cluster = cat(1,pooled_GLM_cluster{:}); 
 these_sessions = unique(pooled_s_ix); 
 
 % this data structure is within mice pooled, but with xMice stretching so
@@ -374,8 +377,8 @@ end
 
 %% Perform PCA across mice 
 pooled_RXNil_pca = cell(1,numel(trialtypes)); 
-neuron_selection = "PFC"; 
-figure();hold on
+neuron_selection = "GLM"; 
+% figure();hold on
 
 % Neuron information to subselect populations
 pooled_GLM_cluster = xMice_GLM_cluster(pool_mice); 
@@ -396,6 +399,8 @@ else
     throw(MException("MyComponent:noSuchVariable","neuron_selection must be PFC or GLM"))
 end 
 
+pooled_GLM_cluster_selection = pooled_GLM_cluster(these_neurons);
+
 roi_pooled_RXNil_mean = cellfun(@(x) x(these_neurons,:),pooled_RXNil_mean,'un',0);
 % now go into our per mouse datastructure and use same subselection
 roi_mouse_poolStretch_RXNil_mean = cell(numel(pool_mice),numel(trialtypes)); 
@@ -409,7 +414,7 @@ end
 % concatenate to perform dimensionality reduction
 tt_starts = [0 cumsum(cellfun(@(x) size(x,2), roi_pooled_RXNil_mean))];
 roi_pooled_RXNil_mean_full = cat(2,roi_pooled_RXNil_mean{:});
-[coeff,score,~,~,explained] = pca(roi_pooled_RXNil_mean_full');
+[coeff,score,latent,~,explained,mu] = pca(zscore(roi_pooled_RXNil_mean_full,[],2)');
 for tt = 1:numel(trialtypes)
     pooled_RXNil_pca{tt} = score(tt_starts(tt)+1:tt_starts(tt+1),:)';
 end 
@@ -418,14 +423,20 @@ end
 % for m = 1:numel(pool_mice) 
 %     
 % end
-
+lines2 = lines(2);
 % elbow plot
-subplot(1,2,1)
-plot(explained(1:10) / sum(explained),'linewidth',1.5)
+figure()
+plot(explained(1:10),'k','linewidth',1.5);hold on
+scatter(1:10,explained(1:10),[],lines2(1,:),'k','linewidth',1.5)
+% plot(cumsum(explained(1:10)),'linewidth',1.5);hold on
+% scatter(1:10,cumsum(explained(1:10)),[],lines2(1,:),'linewidth',1.5)
 title("Variance explained")
-subplot(1,2,2)
-plot(cumsum(explained(1:10)) / sum(explained),'linewidth',1.5)
-title("Cumulative variance explained")
+ylabel("Variance explained per component (%)") 
+xlabel("Principal Component")
+set(gca,'fontsize',14)
+% subplot(1,2,2)
+% plot(cumsum(explained(1:10)) / sum(explained),'linewidth',1.5)
+% title("Cumulative variance explained")
 % subplot(1,3,3) 
 % plot(-diff(explained(1:10) / sum(explained)),'linewidth',1.5)
 % title("\Delta variance explained") 
@@ -438,64 +449,90 @@ post_leave_ix = round(post_leave_sec / tbin_sec);
 
 colors = {[.5 1 1],[0 1 1],[.75 .75 1],[.5 .5 1],[1 .5 1],[1 0 1]}; 
 figure(); hold on
-for tt = [2 4 6] %  [1 3 5]
+for tt = 1:6
     % pre-cue
     plot3(pooled_RXNil_pca{tt}(1,1:pre_cue_ix), ...
           pooled_RXNil_pca{tt}(2,1:pre_cue_ix), ...
-          pooled_RXNil_pca{tt}(3,1:pre_cue_ix),'linewidth',1,'color',[.5 .5 .5]) 
+          pooled_RXNil_pca{tt}(3,1:pre_cue_ix),'linewidth',2,'color',[.5 .5 .5]) 
     % cue
     plot3(pooled_RXNil_pca{tt}(1,pre_cue_ix:pre_cue_ix + median_cue_len), ...
           pooled_RXNil_pca{tt}(2,pre_cue_ix:pre_cue_ix + median_cue_len), ...
-          pooled_RXNil_pca{tt}(3,pre_cue_ix:pre_cue_ix + median_cue_len),'linewidth',1,'color',[.2 .7 .2]) 
+          pooled_RXNil_pca{tt}(3,pre_cue_ix:pre_cue_ix + median_cue_len),'linewidth',2,'color',[.2 .7 .2]) 
     % trial 
     plot3(pooled_RXNil_pca{tt}(1,pre_cue_ix + median_cue_len:end-post_leave_ix), ...
           pooled_RXNil_pca{tt}(2,pre_cue_ix + median_cue_len:end-post_leave_ix), ... 
-          pooled_RXNil_pca{tt}(3,pre_cue_ix + median_cue_len:end-post_leave_ix),'linewidth',1,'color',colors{tt}) 
+          pooled_RXNil_pca{tt}(3,pre_cue_ix + median_cue_len:end-post_leave_ix),'linewidth',2,'color',colors{tt}) 
 
 %     % post leave
 %     plot3(pooled_RXNil_pca{tt}(1,end-post_leave_ix:end), ...
 %           pooled_RXNil_pca{tt}(2,end-post_leave_ix:end), ...
 %           pooled_RXNil_pca{tt}(2,end-post_leave_ix:end),'linewidth',1.5,'color',[.3 .3 .3])
     
-    % add some marks to make the trajectories more interpretable 
-    plot3(pooled_RXNil_pca{tt}(1,1),pooled_RXNil_pca{tt}(2,1),pooled_RXNil_pca{tt}(3,1), ...
-          'ko', 'markerSize', 6, 'markerFaceColor',[.5 .5 .5]);
-    plot3(pooled_RXNil_pca{tt}(1,pre_cue_ix),pooled_RXNil_pca{tt}(2,pre_cue_ix),pooled_RXNil_pca{tt}(3,pre_cue_ix), ...
-          'ko', 'markerSize', 6, 'markerFaceColor',[.2 .7 .2]);  
-    tt_len = length(pooled_RXNil_pca{tt}(1,pre_cue_ix + median_cue_len:end-post_leave_ix));
-    
-    % add O at start of trial
-    plot3(pooled_RXNil_pca{tt}(1,pre_cue_ix + median_cue_len),pooled_RXNil_pca{tt}(2,pre_cue_ix + median_cue_len),pooled_RXNil_pca{tt}(3,pre_cue_ix + median_cue_len), ... 
-          'ko', 'markerSize', 6, 'markerFaceColor',colors{tt});
     tick_interval = 10;  
+    tt_len = length(pooled_RXNil_pca{tt}(1,pre_cue_ix + median_cue_len:end-post_leave_ix));
+
     % add time ticks for cue
-    time_ticks = (pre_cue_ix+tick_interval):tick_interval:(pre_cue_ix + median_cue_len);
+    time_ticks = (pre_cue_ix+tick_interval):tick_interval:(pre_cue_ix + median_cue_len - tick_interval);
     plot3(pooled_RXNil_pca{tt}(1,time_ticks),pooled_RXNil_pca{tt}(2,time_ticks),pooled_RXNil_pca{tt}(3,time_ticks), ... 
-          'ko', 'markerSize', 3, 'markerFaceColor',[.2 .7 .2]); 
+          'ko', 'markerSize', 8, 'markerFaceColor',[.2 .7 .2]); 
     % add time ticks for on patch
-    time_ticks = ((pre_cue_ix + median_cue_len)+tick_interval):tick_interval:tt_len;
+    time_ticks = ((pre_cue_ix + median_cue_len)+tick_interval):tick_interval:(tt_len - tick_interval);
     plot3(pooled_RXNil_pca{tt}(1,time_ticks),pooled_RXNil_pca{tt}(2,time_ticks),pooled_RXNil_pca{tt}(3,time_ticks), ... 
-          'ko', 'markerSize', 3, 'markerFaceColor',colors{tt}); 
+          'ko', 'markerSize', 8, 'markerFaceColor',colors{tt}); 
       
     % add mark for reward
     if mod(tt,2) == 0
         plot3(pooled_RXNil_pca{tt}(1,(pre_cue_ix + median_cue_len)+50),pooled_RXNil_pca{tt}(2,(pre_cue_ix + median_cue_len)+50),pooled_RXNil_pca{tt}(3,(pre_cue_ix + median_cue_len)+50), ... 
-              'kd', 'markerSize', 8, 'markerFaceColor',colors{tt}); 
+              'kd', 'markerSize', 15, 'markerFaceColor',colors{tt}); 
     end 
     
-    % add arrow to end of line
-    penultimate_pt = [pooled_RXNil_pca{tt}(1,end-post_leave_ix-1),pooled_RXNil_pca{tt}(2,end-post_leave_ix-1),pooled_RXNil_pca{tt}(3,end-post_leave_ix-1)];
-    ultimate_pt = [pooled_RXNil_pca{tt}(1,end-post_leave_ix),pooled_RXNil_pca{tt}(2,end-post_leave_ix),pooled_RXNil_pca{tt}(3,end-post_leave_ix)];
-%     arrow3(penultimate_pt,ultimate_pt,[],.4,.8,.4,.4)
-%     quiver3(penultimate_pt(1),penultimate_pt(2),penultimate_pt(3),ultimate_pt(1) - penultimate_pt(1),ultimate_pt(2) - penultimate_pt(2),ultimate_pt(3) - penultimate_pt(3),...
-%             'linewidth',2)
+        % add some marks to make the trajectories more interpretable 
+    plot3(pooled_RXNil_pca{tt}(1,1),pooled_RXNil_pca{tt}(2,1),pooled_RXNil_pca{tt}(3,1), ...
+          'ko', 'markerSize', 15, 'markerFaceColor',[.5 .5 .5]);
+    plot3(pooled_RXNil_pca{tt}(1,pre_cue_ix),pooled_RXNil_pca{tt}(2,pre_cue_ix),pooled_RXNil_pca{tt}(3,pre_cue_ix), ...
+          'ko', 'markerSize', 15, 'markerFaceColor',[.2 .7 .2]);  
+    
+    % add O at start of trial
+    plot3(pooled_RXNil_pca{tt}(1,pre_cue_ix + median_cue_len),pooled_RXNil_pca{tt}(2,pre_cue_ix + median_cue_len),pooled_RXNil_pca{tt}(3,pre_cue_ix + median_cue_len), ... 
+          'ko', 'markerSize', 15, 'markerFaceColor',colors{tt});
+    % add X at end of trial
+    plot3(pooled_RXNil_pca{tt}(1,end-post_leave_ix),pooled_RXNil_pca{tt}(2,end-post_leave_ix),pooled_RXNil_pca{tt}(3,end-post_leave_ix), ... 
+          'ko', 'markerSize', 15, 'markerFaceColor',colors{tt});
+    % add X at end of trial
+    plot3(pooled_RXNil_pca{tt}(1,end-post_leave_ix),pooled_RXNil_pca{tt}(2,end-post_leave_ix),pooled_RXNil_pca{tt}(3,end-post_leave_ix), ... 
+          'kx', 'markerSize', 15, 'markerFaceColor',[.5 .5 .5],'linewidth',2);
+%     
+%     % add arrow to end of line
+%     penultimate_pt = [pooled_RXNil_pca{tt}(1,end-post_leave_ix-1),pooled_RXNil_pca{tt}(2,end-post_leave_ix-1),pooled_RXNil_pca{tt}(3,end-post_leave_ix-1)];
+%     ultimate_pt = [pooled_RXNil_pca{tt}(1,end-post_leave_ix),pooled_RXNil_pca{tt}(2,end-post_leave_ix),pooled_RXNil_pca{tt}(3,end-post_leave_ix)];
+%     projection_scale = 10;
+% %     arrow3(penultimate_pt,ultimate_pt,[],.4,.8,.4,.4)
+%     quiver3(penultimate_pt(1),penultimate_pt(2),penultimate_pt(3),projection_scale * (ultimate_pt(1) - penultimate_pt(1)),projection_scale * (ultimate_pt(2) - penultimate_pt(2)),projection_scale * (ultimate_pt(3) - penultimate_pt(3)),...
+%             'linewidth',1,'maxHeadSize',10,'color',colors{tt})
+        
 %     ARROW3(penultimate_pt,ultimate_pt,S,W,H,IP,ALPHA,BETA)
+%     zl = zlim();
+    
+    % precue
+%     plot3(pooled_RXNil_pca{tt}(1,1:pre_cue_ix), ...
+%           pooled_RXNil_pca{tt}(2,1:pre_cue_ix), ...
+%           zeros(size(pooled_RXNil_pca{tt}(2,1:pre_cue_ix))) + zl(1),'linewidth',1,'color',min(1,.5 * [.5 .5 .5]) )
+%     % cue 
+%     plot3(pooled_RXNil_pca{tt}(1,pre_cue_ix:pre_cue_ix + median_cue_len), ...
+%           pooled_RXNil_pca{tt}(2,pre_cue_ix:pre_cue_ix + median_cue_len), ...
+%           zeros(size(pooled_RXNil_pca{tt}(2,pre_cue_ix:pre_cue_ix + median_cue_len))) + zl(1),'linewidth',1,'color',min(1,.5 * [.5 .5 .5])) 
+%     % trial 
+%     plot3(pooled_RXNil_pca{tt}(1,pre_cue_ix + median_cue_len:end-post_leave_ix), ...
+%           pooled_RXNil_pca{tt}(2,pre_cue_ix + median_cue_len:end-post_leave_ix), ... 
+%           zeros(size(pooled_RXNil_pca{tt}(2,pre_cue_ix + median_cue_len:end-post_leave_ix))) + zl(1),'linewidth',1,'color',min(1,.5 * [.5 .5 .5]))   
+% %     zlim(zl)
 end 
 xlabel("PC1");ylabel("PC2");zlabel("PC3")
 xticklabels([]);yticklabels([]);zticklabels([]) 
 grid()  
-view(0,45)
-title("RXNil Trial Population Dynamics")
+view(-135,30)
+title("R0Nil Trial Population Dynamics")
+set(gca,'fontsize',15)
 
 %% Visualize pooled traces but now separate by reward at t = 0
 
@@ -552,7 +589,7 @@ for i_trial_grp = 1:2
         end
         xlabel("PC1");ylabel(sprintf("PC%i",second_pc))
         xticklabels([]);yticklabels([]);zticklabels([])
-        grid() 
+%         grid() 
         if second_pc == 2 
             if i_trial_grp == 1
                 title("R0Nil Population Dynamics")
@@ -560,27 +597,63 @@ for i_trial_grp = 1:2
                 title("RRNil Population Dynamics")
             end
         end
+        set(gca,'fontsize',14)
     end 
 end
 suptitle("RXNil Trial Population Dynamics")
 suptitle(neuron_selection)
 
+%% pcs vs time
+vis_trial_types = 1:6;
+for pc_vis = 1
+    figure()
+    for tt = vis_trial_types
+        plot((1:pre_cue_ix) * tbin_sec - pre_cue_sec - median_cue_len * tbin_sec,pooled_RXNil_pca{tt}(pc_vis,1:pre_cue_ix),'linewidth',1,'color',[.5 .5 .5])
+        hold on
+        plot((pre_cue_ix:(pre_cue_ix + median_cue_len))* tbin_sec - pre_cue_sec - median_cue_len * tbin_sec,pooled_RXNil_pca{tt}(pc_vis,pre_cue_ix:(pre_cue_ix + median_cue_len))  ,'linewidth',2,'color',[.2 .7 .2])
+        t_len = length(pooled_RXNil_pca{tt}(pc_vis,(pre_cue_ix + median_cue_len):end-post_leave_ix))-1;
+        plot(((pre_cue_ix + median_cue_len):(pre_cue_ix + median_cue_len + t_len))* tbin_sec - pre_cue_sec - median_cue_len * tbin_sec,pooled_RXNil_pca{tt}(pc_vis,(pre_cue_ix + median_cue_len):end-post_leave_ix),'linewidth',2,'color',colors{tt})
+        
+        % add mark for reward
+        if mod(tt,2) == 0
+            plot(tbin_sec * (pre_cue_ix + median_cue_len+50)- pre_cue_sec - median_cue_len*tbin_sec,pooled_RXNil_pca{tt}(pc_vis,(pre_cue_ix + median_cue_len)+50),'kd', 'markerSize', 15, 'markerFaceColor',colors{tt}); 
+        end 
+
+        % add some marks to make the trajectories more interpretable
+        plot(-pre_cue_sec - median_cue_len * tbin_sec,pooled_RXNil_pca{tt}(pc_vis,1),'ko', 'markerSize', 15, 'markerFaceColor',[.5 .5 .5]);
+        plot(- median_cue_len * tbin_sec,pooled_RXNil_pca{tt}(pc_vis,pre_cue_ix),'ko', 'markerSize', 15, 'markerFaceColor',[.2 .7 .2]);
+        
+        % add O at start of trial
+        plot(tbin_sec * (pre_cue_ix + median_cue_len)- pre_cue_sec - median_cue_len*tbin_sec,pooled_RXNil_pca{tt}(pc_vis,pre_cue_ix + median_cue_len),'ko', 'markerSize', 15, 'markerFaceColor',colors{tt});
+        % add X at end of trial
+        plot(tbin_sec * (pre_cue_ix + median_cue_len + t_len)- pre_cue_sec - median_cue_len*tbin_sec,pooled_RXNil_pca{tt}(pc_vis,end-post_leave_ix),'ko', 'markerSize', 15, 'markerFaceColor',colors{tt});
+        % add X at end of trial
+        plot(tbin_sec * (pre_cue_ix + median_cue_len + t_len)- pre_cue_sec - median_cue_len*tbin_sec,pooled_RXNil_pca{tt}(pc_vis,end-post_leave_ix),'kx', 'markerSize', 15, 'markerFaceColor',[.5 .5 .5],'linewidth',2);
+    end
+    title(sprintf("RXNil PC %i Dynamics",pc_vis))
+    ylabel(sprintf("Neural Projection onto PC %i",pc_vis))
+    set(gca,'fontsize',16)
+end
 %% Visualize magnitude of gradient over time, w/ same coloring scheme 
 close all
 tt_lens = cellfun(@(x) size(x,2),pooled_RXNil_pca);
 tt_justTrial_lens = tt_lens - median_cue_len - pre_cue_ix - post_leave_ix; % just stretch this part
 median_justTrial_len = floor(median(tt_justTrial_lens));
 figure() ;hold on
-for tt = [1 3 5]
-    pt0 = pooled_RXNil_pca{tt}(1:3,1);
-    dist_from_init = vecnorm(pooled_RXNil_pca{tt}(1:3,1:end-post_leave_ix) - pt0,2);
-    grad_tt = vecnorm(gradient(pooled_RXNil_pca{tt}(1:3,1:end-post_leave_ix)));  
+pcs = 1:3; 
+tt_rewsizes = [1 1 2 2 4 4];
+gradient_trialtype = [];
+for tt = 1:6
+    pt0 = pooled_RXNil_pca{tt}(pcs,1);
+    dist_from_init = vecnorm(pooled_RXNil_pca{tt}(pcs,1:end-post_leave_ix) - pt0,2);
+    grad_tt = vecnorm(gradient(pooled_RXNil_pca{tt}(pcs,1:end-post_leave_ix)));  
     grad_tt_justTrial = grad_tt(median_cue_len+1:end);
+    gradient_trialtype = [gradient_trialtype ; grad_tt_justTrial' tt_rewsizes(tt) + zeros(length(grad_tt_justTrial),1)];
 %     grad_tt_justTrial = interp1(1:length(grad_tt_justTrial),grad_tt_justTrial,linspace(1,length(grad_tt_justTrial),median_justTrial_len));
     grad_tt = [grad_tt(1:median_cue_len) grad_tt_justTrial]; 
     grad_tt = smoothdata(grad_tt,'gaussian',10); % apply some smoothing
     % last, check out evolution of angle to original state
-    angle = acos(pt0' * pooled_RXNil_pca{tt}(1:3,1:end-post_leave_ix) ./ (norm(pt0)*vecnorm(pooled_RXNil_pca{tt}(1:3,1:end-post_leave_ix))));
+    angle = acos(pt0' * pooled_RXNil_pca{tt}(pcs,1:end-post_leave_ix) ./ (norm(pt0)*vecnorm(pooled_RXNil_pca{tt}(pcs,1:end-post_leave_ix))));
     angle = angle * 180 / pi; % convert to degrees
 
     % plot dist from ITI evolution 
@@ -621,25 +694,27 @@ for tt = [1 3 5]
 %     xline(pre_cue_ix + median(median_cue_len_lens) + 50,'linewidth',1.5,'color',[.6 .6 .6])    
 end 
 
-%% 
+%% Check out position on pooled 2Nil trial
+pcs = 1:3; 
+[closest12,dist12] = dsearchn(pooled_RXNil_pca{3}(pcs,:)',pooled_RXNil_pca{1}(pcs,:)');
+[closest24,dist24] = dsearchn(pooled_RXNil_pca{3}(pcs,:)',pooled_RXNil_pca{5}(pcs,:)');
+[closest22_rew,dist22_rew] = dsearchn(pooled_RXNil_pca{3}(pcs,:)',pooled_RXNil_pca{4}(pcs,:)');
+[closest12_rew,dist12_rew] = dsearchn(pooled_RXNil_pca{3}(pcs,:)',pooled_RXNil_pca{2}(pcs,:)');
+[closest24_rew,dist24_rew] = dsearchn(pooled_RXNil_pca{3}(pcs,:)',pooled_RXNil_pca{6}(pcs,:)');
 
-closest12 = dsearchn(pooled_RXNil_pca{3}(1:3,:)',pooled_RXNil_pca{1}(1:3,:)');
-closest24 = dsearchn(pooled_RXNil_pca{3}(1:3,:)',pooled_RXNil_pca{5}(1:3,:)');
-
-figure()
-subplot(1,2,1) ;hold on
-plot(closest12,'color',[0 1 1],'linewidth',2)
-plot(closest24,'color',[1 0 1],'linewidth',2)
+figure();hold on
+plot(closest12,'color',colors{1},'linewidth',2)
+plot(closest24,'color',colors{5},'linewidth',2)
+plot(closest12_rew,'color',colors{2},'linewidth',2)
+plot(closest24_rew,'color',colors{6},'linewidth',2)
+plot(closest22_rew,'color',colors{4},'linewidth',2)
 h = refline(1,0); 
 h.Color = [.4 .4 .4]; 
 h.LineStyle = '--'; 
 h.LineWidth = 1.5;
-subplot(1,2,2);hold on
-plot(dist12,'color',[0 1 1],'linewidth',2)
-plot(dist24,'color',[1 0 1],'linewidth',2)
 
 %% Pad trials per session with zeros so that we can bootstrap and see trial-by-trial variability in initial point
-
+trialtypes = [10 11 20 22 40 44]; 
 pooled_sessions = unique(pooled_s_ix);
 pooled_mIdx = floor(pooled_sessions/10); 
 pooled_i = mod(pooled_sessions,10); 
@@ -701,6 +776,7 @@ for m_ix = 1:numel(pool_mice)
         for iTrial = 1:nTrials 
             tt = find(trialtypes == RXNil{mIdx}{i}(iTrial),1); % RXNil trialtype in {1:6}
             if ~isempty(tt) % this was an RX trial, let's do some stuff  
+                disp(tt)
                 tt_sec1plus_median_len = sec1plus_median_lens(tt);  
                 
                  % collect fr_mats from 5 trial periods
@@ -712,7 +788,7 @@ for m_ix = 1:numel(pool_mice)
 
                 % concatenate to make full trials
                 iTrial_fr_mat_full = cat(2,iTrial_precue_fr_mat,iTrial_cue_fr_mat,iTrial_sec0_fr_mat,iTrial_sec1plus_fr_mat,iTrial_postleave_fr_mat);
-                iTrial_fr_mat_norm = (iTrial_fr_mat_full - s_means) ./ s_stds;
+                iTrial_fr_mat_norm = (iTrial_fr_mat_full - s_means); %  ./ s_stds;
                 t_len = size(iTrial_fr_mat_norm,2); 
                 time_trials{m_ix}{i_i}{iTrial} = (1:t_len)' * tbin_sec - pre_cue_sec - median_cue_len * tbin_sec;
                 
@@ -723,12 +799,13 @@ for m_ix = 1:numel(pool_mice)
                 nanPadded_trials{m_ix}{i_i}{iTrial}(s_neuron_ix,:) = iTrial_fr_mat_full;
                 zeroPadded_trials{m_ix}{i_i}{iTrial}(s_neuron_ix,:) = iTrial_fr_mat_full;
                 zeroPadded_fr_mat_norm(s_neuron_ix,:) = iTrial_fr_mat_norm;
-                pca_trials{m_ix}{i_i}{iTrial} = coeff(:,1:10)' * zeroPadded_fr_mat_norm; % only really care about 10 PCs
+                pca_trials{m_ix}{i_i}{iTrial} = coeff(:,1:20)' * zeroPadded_fr_mat_norm; % only really care about 10 PCs
             end
         end 
         session_counter = session_counter + 1; 
     end
 end
+
 
 %% 1a) Does initial state affect PRT within RXNil trialtype? 
 % - this cell takes a second b/c the matrix concatenation is pretty big
@@ -753,18 +830,42 @@ time_full = cat(1,pooled_time{:})';
 
 patch_onset_ix = median_cue_len + pre_cue_ix; 
 
-%% 1c) Corrcoef to find timecourse of significant correlation between z-scored PRT and neural activity 
+% 1c) Corrcoef to find timecourse of significant correlation between z-scored PRT and neural activity 
 % multiple timepoints, one PC 
-t_centers = (-pre_cue_sec - median_cue_len * tbin_sec+tbin_sec):tbin_sec:1.5;
-t_edges = [(-pre_cue_sec - median_cue_len * tbin_sec+tbin_sec):tbin_sec:1.5 1.5+tbin_sec] - tbin_sec / 2;
+t_centers = (-pre_cue_sec - median_cue_len * tbin_sec + tbin_sec):tbin_sec:1.5;
+t_edges = [(-pre_cue_sec - median_cue_len * tbin_sec + tbin_sec):tbin_sec:1.5 1.5+tbin_sec] - tbin_sec / 2;
 [~,~,binned_t] = histcounts(time_full,t_edges); 
 
-tts_of_interest = [20 22 40 44]; 
+tts_of_interest = [10 11 20 22 40 44]; 
 these_trials = ismember(pooled_RXNil(~isnan(pooled_RXNil)),tts_of_interest);
 pcs = 1:3;
+pt0 = mean(pca_full(pcs,binned_t == 1),2);
+dist_from_init = vecnorm(pca_full(pcs,:) - pt0,2);
+
+% estimate "manifold"
+% manifold = pooled_RXNil_pca{3}(pcs,:)'; 
+% manifold_tts = [40]; 
+% manifold_timepoints = 1:200; 
+% manifold_pca_trials = pooled_pca_trials(ismember(pooled_RXNil,manifold_tts));
+% manifold_pca_trials = cellfun(@(x) x(pcs,manifold_timepoints),manifold_pca_trials,'un',0); 
+% manifold = mean(cat(3,manifold_pca_trials{:}),3)'; 
+% 
+% figure();scatter3(pca_full(1,1:20:end),pca_full(2,1:20:end),pca_full(3,1:20:end),5,'.');hold on
+% plot3(manifold_2(:,1),manifold_2(:,2),manifold_2(:,3),'linewidth',2)
+% hold on;plot3(manifold(:,1),manifold(:,2),manifold(:,3),'linewidth',2)
+
+%%
+close all
+% now align poin w/ closest manifold point
+manifold_closest = dsearchn(manifold,pca_full(pcs,:)'); % NEED TO MAKE THIS IN OUR NEW PADDED PC SPACE.. some weird SCALING stuff here?
+
 r_zscored_prt = nan(numel(pcs),max(binned_t)); 
 p_zscored_prt = nan(numel(pcs),max(binned_t));  
 p_lm = nan(max(binned_t),1); 
+r_dist = nan(max(binned_t),1); 
+p_dist = nan(max(binned_t),1); 
+r_manifold = nan(max(binned_t),1); 
+p_manifold = nan(max(binned_t),1); 
 for iPC = 1:numel(pcs)
     RXNil_zscored_prts = pooled_zscored_prts(~isnan(pooled_RXNil));
     for i_tBin = 1:max(binned_t)
@@ -779,26 +880,98 @@ for iPC = 1:numel(pcs)
             all_pcs = pca_full(pcs,these_time_ix)';
             mdl = fitlm(all_pcs(these_trials,:),RXNil_zscored_prts(these_trials));
             p_lm(i_tBin) = coefTest(mdl);
+%             iTime_dist_data = dist_from_init(these_time_ix)';
+%             [r,p] = corrcoef(iTime_dist_data(these_trials),RXNil_zscored_prts(these_trials));
+%             r_dist(i_tBin) = r(2);
+%             p_dist(i_tBin) = p(2);
+%             
+%             iTime_manifold_data = manifold_closest(these_time_ix)';
+%             [r,p] = corrcoef(iTime_manifold_data(these_trials),RXNil_zscored_prts(these_trials));
+%             if mod(i_tBin,10) == 0 
+%                 figure();
+%                 scatter(iTime_manifold_data(these_trials),RXNil_zscored_prts(these_trials))
+%             end
+%             r_manifold(i_tBin) = r(2);
+%             p_manifold(i_tBin) = p(2);
         end
     end
 end 
 
 figure()
 subplot(2,1,1)
-plot(t_centers,r_zscored_prt','linewidth',1.5)
-xline(t_centers(1) + pre_cue_sec,'--') 
+plot(t_centers,r_zscored_prt','linewidth',3);hold on
+% plot(t_centers,r_dist,'k','linewidth',2) 
+% plot(t_centers,r_manifold,'color',[.5,.5,.5],'linewidth',2) 
 ylabel("Pearson Correlation Coefficient") 
 xlim([min(t_centers) max(t_centers)]) 
 ylim([-.3 .3]) 
-yline(0,'--')
+yline(0,'--','linewidth',1.5) 
+xline(t_centers(1) + pre_cue_sec,'--','linewidth',1.5) 
+xline(t_centers(1) + pre_cue_sec + ((median_cue_len-1) * tbin_sec),'--','linewidth',1.5) 
+set(gca,'fontsize',16)
 subplot(2,1,2)
-plot(t_centers,log10(p_zscored_prt)','linewidth',1.5);hold on 
-plot(t_centers,log10(p_lm),'k--','linewidth',1.5) 
-yline(log10(.05),'--')  
-xline(t_centers(1) + pre_cue_sec,'--')  
-ylabel("Log10 p-value Against Constant Model") 
+plot(t_centers,log10(p_zscored_prt)','linewidth',3);hold on 
+% plot(t_centers,log10(p_dist),'k','linewidth',2) 
+% plot(t_centers,log10(p_manifold),'color',[.5,.5,.5],'linewidth',2) 
+yline(log10(.05),'--','linewidth',1.5)  
+xline(t_centers(1) + pre_cue_sec,'--','linewidth',1.5) 
+xline(t_centers(1) + pre_cue_sec + ((median_cue_len-1) * tbin_sec),'--','linewidth',1.5) 
+ylabel(sprintf("Log10 p-value \n Against Constant Model") )
 xlim([min(t_centers) max(t_centers)]) 
 suptitle(neuron_selection)
+set(gca,'fontsize',16)
+xlabel("Time on Patch (sec)")
+legend(arrayfun(@(x) sprintf("PC %i",x),1:numel(pcs)))
+
+%% Ok let's make some visualizations to show what's going on here 
+
+%% 1c) how do pcs vary w/ different zscored prt 
+% ok we need to do some binning here, single traces are not nice enough
+trialtypes = [40];
+trialtype_names = [10 11 20 22 40 44];
+trialtype_rewsizes = [1 1 2 2 3 3];
+nDiv = 3; 
+cool3 = cool(3);
+cool_prtShades = nan(nDiv*3,3);
+for i_rewsize = 1:3
+    cool_prtShades(1:nDiv,i_rewsize) = linspace(.9, cool3(1,i_rewsize), nDiv);
+    cool_prtShades((nDiv+1):2*nDiv,i_rewsize) = linspace(.9, cool3(2,i_rewsize), nDiv);
+    cool_prtShades((2*nDiv+1):nDiv*3,i_rewsize) = linspace(.9, cool3(3,i_rewsize), nDiv);
+end
+tt_quantile_colors{1} = cool_prtShades(1:nDiv,:); 
+tt_quantile_colors{2} = cool_prtShades((nDiv+1):2*nDiv,:); 
+tt_quantile_colors{3} = cool_prtShades((2*nDiv+1):nDiv*3,:); 
+
+trial_precue_offset = pre_cue_ix * tbin_sec + median_cue_len * tbin_sec; 
+trial_cue_offset = median_cue_len * tbin_sec; 
+for pc_vis = 1
+    for i_tt = 1:numel(trialtypes)
+        tt = trialtypes(i_tt);
+        tt_ix = find(trialtype_names == tt);
+        rewsize_ix = trialtype_rewsizes(tt_ix);
+        these_trials = find(pooled_RXNil == tt);
+        these_zscored_prts = pooled_zscored_prts(these_trials);
+        [~,~,prt_bin] = histcounts(these_zscored_prts, [min(these_zscored_prts) quantile(these_zscored_prts,nDiv-1) max(these_zscored_prts)]);
+        
+        hold on
+        for i_bin = unique(prt_bin)'
+            bin_trials = these_trials(prt_bin == i_bin);
+            this_bin_pca = pooled_pca_trials(bin_trials);
+            this_bin_pca = cat(3,this_bin_pca{:}); 
+            this_bin_pca_mean = median(this_bin_pca,3);
+            this_bin_pca_sem = 1.96 * std(this_bin_pca,[],3) / sqrt(numel(bin_trials));
+            t_len = size(this_bin_pca_mean,2);
+            % do shaded errorbar
+%             shadedErrorBar(1:t_len,this_bin_pca_mean(pc_vis,:),this_bin_pca_sem(pc_vis,:),'')
+            
+            shadedErrorBar(tbin_sec * (1:pre_cue_ix) - trial_precue_offset,this_bin_pca_mean(pc_vis,1:pre_cue_ix),this_bin_pca_sem(pc_vis,1:pre_cue_ix),'lineProps',{'color',[.5 .5 .5],'linewidth',1.5})
+            shadedErrorBar(tbin_sec * (pre_cue_ix:(pre_cue_ix+median_cue_len)) - trial_precue_offset,this_bin_pca_mean(pc_vis,pre_cue_ix:pre_cue_ix + median_cue_len),this_bin_pca_sem(pc_vis,pre_cue_ix:pre_cue_ix + median_cue_len),'lineProps',{'color',[.2 .7 .2],'linewidth',1.5}) 
+            tt_len = length(this_bin_pca_mean(pc_vis,(median_cue_len+pre_cue_ix):end));
+            shadedErrorBar(tbin_sec * ((pre_cue_ix+median_cue_len) + (1:tt_len-1)-1) - trial_time_offset,this_bin_pca_mean(pc_vis,(pre_cue_ix+median_cue_len+1):end),this_bin_pca_sem(pc_vis,(pre_cue_ix+median_cue_len+1):end),'lineProps',{'color',tt_quantile_colors{rewsize_ix}(i_bin,:),'linewidth',1.5}) 
+        end
+    end
+end
+
 
 %% 1d) Visualize relation between starting pt and PRT w/ colored scatter 
 % one timepoint, multiple PCs 
@@ -853,31 +1026,31 @@ for i_tt = [5]
     i_rewsize = min(3,floor(tt/10)); % min(3,floor(mod(tt,10)));
     for i_quantile = [1 2 nDiv]
         % pre-cue
-        plot3(prt_sep_trajectories{i_tt,i_quantile}(1,1:pre_cue_ix), ...
-              prt_sep_trajectories{i_tt,i_quantile}(2,1:pre_cue_ix), ...
-              prt_sep_trajectories{i_tt,i_quantile}(3,1:pre_cue_ix),'linewidth',1,'color',[.5 .5 .5]) 
+        plot(prt_sep_trajectories{i_tt,i_quantile}(1,1:pre_cue_ix), ...
+              prt_sep_trajectories{i_tt,i_quantile}(2,1:pre_cue_ix),'linewidth',2,'color',[.5 .5 .5]) 
         % cue
-        plot3(prt_sep_trajectories{i_tt,i_quantile}(1,pre_cue_ix:pre_cue_ix + median_cue_len), ...
-              prt_sep_trajectories{i_tt,i_quantile}(2,pre_cue_ix:pre_cue_ix + median_cue_len), ...
-              prt_sep_trajectories{i_tt,i_quantile}(3,pre_cue_ix:pre_cue_ix + median_cue_len),'linewidth',1,'color',[.2 .7 .2]) 
+        plot(prt_sep_trajectories{i_tt,i_quantile}(1,pre_cue_ix:pre_cue_ix + median_cue_len), ...
+              prt_sep_trajectories{i_tt,i_quantile}(2,pre_cue_ix:pre_cue_ix + median_cue_len),'linewidth',2,'color',[.2 .7 .2]) 
         % trial 
-        plot3(prt_sep_trajectories{i_tt,i_quantile}(1,pre_cue_ix + median_cue_len:end-post_leave_ix), ...
-              prt_sep_trajectories{i_tt,i_quantile}(2,pre_cue_ix + median_cue_len:end-post_leave_ix), ... 
-              prt_sep_trajectories{i_tt,i_quantile}(3,pre_cue_ix + median_cue_len:end-post_leave_ix),'linewidth',1,'color',tt_quantile_colors{i_rewsize}(i_quantile,:)) 
+        plot(prt_sep_trajectories{i_tt,i_quantile}(1,pre_cue_ix + median_cue_len:end-post_leave_ix), ...
+              prt_sep_trajectories{i_tt,i_quantile}(2,pre_cue_ix + median_cue_len:end-post_leave_ix),'linewidth',2,'color',tt_quantile_colors{i_rewsize}(i_quantile,:)) 
     end
 end
 
 %% 2a) Bootstrap to find SEM of quantified dynamics 
 %  - Subsample trials to get nBootstraps x nTrialtypes cell array of means
 %  - How many trials to choose?
-
+trialtypes = [10 11 20 22 40 44]; 
 nSamples = 500; 
 sample_size = 50; 
 tt_lens = round(pre_cue_ix + median_cue_len + sec1plus_median_lens + post_leave_ix + 50); 
 dist_from_init_bootstrap = cell(numel(trialtypes),1);
+manifold = pooled_RXNil_pca{3}(1:3,:)'; 
+manifold_closest = cell(numel(trialtypes),1);
 grad_bootstrap = cell(numel(trialtypes),1);
 angle_bootstrap = cell(numel(trialtypes),1);
-pcs = 1:2; 
+pc1_bootstrap = cell(numel(trialtypes),1);
+pcs = 1:3; 
 f = waitbar(0,'Drawing bootstrapped trajectory quantifications');
 for i_tt = 1:numel(trialtypes) 
     tt = trialtypes(i_tt);
@@ -887,8 +1060,10 @@ for i_tt = 1:numel(trialtypes)
     
     % just going to end up w/ these metrics.. throw out actual sampled data 
     dist_from_init_bootstrap{i_tt} = nan(nSamples,this_t_len); 
+    manifold_closest{i_tt} = nan(nSamples,this_t_len); 
     grad_bootstrap{i_tt} = nan(nSamples,this_t_len); 
     angle_bootstrap{i_tt} = nan(nSamples,this_t_len); 
+    pc1_bootstrap{i_tt} = nan(nSamples,this_t_len); 
     
     trialrange = 1:length(these_trials); 
     
@@ -903,6 +1078,7 @@ for i_tt = 1:numel(trialtypes)
         % now calculate metrics
         pt0 = sample_pca(pcs,1);
         dist_from_init_bootstrap{i_tt}(b,:) = vecnorm(sample_pca(pcs,1:end) - pt0,2);
+        manifold_closest{i_tt}(b,:) = dsearchn(manifold,sample_pca(pcs,:)');
         grad_tt = vecnorm(gradient(sample_pca(pcs,1:end)),2,1); % vecnorm(gradient(sample_pca(pcs,1:end)));
         grad_tt_justTrial = grad_tt(median_cue_len+1:end);
         grad_tt = [grad_tt(1:median_cue_len) grad_tt_justTrial]; 
@@ -910,6 +1086,7 @@ for i_tt = 1:numel(trialtypes)
         % last, check out evolution of angle to original state
         angle = acos(pt0' * sample_pca(pcs,1:end) ./ (norm(pt0)*vecnorm(sample_pca(pcs,1:end))));
         angle_bootstrap{i_tt}(b,:) = real(angle) * 180 / pi; % convert to degrees 
+        pc1_bootstrap{i_tt}(b,:) = sample_pca(1,:);
         % 
         waitbar((b + (i_tt-1)*nSamples) / (numel(trialtypes)*nSamples),f) 
     end 
@@ -966,7 +1143,7 @@ close(f);
 
 %% 2c) Plot errorbar Now visualize dynamics with errorbars
 
-close all
+% close all
 tt_lens = cellfun(@(x) size(x,2),pooled_RXNil_pca);
 tt_justTrial_lens = tt_lens - median_cue_len - pre_cue_ix - post_leave_ix; % just stretch this part
 median_justTrial_len = floor(median(tt_justTrial_lens)); 
@@ -977,97 +1154,145 @@ vis_trial_grps = {1 3 5};
 % colors_tt = {[0 1 1],[.5 .5 1],[1 0 1]}; % {[.5 1 1],[0 1 1],[.75 .75 1],[.5 .5 1],[1 .5 1],[1 0 1]}; 
 colors_tt = {[.5 1 1],[0 1 1],[.75 .75 1],[.5 .5 1],[1 .5 1],[1 0 1]};  
 
-figure() ;hold on 
-for i_tt = [1 3 5]
+var_to_plot = pc1_bootstrap; 
+var_to_plot_name = "PC1"; 
+
+figure()
+subplot(1,2,1);hold on
+for i_tt = 1:6
     % distance from initial point
-%     dist_from_init_tt = cellfun(@(x) x(:,1:vis_ix),dist_from_init_bootstrap(vis_trial_grps{i_tt}),'un',0);  
-%     dist_from_init_tt = cat(1,dist_from_init_tt{:});  
-    dist_from_init_tt = dist_from_init_bootstrap{i_tt}; 
-    mean_dist_from_init = mean(dist_from_init_tt,1);
-    ci_dist_from_init = 1.95 * std(dist_from_init_tt,[],1);
+%     dist_from_init_tt = dist_from_init_bootstrap{i_tt}; 
+%     mean_dist_from_init = mean(dist_from_init_tt,1);
+%     ci_dist_from_init = 1.96 * std(dist_from_init_tt,[],1);
+    var_to_plot_tt = var_to_plot{i_tt}; 
+    mean_var_to_plot = mean(var_to_plot_tt,1);
+    ci_var_to_plot = 1.96 * std(var_to_plot_tt,[],1);
+%     ci_dist_from_init(1:end-2) = 0;
     % gradient
-%     grad_tt = cellfun(@(x) x(:,1:vis_ix),grad_bootstrap(vis_trial_grps{i_tt}),'un',0);  
-%     grad_tt = cat(1,grad_tt{:});  
     grad_tt = grad_bootstrap{i_tt}; 
     mean_grad = mean(grad_tt,1);
     ci_grad = 1.95 * std(grad_tt,[],1); 
     % angle from init point 
-%     mean_angle_tt = cellfun(@(x) x(:,1:vis_ix),angle_bootstrap(vis_trial_grps{i_tt}),'un',0);  
-%     mean_angle_tt = cat(1,mean_angle_tt{:});  
     mean_angle_tt = angle_bootstrap{i_tt}; 
     mean_angle = mean(mean_angle_tt,1); 
     ci_angle = 1.95 * std(mean_angle_tt,[],1);
     
-    % plot dist from ITI evolution 
-    subplot(3,1,1);hold on;grid()
-    shadedErrorBar(1:pre_cue_ix,mean_dist_from_init(1:pre_cue_ix),ci_dist_from_init(1:pre_cue_ix),'lineProps',{'color',[.5 .5 .5],'linewidth',1.5})
-    shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_dist_from_init(pre_cue_ix:pre_cue_ix + median_cue_len),ci_dist_from_init(pre_cue_ix:pre_cue_ix + median_cue_len),'lineProps',{'color',[.2 .7 .2],'linewidth',1.5}) 
-    tt_len = length(mean_dist_from_init((median_cue_len+pre_cue_ix):end));
-    shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_dist_from_init((pre_cue_ix+median_cue_len):end),ci_dist_from_init((pre_cue_ix+median_cue_len):end),'lineProps',{'color',colors_tt{i_tt},'linewidth',1.5})
-    xticks(0:25:length(mean_dist_from_init)) 
-    xticklabels((0:25:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
-    xlabel("Time since Cue Onset (sec)") 
-    ylabel("Distance From ITI State (A.U.)") 
-    title("Quantified RNil Trial Dynamics") 
-    set(gca,'FontSize',13)
-
-%     % plot gradient evolution
-%     subplot(3,1,2);hold on;grid()
-%     shadedErrorBar(1:pre_cue_ix,mean_grad(1:pre_cue_ix),ci_grad(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
-%     shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_grad(pre_cue_ix:pre_cue_ix + median_cue_len),ci_grad(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5}) 
-%     tt_len = length(mean_grad((median_cue_len+pre_cue_ix):end));
-%     shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_grad((pre_cue_ix+median_cue_len):end),ci_grad((pre_cue_ix+median_cue_len):end),'lineprops',{'color',colors_tt{i_tt},'linewidth',1.5}) 
-%     xticks(0:25:length(mean_grad)) 
-%     xticklabels((0:25:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
-%     xlabel("Time since Cue Onset (sec)") 
-%     ylabel("Magnitude of Gradient (A.U.)")  
-%     ylim([0 1.5])
+    tt_len = length(mean_var_to_plot((median_cue_len+pre_cue_ix):end));
     
-%     % plot angle evolution
-    subplot(3,1,3);hold on;grid()
-    shadedErrorBar(1:pre_cue_ix,mean_angle(1:pre_cue_ix),ci_angle(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
-    shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_angle(pre_cue_ix:pre_cue_ix + median_cue_len),ci_angle(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5}) 
-    tt_len = length(mean_angle((median_cue_len+pre_cue_ix):end));
-    shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_angle((pre_cue_ix+median_cue_len):end),ci_angle((pre_cue_ix+median_cue_len):end),'lineprops',{'color',colors_tt{i_tt},'linewidth',1.5})
-    xticks(0:25:length(mean_angle)) 
-    xticklabels((0:25:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
-    xlabel("Time since Cue Onset (sec)") 
-    ylabel("Angle Traversed From ITI State (degrees)")  
-    set(gca,'FontSize',13)
+%     shadedErrorBar(1:pre_cue_ix,mean_dist_from_init(1:pre_cue_ix),ci_dist_from_init(1:pre_cue_ix),'lineProps',{'color',[.5 .5 .5],'linewidth',2.5})
+%     shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_dist_from_init(pre_cue_ix:pre_cue_ix + median_cue_len),ci_dist_from_init(pre_cue_ix:pre_cue_ix + median_cue_len),'lineProps',{'color',[.2 .7 .2],'linewidth',2.5}) 
+%     shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_dist_from_init((pre_cue_ix+median_cue_len):end),ci_dist_from_init((pre_cue_ix+median_cue_len):end),'lineProps',{'color',colors_tt{i_tt},'linewidth',2.5}) 
+    
+    h = plot(1:pre_cue_ix,mean_var_to_plot(1:pre_cue_ix),'color',[.5 .5 .5],'linewidth',2.5);
+    h.Annotation.LegendInformation.IconDisplayStyle = 'off';
+    h = plot(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_var_to_plot(pre_cue_ix:pre_cue_ix + median_cue_len),'color',[.2 .7 .2],'linewidth',2.5); 
+    h.Annotation.LegendInformation.IconDisplayStyle = 'off';
+    plot((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_var_to_plot((pre_cue_ix+median_cue_len):end),'color',colors_tt{i_tt},'linewidth',2.5) 
+    h = errorbar(pre_cue_ix+median_cue_len + tt_len-1,mean_var_to_plot(end),ci_var_to_plot(end),'linewidth',1.5,'MarkerFaceColor','k'); 
+    h.Annotation.LegendInformation.IconDisplayStyle = 'off';
+    h.Color = colors_tt{i_tt};
 end  
 
-mean_bootstrap_12ix = mean(bootstrap_12ix); 
-ci_bootstrap_12ix = 1.96 * std(bootstrap_12ix); 
-mean_bootstrap_24ix = mean(bootstrap_24ix); 
-ci_bootstrap_24ix = 1.96 * std(bootstrap_24ix); 
+max_t_len = max(cellfun(@(x) size(x,2),dist_from_init_bootstrap));
+patch_onset = max_t_len - median_cue_len - pre_cue_sec / tbin_ms * 1000; 
 
-mean_bootstrap_12dist = mean(bootstrap_12dist); 
-ci_bootstrap_12dist = 1.96 * std(bootstrap_12dist); 
-mean_bootstrap_24dist = mean(bootstrap_24dist); 
-ci_bootstrap_24dist = 1.96 * std(bootstrap_24dist); 
+xticks([(pre_cue_sec/tbin_sec) patch_onset_ix:50:max_t_len])
+xticklabels(([-(median_cue_len) (patch_onset_ix:50:max_t_len) - patch_onset_ix]) * tbin_sec)
+xlabel("Time since patch onset (sec)")
+ylabel(sprintf("%s (A.U.)",var_to_plot_name))
+title("Quantified RXNil Trial Dynamics")
+legend("10Nil","11Nil","20Nil","22Nil","40Nil","44Nil")
+set(gca,'FontSize',14)
 
-subplot(3,1,2);hold on; grid()
-shadedErrorBar(1:pre_cue_ix,mean_bootstrap_12ix(1:pre_cue_ix),ci_bootstrap_12ix(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
-shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_12ix(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_12ix(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
-tt_len = length(mean_bootstrap_12ix((median_cue_len+pre_cue_ix):end));
-shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_12ix((pre_cue_ix+median_cue_len):end),ci_bootstrap_12ix((pre_cue_ix+median_cue_len):end),'lineprops',{'color',colors{1},'linewidth',1.5})
+max_t_len = max(cellfun(@(x) size(x,2),dist_from_init_bootstrap));
+patch_onset = max_t_len - median_cue_len - pre_cue_sec / tbin_ms * 1000; 
 
-shadedErrorBar(1:pre_cue_ix,mean_bootstrap_24ix(1:pre_cue_ix),ci_bootstrap_24ix(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
-shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_24ix(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_24ix(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
-tt_len = length(mean_bootstrap_24ix((median_cue_len+pre_cue_ix):end));
-shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_24ix((pre_cue_ix+median_cue_len):end),ci_bootstrap_24ix((pre_cue_ix+median_cue_len):end),'lineprops',{'color',colors{5},'linewidth',1.5})
-
-xticks(0:25:length(mean_angle))
-xticklabels((0:25:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
-yticks(0:50:length(mean_angle))
-yticklabels((0:50:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
-xlabel("Time since Cue Onset (sec)")
-ylabel("Closest timepoint")
-h = refline(1,0); 
-h.Color = colors{3}; 
-h.LineStyle = '-'; 
-h.LineWidth = 2;
+xticks([(pre_cue_sec/tbin_sec) patch_onset_ix:50:max_t_len])
+xticklabels(([-(median_cue_len) (patch_onset_ix:50:max_t_len) - patch_onset_ix]) * tbin_sec)
+xlabel("Time since patch onset (sec)")
+ylabel("Distance From ITI State (A.U.)")
 set(gca,'FontSize',13)
+
+% then separate traces by reward size to show reward effect
+subplot(1,2,2)
+offsets = 20 * [-1 -1 0 0 1 1];
+patch_onset_ix = median_cue_len + pre_cue_sec / tbin_ms * 1000 + 1;
+for i_tt = 1:6
+    % distance from initial point
+    var_to_plot_tt = var_to_plot{i_tt}; 
+    mean_var_to_plot = mean(var_to_plot_tt,1);
+    mean_var_to_plot(patch_onset_ix:end) = mean_var_to_plot(patch_onset_ix:end) + offsets(i_tt);
+    ci_var_to_plot = 1.96 * std(var_to_plot_tt,[],1);
+    
+    shadedErrorBar(1:pre_cue_ix,mean_var_to_plot(1:pre_cue_ix),ci_var_to_plot(1:pre_cue_ix),'lineProps',{'color',[.5 .5 .5],'linewidth',1.5})
+    shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_var_to_plot(pre_cue_ix:pre_cue_ix + median_cue_len),ci_var_to_plot(pre_cue_ix:pre_cue_ix + median_cue_len),'lineProps',{'color',[.2 .7 .2],'linewidth',1.5}) 
+    tt_len = length(mean_var_to_plot((median_cue_len+pre_cue_ix):end));
+    shadedErrorBar((pre_cue_ix+median_cue_len) + (1:tt_len-1),mean_var_to_plot((pre_cue_ix+median_cue_len+1):end),ci_var_to_plot((pre_cue_ix+median_cue_len+1):end),'lineProps',{'color',colors_tt{i_tt},'linewidth',1.5}) 
+    set(gca,'FontSize',14)
+end  
+xticks([(pre_cue_sec/tbin_sec) patch_onset_ix:50:max_t_len])
+xticklabels(([-(median_cue_len) (patch_onset_ix:50:max_t_len) - patch_onset_ix]) * tbin_sec)
+xlabel("Time since patch onset (sec)")
+ylabel(sprintf("%s (A.U.)",var_to_plot_name))
+title("Quantified RXNil Trial Dynamics")
+set(gca,'FontSize',14)
+
+% mean_bootstrap_12ix = mean(bootstrap_12ix); 
+% ci_bootstrap_12ix = 1.96 * std(bootstrap_12ix); 
+% mean_bootstrap_24ix = mean(bootstrap_24ix); 
+% ci_bootstrap_24ix = 1.96 * std(bootstrap_24ix); 
+% 
+% mean_bootstrap_12dist = mean(bootstrap_12dist); 
+% ci_bootstrap_12dist = 1.96 * std(bootstrap_12dist); 
+% mean_bootstrap_24dist = mean(bootstrap_24dist); 
+% ci_bootstrap_24dist = 1.96 * std(bootstrap_24dist); 
+% 
+% subplot(3,1,2);hold on; grid()
+% shadedErrorBar(1:pre_cue_ix,mean_bootstrap_12ix(1:pre_cue_ix),ci_bootstrap_12ix(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
+% shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_12ix(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_12ix(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
+% tt_len = length(mean_bootstrap_12ix((median_cue_len+pre_cue_ix):end));
+% shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_12ix((pre_cue_ix+median_cue_len):end),ci_bootstrap_12ix((pre_cue_ix+median_cue_len):end),'lineprops',{'color',colors{1},'linewidth',1.5})
+% 
+% shadedErrorBar(1:pre_cue_ix,mean_bootstrap_24ix(1:pre_cue_ix),ci_bootstrap_24ix(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
+% shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_24ix(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_24ix(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
+% tt_len = length(mean_bootstrap_24ix((median_cue_len+pre_cue_ix):end));
+% shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_24ix((pre_cue_ix+median_cue_len):end),ci_bootstrap_24ix((pre_cue_ix+median_cue_len):end),'lineprops',{'color',colors{5},'linewidth',1.5})
+% 
+% xticks(0:25:length(mean_angle))
+% xticklabels((0:25:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
+% yticks(0:50:length(mean_angle))
+% yticklabels((0:50:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
+% xlabel("Time since Cue Onset (sec)")
+% ylabel("Closest timepoint")
+% h = refline(1,0); 
+% h.Color = colors{3}; 
+% h.LineStyle = '-'; 
+% h.LineWidth = 2;
+% set(gca,'FontSize',13)
+
+%% Calculate p-values for the distance after 500ms post rew and dist at patch leave
+p_end = nan(6,6); 
+p_rew = nan(6,6); 
+patch_onset_ix = median_cue_len + pre_cue_sec / tbin_ms * 1000 + 1;
+t_post_rew = 500; 
+ix_post_rew = 500 / tbin_ms; 
+for i_tt1 = 1:6
+    for i_tt2 = 1:6
+        % distance from initial point
+        dist_from_init_tt1 = dist_from_init_bootstrap{i_tt1}; % [n_bootstrap x n_timepoints]
+        dist_from_init_tt2 = dist_from_init_bootstrap{i_tt2}; 
+        
+        % first pull end of trial
+        dist_end_tt1 = dist_from_init_tt1(:,end);
+        dist_end_tt2 = dist_from_init_tt2(:,end);
+        p_end(i_tt1,i_tt2) = length(find(dist_end_tt1 < dist_end_tt2)) / nSamples; 
+        
+        % then pull t_post_rew ms post reward
+        dist_rew_tt1 = dist_from_init_tt1(:,patch_onset_ix + 1000 / tbin_ms + ix_post_rew);
+        dist_rew_tt2 = dist_from_init_tt2(:,patch_onset_ix + 1000 / tbin_ms + ix_post_rew);
+        p_rew(i_tt1,i_tt2) = length(find(dist_rew_tt1 < dist_rew_tt2)) / nSamples; 
+    end
+end
 
 %% take mean and std error of mean for "KiNeT" quantifications
 mean_bootstrap_12ix = mean(bootstrap_12ix); 
@@ -1080,6 +1305,8 @@ ci_bootstrap_12dist = 1.96 * std(bootstrap_12dist);
 mean_bootstrap_24dist = mean(bootstrap_24dist); 
 ci_bootstrap_24dist = 1.96 * std(bootstrap_24dist); 
 
+figure() 
+subplot(2,1,1);hold on
 shadedErrorBar(1:pre_cue_ix,mean_bootstrap_12ix(1:pre_cue_ix),ci_bootstrap_12ix(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
 shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_12ix(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_12ix(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
 tt_len = length(mean_bootstrap_12ix((median_cue_len+pre_cue_ix):end));
@@ -1092,23 +1319,31 @@ shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_24ix((p
 
 xticks(0:25:length(mean_angle))
 xticklabels((0:25:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
+yticks(0:25:length(mean_angle))
+yticklabels((0:25:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
 xlabel("Time since Cue Onset (sec)")
-ylabel("Angle Traversed From ITI State (degrees)")
+ylabel(sprintf("Time of Closest Point \n on 2 uL Trajectory"))
 h = refline(1,0); 
 h.Color = [.4 .4 .4]; 
 h.LineStyle = '--'; 
 h.LineWidth = 1.5;
+set(gca,'fontsize',14)
 % 
-% subplot(2,1,2); 
-% shadedErrorBar(1:pre_cue_ix,mean_bootstrap_12dist(1:pre_cue_ix),ci_bootstrap_12dist(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
-% shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_12dist(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_12dist(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
-% tt_len = length(mean_bootstrap_12dist((median_cue_len+pre_cue_ix):end));
-% shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_12dist((pre_cue_ix+median_cue_len):end),ci_bootstrap_12dist((pre_cue_ix+median_cue_len):end),'lineprops',{'color',[0 1 1],'linewidth',1.5})
-% 
-% shadedErrorBar(1:pre_cue_ix,mean_bootstrap_24dist(1:pre_cue_ix),ci_bootstrap_24dist(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
-% shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_24dist(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_24dist(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
-% tt_len = length(mean_bootstrap_24dist((median_cue_len+pre_cue_ix):end));
-% shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_24dist((pre_cue_ix+median_cue_len):end),ci_bootstrap_24dist((pre_cue_ix+median_cue_len):end),'lineprops',{'color',[1 0 1],'linewidth',1.5})
+subplot(2,1,2);hold on
+
+shadedErrorBar(1:pre_cue_ix,mean_bootstrap_12dist(1:pre_cue_ix),ci_bootstrap_12dist(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
+shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_12dist(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_12dist(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
+tt_len = length(mean_bootstrap_12dist((median_cue_len+pre_cue_ix):end));
+shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_12dist((pre_cue_ix+median_cue_len):end),ci_bootstrap_12dist((pre_cue_ix+median_cue_len):end),'lineprops',{'color',[0 1 1],'linewidth',1.5})
+shadedErrorBar(1:pre_cue_ix,mean_bootstrap_24dist(1:pre_cue_ix),ci_bootstrap_24dist(1:pre_cue_ix),'lineprops',{'color',[.5 .5 .5],'linewidth',1.5})
+shadedErrorBar(pre_cue_ix:(pre_cue_ix+median_cue_len),mean_bootstrap_24dist(pre_cue_ix:pre_cue_ix + median_cue_len),ci_bootstrap_24dist(pre_cue_ix:pre_cue_ix + median_cue_len),'lineprops',{'color',[.2 .7 .2],'linewidth',1.5})
+tt_len = length(mean_bootstrap_24dist((median_cue_len+pre_cue_ix):end));
+shadedErrorBar((pre_cue_ix+median_cue_len) + (0:tt_len-1),mean_bootstrap_24dist((pre_cue_ix+median_cue_len):end),ci_bootstrap_24dist((pre_cue_ix+median_cue_len):end),'lineprops',{'color',[1 0 1],'linewidth',1.5})
+ylabel(sprintf("Distance to Closest Point \n on 2 uL Trajectory (A.U.)"))
+xticks(0:25:length(mean_angle))
+xticklabels((0:25:length(mean_dist_from_init))*tbin_sec - (pre_cue_sec))
+xlabel("Time since Cue Onset (sec)")
+set(gca,'fontsize',14)
 
 % Now add significance bars using pvalue from bootstrap
 % grad_all_tts = grad_bootstrap(cell2mat(vis_trial_grps));
@@ -1124,3 +1359,30 @@ h.LineWidth = 1.5;
 %         p_value(t,i_tt-1) = length(find(diff(:,t) > 0)) / nSamples;
 %     end
 % end
+
+%% Visualize contribution of different clusters to coeffs matrix 
+gmm_colors = [68 119 170; 238 102 119; 34 136 51; 204 187 68; 102 204 238]/255;
+cluster_means = nan(5,3); 
+cluster_sems = nan(5,3); 
+for i_cluster = 1:5 
+    cluster_means(i_cluster,:) = median(coeff(pooled_GLM_cluster_selection == i_cluster,1:3));
+    cluster_sems(i_cluster,:) = 1.96 * std(coeff(pooled_GLM_cluster_selection == i_cluster,1:3)) / sqrt(length(find(pooled_GLM_cluster_selection == i_cluster) ));
+end
+figure()
+% set(gca,'colororder',gmm_colors)
+b = bar(cluster_means','facecolor','flat');hold on
+
+colororder(gmm_colors)
+b = bar(cluster_means');
+x = arrayfun(@(i_feature) b(i_feature).XEndPoints,1:5,'un',0);
+x = cat(2,x{:});
+cluster_means = cluster_means';
+cluster_sems = cluster_sems';
+errorbar(x,cluster_means(:),cluster_sems(:),'k.','linewidth',1.5)
+ylabel("PC Weight")
+xticklabels(["PC 1","PC 2","PC 3"])
+set(gca,'fontsize',14)
+
+
+
+

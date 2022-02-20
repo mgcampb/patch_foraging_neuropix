@@ -152,7 +152,7 @@ analyze_ix = round(2000 / tbin_ms);
 cool3 = cool(3);  
 tt = "R0";
 cell_threshold = true; 
-vis_features = [1 2 3 5 6];  
+vis_features = [5];  
 xMouse_decodedTime = cell(numel(vis_features),1); 
 
 for i_feature = 1:numel(vis_features)
@@ -243,40 +243,51 @@ end
 
 %% 1b) Concatenate across mice (use our for loops above to collect)
 close all
+pooled_init_timeSince = [];
+pooled_rewsize = [];
 for i_feature = 1:numel(vis_features)
     iFeature = vis_features(i_feature);
     for i_trained_rewsize = 1:3
-        for i_true_rewsize = 1:3
+        for i_true_rewsize = 2
             iRewsize_true = rewsizes(i_true_rewsize); 
             % concatenate across mice
             decodedTime_hat = cat(1,xMouse_decodedTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{:});
             nTrials_true_rewsize = size(decodedTime_hat,1); 
             mean_decodedTime = nanmean(decodedTime_hat);
             sem_decodedTime = 1.96 * nanstd(decodedTime_hat) / sqrt(nTrials_true_rewsize);
+            pooled_init_timeSince = [pooled_init_timeSince ; decodedTime_hat(:,1)];
+            pooled_rewsize = [pooled_rewsize ; i_trained_rewsize + zeros(size(decodedTime_hat(:,1)))];
             
             subplot(3,numel(vis_features),numel(vis_features) * (i_true_rewsize - 1) + i_feature);hold on
-            shadedErrorBar((1:analyze_ix)*tbin_ms/1000,mean_decodedTime,sem_decodedTime,'lineProps',{'color',cool3(i_trained_rewsize,:)})
+            shadedErrorBar((1:analyze_ix)*tbin_ms/1000,mean_decodedTime,sem_decodedTime,'lineProps',{'color',cool3(i_trained_rewsize,:),'linewidth',1.5})
             ylim([0 2])
             
-            if tt == "RR"
+            if tt == "RR" && i_true_rewsize == 2 && i_trained_rewsize == 3
                 plot([0 1],[0 1],'k--','linewidth',1.5)
                 plot([1 2],[0 1],'k--','linewidth',1.5)
-            else
+            elseif tt == "R0" && i_true_rewsize == 2 && i_trained_rewsize == 3
                 plot([0 2],[0,2],'k--','linewidth',1.5)
             end
             if i_feature == 1
-                ylabel(sprintf("%i uL Trials \n Decoded time",iRewsize_true))
+                ylabel(sprintf("%i uL Trials \n Decoded time",iRewsize_true)) 
+            end 
+            if i_feature == numel(vis_features) 
+                legend("1 uL Trained","2 uL Trained","4 uL Trained","Perfect Decoding")
             end
-            if i_true_rewsize == 1
-                title(sprintf("%s \n Pooled",feature_names(iFeature)))
+            if i_true_rewsize == 2
+                title(sprintf("%s",feature_names(iFeature)))
             end
             
             if i_trained_rewsize == numel(rewsizes)
-                xlabel("True time")
-            end
+                xlabel("True time on patch (sec)")
+            end 
+            set(gca,'fontsize',14)
         end
     end
 end
+
+% difference in initial point?
+kruskalwallis(pooled_init_timeSince,pooled_rewsize)
 
 %% 2) Formalize by fitting slopes to estimate gain differences
 analyze_ix = round(1000 / tbin_ms);
@@ -365,13 +376,14 @@ end
 %% 2b) Pool linear fits across mice 
 
 figure();hold on
-for i_feature = 1:numel(vis_features)
+CIs = cell(numel(rewsizes),1);
+for i_feature = 4 % 1:numel(vis_features)
     iFeature = vis_features(i_feature);
     slope = nan(numel(rewsizes)^2,1);
     slope_sem = nan(numel(rewsizes)^2,1);
     for i_trained_rewsize = 1:numel(rewsizes)
         
-        for i_true_rewsize = 1:numel(rewsizes)
+        for i_true_rewsize = 2 % 1:numel(rewsizes)
             iRewsize_true = rewsizes(i_true_rewsize);
             
             decodedTime_trueRewsize = cat(2,xMouse_decodedTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{:});
@@ -380,6 +392,7 @@ for i_feature = 1:numel(vis_features)
             mdl = fitlm(trueTime_trueRewsize(:),decodedTime_trueRewsize(:),'intercept',true);
             slope(3 * (i_true_rewsize - 1) + i_trained_rewsize) = mdl.Coefficients.Estimate(2);
             slope_sem(3 * (i_true_rewsize - 1) + i_trained_rewsize) = mdl.Coefficients.SE(2);
+            CIs{i_trained_rewsize} = coefCI(mdl);
         end
     end
     subplot(1,numel(vis_features),i_feature);hold on
@@ -402,8 +415,8 @@ end
 %% 3) The second part of this: constant threshold integration? Plot decoded time until leave
 % the main difference here is going to be that we will align to leave
 % analyze_ix = [4000/tbin_ms 4000/tbin_ms 15000 / tbin_ms 4000/tbin_ms 4000/tbin_ms];
-vis_rewsizes = [1 2 4];
-vis_features = [1 2 3 4 5];
+vis_rewsizes = [2];
+vis_features = [5];
 smoothing_sigma = 1;
 analyze_ix = round(2000 / tbin_ms);
 cool3 = cool(3);  
@@ -411,7 +424,7 @@ xMouse_decodedTime = cell(numel(vis_features),1);
 for i_feature = 1:numel(vis_features)
     iFeature = vis_features(i_feature); 
     figure();hold on
-    for m_ix = [2 4] % 1:numel(analysis_mice)
+    for m_ix = 1:numel(analysis_mice)
         mIdx = analysis_mice(m_ix); 
         % make sure these are the same!
         decoded_time_hat = timeUntil_hat_xRewsize;
@@ -429,7 +442,7 @@ for i_feature = 1:numel(vis_features)
         true_time = cat(1,y_true_tmp{:});
         
         if ~isempty(true_time)
-            pad_trueTime = cellfun(@(x) [x(1:min(length(x),analyze_ix)) nan(1,max(0,analyze_ix - length(x)))],true_time,'un',0);
+            pad_trueTime = cellfun(@(x) [nan(max(0,analyze_ix - (length(x)-1))) x(end-min((length(x)-1),analyze_ix):end)],true_time,'un',0);
             true_time = cat(1,pad_trueTime{:});
             
             for i_trained_rewsize = 1:numel(rewsizes)
@@ -452,6 +465,11 @@ for i_feature = 1:numel(vis_features)
                     nTrials_true_rewsize = length(find(these_trials));
                     decodedTime_hat = decodedTime_trainedRewsize(these_trials,:);
                     xMouse_decodedTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{m_ix} = decodedTime_hat;
+                    
+                    trueTime_trueRewsize = true_time(these_trials,:)';
+                    xMouse_trueTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{m_ix} = trueTime_trueRewsize;
+                    
+                    
                     mean_decodedTime = nanmean(decodedTime_hat);
                     sem_decodedTime = 3 * nanstd(decodedTime_hat) / sqrt(nTrials_true_rewsize);
                     
@@ -488,7 +506,7 @@ close all
 for i_feature = 1:numel(vis_features)
     iFeature = vis_features(i_feature);
     for i_trained_rewsize = 1:3
-        for i_true_rewsize = 1:3
+        for i_true_rewsize = 2
             iRewsize_true = rewsizes(i_true_rewsize); 
             % concatenate across mice
             decodedTime_hat = cat(1,xMouse_decodedTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{:});
@@ -497,22 +515,76 @@ for i_feature = 1:numel(vis_features)
             sem_decodedTime = 1.96 * nanstd(decodedTime_hat) / sqrt(nTrials_true_rewsize);
             
             subplot(3,numel(vis_features),numel(vis_features) * (i_true_rewsize - 1) + i_feature);hold on
-            shadedErrorBar((0:analyze_ix)*tbin_ms/1000,mean_decodedTime,sem_decodedTime,'lineProps',{'color',cool3(i_trained_rewsize,:)})
-            ylim([0 analyze_ix * tbin_ms / 1000])
-            plot([analyze_ix * tbin_ms / 1000 0],[0 analyze_ix * tbin_ms / 1000],'k--','linewidth',1.5)
+            shadedErrorBar((0:analyze_ix)*tbin_ms/1000,mean_decodedTime,sem_decodedTime,'lineProps',{'color',cool3(i_trained_rewsize,:),'linewidth',1.5})
+            ylim([0 analyze_ix * tbin_ms / 1000]) 
+            if i_true_rewsize == 2 && i_trained_rewsize == 3
+                plot([analyze_ix * tbin_ms / 1000 0],[0 analyze_ix * tbin_ms / 1000],'k--','linewidth',1.5)
+            end
             xticks([0 1 2])
             xticklabels(fliplr([0 1 2]))
             if i_feature == 1
                 ylabel(sprintf("%i uL Trials \n Decoded time",iRewsize_true))
             end
-            if i_true_rewsize == 1
-                title(sprintf("%s \n Pooled",feature_names(iFeature)))
+%             if i_true_rewsize == 1
+%                 title(sprintf("%s \n Pooled",feature_names(iFeature)))
+%             end
+            
+            if i_feature == numel(vis_features) 
+                legend("1 uL Trained","2 uL Trained","4 uL Trained","Perfect Decoding")
+            end
+            if i_true_rewsize == 2
+                title(sprintf("%s",feature_names(iFeature)))
             end
             
             if i_trained_rewsize == numel(rewsizes)
                 xlabel("True time Until Leave")
-            end 
+            end  
+            set(gca,'fontsize',14)
         end
     end
 end
 
+%% Linear fits to time until leave
+figure();hold on
+CIs = cell(numel(rewsizes),1);
+pooled_terminal_timeUntil = [];
+pooled_rewsize = [];
+for i_feature = 1:numel(vis_features)
+    iFeature = vis_features(i_feature);
+    slope = nan(numel(rewsizes)^2,1);
+    slope_sem = nan(numel(rewsizes)^2,1);
+    for i_trained_rewsize = 1:numel(rewsizes)
+        for i_true_rewsize = 2 % 1:numel(rewsizes)
+            iRewsize_true = rewsizes(i_true_rewsize);
+            
+            decodedTime_trueRewsize = cat(1,xMouse_decodedTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{:});
+%             trueTime_trueRewsize = cat(2,xMouse_trueTime{i_feature}{i_trained_rewsize}{i_true_rewsize}{:})';
+            trueTime_trueRewsize = repmat((0:analyze_ix) * tbin_ms / 1000,[size(decodedTime_trueRewsize,1),1] );
+            
+            pooled_terminal_timeUntil = [pooled_terminal_timeUntil ; decodedTime_trueRewsize(:,end)];
+            pooled_rewsize = [pooled_rewsize ; i_trained_rewsize + zeros(size(decodedTime_trueRewsize(:,end)))];
+            
+            mdl = fitlm(trueTime_trueRewsize(:),decodedTime_trueRewsize(:),'intercept',true);
+            slope(3 * (i_true_rewsize - 1) + i_trained_rewsize) = mdl.Coefficients.Estimate(2);
+            slope_sem(3 * (i_true_rewsize - 1) + i_trained_rewsize) = mdl.Coefficients.SE(2);
+            CIs{i_trained_rewsize} = coefCI(mdl);
+        end
+    end
+    subplot(1,numel(vis_features),i_feature);hold on
+    for i = 1:numel(x)
+        bar(x(i),slope(i),'FaceColor',cool3repeat(i,:),'FaceAlpha',.5)
+        errorbar(x(i),slope(i),slope_sem(i),'k')
+    end
+    yline(1,'k--','linewidth',1.5)
+    xticks([2 6 10])
+    xticklabels(["1 uL","2 uL","4 uL"])
+    xlabel("Decoded Reward Size")
+    if i_feature == 1
+        ylabel("Fit slope between true and decoded time")
+    end
+    title(sprintf("%s \n Pooled Linear Model Fits",feature_names(iFeature)))
+%     ylim([0 4])
+end
+
+% test for difference in terminal point
+kruskalwallis(pooled_terminal_timeUntil,pooled_rewsize)

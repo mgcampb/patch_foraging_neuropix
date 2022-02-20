@@ -72,7 +72,7 @@ cool9_light(2,1) = .7; % adjustment otherwise the 1uL colors don't come out nice
 vis_mice = 1:5; 
 vis_quartiles = 1:3;
 
-h2 = figure();
+h2 = figure(); % 'units','inches','position',[0 50 0 50]);
 h2(1) = subplot(2,3,1);
 h2(2) = subplot(2,3,2);
 h2(3) = subplot(2,3,3);
@@ -91,15 +91,20 @@ for m = 1:numel(vis_mice)
             if iN0 ~= .5
                 set(get(get(b,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
             end 
-            sem = std(mouse_prts{mIdx}(these_trials)) / sqrt(numel(find(these_trials)));
+            sem = 1.96 * std(mouse_prts{mIdx}(these_trials)) / sqrt(numel(find(these_trials)));
             e = errorbar(x(counter), mean(mouse_prts{mIdx}(these_trials)),sem,'k.');
             set(get(get(e,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
             
             ax = gca;
-            ax.XTick = x;
             ax.YAxis.FontSize = 13;
-            ax.XTickLabel = {"ρ_{0} = .125", 'ρ_{0} = .25', 'ρ_{0} = .50', "ρ_{0} = .125", 'ρ_{0} = .25', 'ρ_{0} = .50', "ρ_{0} = .125", 'ρ_{0} = .25', 'ρ_{0} = .50'};
-            ax.XTickLabelRotation = 60;
+            if m >= 4
+                ax.XTick = x;
+                ax.XTickLabel = {"ρ_{0} = .125", 'ρ_{0} = .25', 'ρ_{0} = .50', "ρ_{0} = .125", 'ρ_{0} = .25', 'ρ_{0} = .50', "ρ_{0} = .125", 'ρ_{0} = .25', 'ρ_{0} = .50'};
+                ax.XTickLabelRotation = 60;
+                xlabel("Initial Reward Probability")
+            else
+                xticks([])
+            end
 
             counter = counter + 1; 
         end
@@ -137,11 +142,11 @@ for m = 1:numel(vis_mice)
     title(mouse_names(m),'Fontsize',15)
     
     if m == 1
-        legend(["R = 1 uL","R = 2 uL","R = 4 uL"],'Fontsize',13)
+        legend([sprintf("1 μL"),"2 μL","4 μL"],'Fontsize',13)
     end
 end 
 
-suptitle("First Session")
+% suptitle("Behavior during Recorded Sessions")
 
 pos = get(h2,'Position');
 new = mean(cellfun(@(v)v(1),pos(1:2)));
@@ -159,13 +164,13 @@ first = true;
 figure();hold on
 for iRewsize = [1 2 4]
     for iN0 = [.125 .25 .5]
-%         subplot(2,3,m);hold on
+
         these_trials = (all_rewsize == iRewsize & all_N0 == iN0);
-        b = bar(x(counter), mean(all_prts(these_trials)),'FaceColor', cool9_light(counter,:), 'EdgeColor', 'k');
+        b = bar(x(counter), mean(all_prts(these_trials)),'FaceColor', cool9_light(counter,:), 'EdgeColor', 'k','linewidth',1.5);
         if iN0 ~= .5
             set(get(get(b,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
         end
-        sem = std(all_prts(these_trials)) / sqrt(numel(find(these_trials)));
+        sem = 1.96 * std(all_prts(these_trials)) / sqrt(numel(find(these_trials)));
         e = errorbar(x(counter), mean(all_prts(these_trials)),sem,'k.');
         set(get(get(e,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
         
@@ -180,17 +185,18 @@ for iRewsize = [1 2 4]
     ax.XAxis.FontSize = 13;
     
     [p,tbl,stats] = kruskalwallis(all_prts(all_rewsize == iRewsize),all_N0(all_rewsize == iRewsize),'off');
+    disp(p)
     
     if p < .05
         % add line
-        plot([x(counter-3)-.75 x(counter-1)+.75],1.05 * [sem + b(1).YData sem + b(1).YData],'k','linewidth',1,'HandleVisibility','off')
+        plot([x(counter-3)-.75 x(counter-1)+.75],1.05 * [sem + b(1).YData sem + b(1).YData],'k','linewidth',1.5,'HandleVisibility','off')
         % add legs to sides of the line
         if first == true
             leg_length = 1.05 * (sem + b(1).YData) - .95 * 1.05 * (sem + b(1).YData);
             first = false;
         end
-        plot([x(counter-3)-.75 x(counter-3)-.75],[1.05 * (sem + b(1).YData) 1.05 * (sem + b(1).YData)-leg_length],'k','linewidth',1,'HandleVisibility','off')
-        plot([x(counter-1)+.75 x(counter-1)+.75],[1.05 * (sem + b(1).YData) 1.05 * (sem + b(1).YData)-leg_length],'k','linewidth',1,'HandleVisibility','off')
+        plot([x(counter-3)-.75 x(counter-3)-.75],[1.05 * (sem + b(1).YData) 1.05 * (sem + b(1).YData)-leg_length],'k','linewidth',1.5,'HandleVisibility','off')
+        plot([x(counter-1)+.75 x(counter-1)+.75],[1.05 * (sem + b(1).YData) 1.05 * (sem + b(1).YData)-leg_length],'k','linewidth',1.5,'HandleVisibility','off')
         % add significance stars
         if p < .05 && p > .01
             text(mean([x(counter-3)-.75 x(counter-1)+.75]),1.1 * (sem + b(1).YData), "*",'FontSize',14,'HorizontalAlignment','center');
@@ -202,5 +208,15 @@ for iRewsize = [1 2 4]
     end
     ylim([0 1.1 *  1.1 * (sem + b(1).YData)])
     ylabel("PRT (sec)") 
-    title("First Session Pooled Across Mice")
+    xlabel("Initial Reward Probability")
+%     title("First Day Pooled Across Mice")
 end
+set(gca,'fontsize',18)
+
+kruskalwallis(all_prts,all_rewsize,'off')
+
+
+% savepath = '/Users/joshstern/Documents/Undergraduate Thesis/Draft 1.1/results_figures 1.1/figure2';
+% save([savepath '/rewsize_n0_prts.mat'],'all_prts','all_rewsize','all_N0')
+
+

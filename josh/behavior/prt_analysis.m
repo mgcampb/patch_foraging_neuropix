@@ -6,6 +6,7 @@
 % 2. Is there correlation between cue residence time and PRT? 
 %    a. this will need to be among certain subsets of trials or patch
 %    effects will outweigh  
+
 % 3. What is distribution of PRT after last reward? 
 %    a. Dependent on last reward time or number?
 % ---- These are less pressing ----
@@ -38,6 +39,7 @@ recording_sessions = dir(fullfile(paths.neuro_data,'*.mat'));
 recording_sessions = {recording_sessions.name};
 % to just use recording sessions
 recording_session_bool = cellfun(@(x) ismember(x,recording_sessions),sessions);
+savepath = '/Users/joshstern/Documents/Undergraduate Thesis/Draft 1.1/results_figures 1.1/figure2';
 
 %% Get PRTs and RX, RXX barcode for 5 recorded mice  
 mouse_rewsize = cell(numel(mouse_grps),1); 
@@ -303,6 +305,7 @@ for mIdx = 1:numel(mouse_grps)
         % significance?  
         p = ranksum(iMouse_prts(iMouse_RX == double(sprintf("%i%i",iRewsize,iRewsize)))-1, ...
                     iMouse_prts(iMouse_RX == double(sprintf("%i0",iRewsize))));
+%         disp(p)
 %         p = ranksum(i_ERew(iMouse_RX == double(sprintf("%i%i",iRewsize,iRewsize)))-1, ...
 %                     i_ERew(iMouse_RX == double(sprintf("%i0",iRewsize))));        
         if p < .05
@@ -362,15 +365,20 @@ h2(2) = subplot(2,3,2);
 h2(3) = subplot(2,3,3);
 h2(4) = subplot(2,3,4);
 h2(5) = subplot(2,3,5); % the last (odd) axes 
-
+rxx_tt_pool = [];
+rxx_prts_pool = [];
+mouse_pool = [];
 for mIdx = 1:numel(mouse_grps)   
     sig_sessions = any(pvalues{mIdx} < .05,1);  
     sig_RXX = mouse_RXX{mIdx}(sig_sessions);
     sig_RXX = cat(1,sig_RXX{:}); 
+    rxx_tt_pool = [rxx_tt_pool ; sig_RXX];
 %     sig_RXX = cat(1,mouse_RXX{mIdx}{:});
     sig_prts = mouse_prts{mIdx}(sig_sessions); 
     sig_prts = cat(1,sig_prts{:}); 
+    rxx_prts_pool = [rxx_prts_pool ; sig_prts];
 %     sig_prts = cat(1,mouse_prts{mIdx}{:}); 
+    mouse_pool = [mouse_pool ; mIdx + zeros(length(sig_prts),1)];
     
     counter = 1; 
     for iRewsize = [2 4]
@@ -390,6 +398,7 @@ for mIdx = 1:numel(mouse_grps)
         % significance?  
         p = ranksum(sig_prts(sig_RXX == double(sprintf("%i0%i",iRewsize,iRewsize))), ...
                     sig_prts(sig_RXX == double(sprintf("%i%i%i",iRewsize,iRewsize,iRewsize))));
+        disp(p)
         if p < .05
             if p < .05 && p > .01
                 %                     text(mean([x(counter-2)-.75 x(counter-1)+.75]),1.1 * (sem + b(1).YData), "*",'FontSize',14,'HorizontalAlignment','center');
@@ -400,8 +409,8 @@ for mIdx = 1:numel(mouse_grps)
             elseif p < .001
                 %                     text(mean([x(counter-2)-.75 x(counter-1)+.75]),1.1 * (sem + b(1).YData), "***",'FontSize',14,'HorizontalAlignment','center');
                 text(mean([x(counter-2)-.75 x(counter-1)+.75]),5, "***",'FontSize',14,'HorizontalAlignment','center');
-            end
-        end 
+            end 
+        end  
     end    
     ax = gca;
     ax.XTick = x;
@@ -423,6 +432,55 @@ new = mean(cellfun(@(v)v(1),pos(1:2)));
 set(h2(4),'Position',[new,pos{end}(2:end)])
 new = mean(cellfun(@(v)v(1),pos(2:3)));
 set(h2(5),'Position',[new,pos{end}(2:end)])
+
+%% 1.b.pool) 
+
+cool4 = zeros(4,3);
+cool4(1,:) = [.6,.6,.8];
+cool4(2,:) = cool3(2,:);
+cool4(3,:) = [.7,.5,.7];
+cool4(4,:) = cool3(3,:);
+
+
+mouse_means = zeros(5,4); 
+tts = [202,222,404,444];
+for i_mouse = 1:5
+    for i_tt = 1:numel(tts)
+        these_trials = rxx_tt_pool == tts(i_tt) & mouse_pool == i_mouse;
+        mouse_means(i_mouse,i_tt) = mean(rxx_prts_pool(these_trials));
+    end
+end
+[~,tt444_sort] = sort(mouse_means(:,4));
+mouse_means = mouse_means(tt444_sort,:);
+
+figure();hold on
+these_trials = ismember(rxx_tt_pool,[202,222,404,444]);
+b = boxplot(rxx_prts_pool(these_trials),rxx_tt_pool(these_trials),'Notch','on','orientation','horizontal','Color',cool4); 
+h = findobj(gcf,'tag','Outliers');
+for i = 1:4
+    j = i*-1 + 5;
+    set(h(j),'MarkerEdgeColor',cool4(i,:));
+    set(h(j),'MarkerSize',4);
+    scatter(mouse_means(:,i),i + zeros(5,1),20,cool4(i,:),'linewidth',1) %   + linspace(-.05,.05,5)'
+end
+
+xlabel("PRT (sec)")
+xlim([0,15])
+xticks([1:5 10 15])
+xticklabels([1:5 10 15])
+title("RXX PRT Comparison")
+set(gca,'fontsize',14)
+
+md_rxx = ismember(rxx_tt_pool,[202,222]);
+lg_rxx = ismember(rxx_tt_pool,[404,444]);
+p_4XX = ranksum(rxx_prts_pool(lg_rxx),rxx_tt_pool(lg_rxx));
+p_2XX = ranksum(rxx_prts_pool(md_rxx),rxx_tt_pool(md_rxx));
+
+set(b,{'linew'},{2})
+
+save([savepath '/rxx_data.mat'],'rxx_prts_pool','rxx_tt_pool')
+
+% saveas(gcf,[savepath '/rxx_boxplot.png'])
 
 %% 2) Is there correlation between cue residence time and PRT? 
 %     - start by doing this within reward size 
@@ -461,9 +519,9 @@ for mIdx = 1:numel(mouse_grps)
     xlim([-2 4])
     ylim([-2 4])  
     [r,p] = corrcoef(pooled_zscored_qrts,pooled_zscored_prts);   
-    title(sprintf("%s \n r = %.3f, p = %.2e",mouse_names(mIdx),r(2),p(2)))   
-    ylabel("PRT (z-scored)")  
-    xlabel("Patch Entrance Latency (z-scored)") 
+    title(sprintf("%s \n r = %.3f, p = %.2e",mouse_names(mIdx),r(2),p(2)),'fontsize',13)   
+    ylabel("PRT (z-scored)",'fontsize',13)   
+    xlabel("Patch Entrance Latency (z-scored)",'fontsize',13)   
 end 
 
 pos = get(h2,'Position');
@@ -471,6 +529,7 @@ new = mean(cellfun(@(v)v(1),pos(1:2)));
 set(h2(4),'Position',[new,pos{end}(2:end)])
 new = mean(cellfun(@(v)v(1),pos(2:3)));
 set(h2(5),'Position',[new,pos{end}(2:end)])
+
 
 %% 3) Is there time on patch information? 
 %   - Does time spent on patch after last reward depend on when last reward
@@ -494,6 +553,10 @@ end
 % cool6_darkening(2,1) = .7; % adjustment otherwise the 1uL colors don't come out nice 
 x = [1 2 3 5 6 7];
 
+pooled_post_rew_rts = []; 
+pooled_tt = []; 
+pooled_mouse = []; 
+
 for mIdx = 1:numel(mouse_grps)  
     sig_sessions = any(pvalues{mIdx} < .05,1);  
     sig_post_rew_rts = mouse_post_rew_rts{mIdx}(sig_sessions);
@@ -504,6 +567,11 @@ for mIdx = 1:numel(mouse_grps)
     sig_last_rew_time = cat(1,sig_last_rew_time{:}); 
     sig_rewsize = mouse_rewsize{mIdx}(sig_sessions);  
     sig_rewsize = cat(1,sig_rewsize{:}); 
+    
+    pool_trials = sig_last_rew_num == 2 & ismember(sig_rewsize,[2,4]) & ismember(sig_last_rew_time,[1:3]);
+    pooled_post_rew_rts = [pooled_post_rew_rts ; sig_post_rew_rts(pool_trials)]; 
+    pooled_tt = [pooled_tt ; sig_rewsize(pool_trials) * 10 + sig_last_rew_time(pool_trials)];
+    pooled_mouse = [pooled_mouse ; mIdx + zeros(length(find(pool_trials)),1)]; 
     
     subplot(2,3,mIdx);hold on
     counter = 1; 
@@ -576,6 +644,45 @@ new = mean(cellfun(@(v)v(1),pos(1:2)));
 set(h2(4),'Position',[new,pos{end}(2:end)])
 new = mean(cellfun(@(v)v(1),pos(2:3)));
 set(h2(5),'Position',[new,pos{end}(2:end)])
+
+%% 3pooled) 
+
+mouse_means = zeros(5,4); 
+tts = [21,22,23,41,42,43];
+for i_mouse = 1:5
+    for i_tt = 1:numel(tts)
+        these_trials = pooled_tt == tts(i_tt) & pooled_mouse == i_mouse;
+        mouse_means(i_mouse,i_tt) = mean(pooled_post_rew_rts(these_trials));
+    end
+end
+[~,tt40_sort] = sort(mouse_means(:,4));
+mouse_means = mouse_means(tt40_sort,:);
+
+figure();hold on
+b = boxplot(pooled_post_rew_rts,pooled_tt,'Notch','on','orientation','horizontal','Color',cool6_darkening); 
+set(b,{'linew'},{2})
+xlim([0,15])
+h = findobj(gcf,'tag','Outliers');
+for i = 1:6
+    j = i*-1 + 7;
+    set(h(j),'MarkerEdgeColor',cool6_darkening(i,:));
+    set(h(j),'MarkerSize',4);
+    scatter(mouse_means(:,i),i + zeros(5,1),20,cool6_darkening(i,:),'linewidth',1) %   + linspace(-.05,.05,5)'
+end
+md_pval = kruskalwallis(pooled_post_rew_rts(floor(pooled_tt / 10) == 2),pooled_tt(floor(pooled_tt / 10) == 2),'off')
+lg_pval = kruskalwallis(pooled_post_rew_rts(floor(pooled_tt / 10) == 4),pooled_tt(floor(pooled_tt / 10) == 4),'off')
+
+yticklabels(["22","202","2002","44","404","4004"])
+
+xlabel("PRT After Last Reward (sec)")
+xlim([0,15])
+xticks([1:5 10 15])
+xticklabels([1:5 10 15])
+title("PRT by Reward Time Comparison")
+set(gca,'fontsize',14)
+
+save([savepath '/r_2_data.mat'],'pooled_post_rew_rts','pooled_tt')
+saveas(gcf,[savepath '/r_2_boxplot.png'])
 
 %% 3+) Is there parametric information about number of rewards received? 
 % given that last reward is delivered at t = 4, do mice wait diff amount of
@@ -709,17 +816,25 @@ h2(3) = subplot(2,3,3);
 h2(4) = subplot(2,3,4);
 h2(5) = subplot(2,3,5); % the last (odd) axes
 
+% pool (yeah it's dumb)
+pooled_sigRewsize = [];
+pooled_sigN0 = [];
+pooled_ERew = []; 
+
 for m = 1:numel(vis_mice)
     mIdx = vis_mice(m);
     sig_sessions = any(pvalues{mIdx} < .05,1);  
     
     sig_rewsize = mouse_rewsize{mIdx}(sig_sessions);  
     sig_rewsize = cat(1,sig_rewsize{:}); 
+    pooled_sigRewsize = [pooled_sigRewsize ; sig_rewsize]; 
     sig_N0 = mouse_N0{mIdx}(sig_sessions);  
     sig_N0 = cat(1,sig_N0{:});  
+    pooled_sigN0 = [pooled_sigN0 ; sig_N0]; 
     
     i_ERew = mouse_ERew{mIdx}(sig_sessions); 
     i_ERew = cat(1,i_ERew{:}); 
+    pooled_ERew = [pooled_ERew ; i_ERew];
     
     counter = 1; 
     first = true;
@@ -731,7 +846,7 @@ for m = 1:numel(vis_mice)
             if iN0 ~= .5
                 set(get(get(b,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
             end 
-            sem = std(i_ERew(these_trials)) / sqrt(numel(find(these_trials)));
+            sem = 1.96 * std(i_ERew(these_trials)) / sqrt(numel(find(these_trials)));
             e = errorbar(x(counter), mean(i_ERew(these_trials)),sem,'k.');
             set(get(get(e,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
             
@@ -755,8 +870,8 @@ for m = 1:numel(vis_mice)
                 leg_length = 1.05 * (sem + b(1).YData) - .95 * 1.05 * (sem + b(1).YData); 
                 first = false;
             end
-            plot([x(counter-3)-.75 x(counter-3)-.75],[1.05 * (sem + b(1).YData) 1.05 * (sem + b(1).YData)-leg_length],'k','linewidth',1,'HandleVisibility','off') 
-            plot([x(counter-1)+.75 x(counter-1)+.75],[1.05 * (sem + b(1).YData) 1.05 * (sem + b(1).YData)-leg_length],'k','linewidth',1,'HandleVisibility','off') 
+            plot([x(counter-3)-.75 x(counter-3)-.75],[1.05 * (sem + b(1).YData) 1.05 * (sem + b(1).YData)-leg_length],'k','linewidth',1.5,'HandleVisibility','off') 
+            plot([x(counter-1)+.75 x(counter-1)+.75],[1.05 * (sem + b(1).YData) 1.05 * (sem + b(1).YData)-leg_length],'k','linewidth',1.5,'HandleVisibility','off') 
             % add significance stars 
             if p < .05 && p > .01
                 text(mean([x(counter-3)-.75 x(counter-1)+.75]),1.1 * (sem + b(1).YData), "*",'FontSize',14,'HorizontalAlignment','center');   
@@ -771,7 +886,7 @@ for m = 1:numel(vis_mice)
     end
     
     if m == 1 || m == 4
-        ylabel("PDF (sec)",'Fontsize',15)
+        ylabel("E[Reward] at time of leave",'Fontsize',15)
     end
     
     title(mouse_names(m),'Fontsize',15)
@@ -781,7 +896,7 @@ for m = 1:numel(vis_mice)
     end
 end 
 
-suptitle("First Session")
+suptitle(sprintf("E[Reward] at time of leave\n Separated by Trial Type"))
 
 pos = get(h2,'Position');
 new = mean(cellfun(@(v)v(1),pos(1:2)));
@@ -789,15 +904,119 @@ set(h2(4),'Position',[new,pos{end}(2:end)])
 new = mean(cellfun(@(v)v(1),pos(2:3)));
 set(h2(5),'Position',[new,pos{end}(2:end)]) 
 
+%% Pool MVT hypothesis figure
+
+counter = 1;
+first = true;
+figure();hold on
+for iRewsize = [1 2 4]
+    for iN0 = [.125 .25 .5]
+        these_trials = (pooled_sigRewsize == iRewsize & pooled_sigN0 == iN0);
+        b = bar(x(counter), mean(pooled_ERew(these_trials)),'FaceColor', cool9_light(counter,:), 'EdgeColor', 'k','linewidth',1.5);
+        if iN0 ~= .5
+            set(get(get(b,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+        end
+        sem = 1.96 * std(pooled_ERew(these_trials)) / sqrt(numel(find(these_trials)));
+        e = errorbar(x(counter), mean(pooled_ERew(these_trials)),sem,'k.');
+        set(get(get(e,'Annotation'),'LegendInformation'),'IconDisplayStyle','off');
+        
+        ax = gca;
+        ax.XTick = x;
+        ax.YAxis.FontSize = 13;
+        ax.XTickLabel = {"ρ_{0} = .125", 'ρ_{0} = .25', 'ρ_{0} = .50', "ρ_{0} = .125", 'ρ_{0} = .25', 'ρ_{0} = .50', "ρ_{0} = .125", 'ρ_{0} = .25', 'ρ_{0} = .50'};
+        ax.XTickLabelRotation = 60;
+        
+        counter = counter + 1;
+    end
+    ax.XAxis.FontSize = 13;
+    
+    [p,tbl,stats] = kruskalwallis(pooled_ERew(pooled_sigRewsize == iRewsize),pooled_sigN0(pooled_sigRewsize == iRewsize),'off');
+    
+    if p < .05
+        % add line
+        plot([x(counter-3)-.75 x(counter-1)+.75],1.05 * [sem + b(1).YData sem + b(1).YData],'k','linewidth',1.5,'HandleVisibility','off')
+        % add legs to sides of the line
+        if first == true
+            leg_length = 1.05 * (sem + b(1).YData) - .95 * 1.05 * (sem + b(1).YData);
+            first = false;
+        end
+        plot([x(counter-3)-.75 x(counter-3)-.75],[1.05 * (sem + b(1).YData) 1.05 * (sem + b(1).YData)-leg_length],'k','linewidth',1.5,'HandleVisibility','off')
+        plot([x(counter-1)+.75 x(counter-1)+.75],[1.05 * (sem + b(1).YData) 1.05 * (sem + b(1).YData)-leg_length],'k','linewidth',1.5,'HandleVisibility','off')
+        % add significance stars
+        if p < .05 && p > .01
+            text(mean([x(counter-3)-.75 x(counter-1)+.75]),1.1 * (sem + b(1).YData), "*",'FontSize',14,'HorizontalAlignment','center');
+        elseif p < .01 && p > .001
+            text(mean([x(counter-3)-.75 x(counter-1)+.75]),1.1 * (sem + b(1).YData), "**",'FontSize',14,'HorizontalAlignment','center');
+        elseif p < .001
+            text(mean([x(counter-3)-.75 x(counter-1)+.75]),1.1 * (sem + b(1).YData), "***",'FontSize',14,'HorizontalAlignment','center');
+        end
+    end
+    ylim([0 1.1 *  1.1 * (sem + b(1).YData)])
+    
+end
+
+ylabel("E[Reward] at time of leave",'Fontsize',15)
+
+title(sprintf("E[Reward] at time of leave\n Separated by Trial Type"))
+set(gca,'fontsize',18)
+
 %% Plot PDFs to check
 pdf1 = calc_E_rew(0:.1:30,.125,1); 
 pdf2 = calc_E_rew(0:.1:30,.25,1); 
 pdf3 = calc_E_rew(0:.1:30,.5,1); 
+rewsize_dumb = [1 2 4]; 
+
 figure(); hold on
-plot(pdf1); plot(pdf2); plot(pdf3); 
+for i_rewsize = 1:3
+    plot(pdf1 * rewsize_dumb(i_rewsize),'linewidth',2,'color',cool9_light(1 + 3 * (i_rewsize - 1),:)); 
+    plot(pdf2 * rewsize_dumb(i_rewsize) - .025,'linewidth',2,'color',cool9_light(2 + 3 * (i_rewsize - 1),:)); 
+    plot(pdf3 * rewsize_dumb(i_rewsize) - .05,'linewidth',2,'color',cool9_light(3 + 3 * (i_rewsize - 1),:)); 
+end
 xticks(0:50:300) 
 xticklabels(.1*(0:50:300) ) 
-xlim([0 300])
+xlim([0 200])
+xlabel("Time on patch (sec)")
+ylabel("E[Reward]")
+ylim([0,2])
+title("Expected Value Across 9 Patch Types")
+legend("1 µL \rho = 0.125","1 µL \rho = 0.25","1 µL \rho = 0.50","2 µL \rho = 0.125","2 µL \rho = 0.25","2 µL \rho = 0.50","4 µL \rho = 0.125","4 µL \rho = 0.25","4 µL \rho = 0.50")
+this_fig = gca; 
+set(this_fig,'fontsize',16)
+
+%% Where in the second are mice leaving? 
+
+h2 = figure();
+h2(1) = subplot(2,3,1);
+h2(2) = subplot(2,3,2);
+h2(3) = subplot(2,3,3);
+h2(4) = subplot(2,3,4);
+h2(5) = subplot(2,3,5); % the last (odd) axes
+
+for mIdx = 1:5 
+    sig_sessions = any(pvalues{mIdx} < .05,1);  
+%     sig_sessions = any(pvalues{mIdx} < .05,1);  
+    last_rew_time_cat = cat(1,mouse_last_rew_time{mIdx}{:}); 
+    prts_cat = cat(1,mouse_prts{mIdx}{:}); % (sig_sessions)); 
+%     prts_cat = prts_cat(last_rew_time_cat - prts_cat > .5);
+    prts_cat = prts_cat((floor(prts_cat) == last_rew_time_cat) & (floor(prts_cat) > 0)); 
+%     prts_cat = prts_cat((floor(prts_cat) > 0)); 
+%     prts_cat = cat(1,prts_cat{:});
+    decimal = prts_cat - floor(prts_cat);
+    
+    subplot(2,3,mIdx)
+    histogram(decimal,0:.1:1)
+    [h,p] = kstest(decimal,'CDF',[(0:.01:1)' unifcdf(0:.01:1,0,1)']); % kolmagorov-smirnov test for equality of distn.
+    title(sprintf("%s (p = %.3f)",mouse_names(mIdx),p),'fontsize',13) 
+    xlabel("Decimal Place of PRT",'fontsize',14) 
+    ylabel([])
+end
+
+pos = get(h2,'Position');
+new = mean(cellfun(@(v)v(1),pos(1:2)));
+set(h2(4),'Position',[new,pos{end}(2:end)])
+new = mean(cellfun(@(v)v(1),pos(2:3)));
+set(h2(5),'Position',[new,pos{end}(2:end)]) 
+suptitle(sprintf("Decimal Place of PRT Distribution\n Trials Where Leave occurs in rewarded second"))
 
 %% Define N0 pdf 
 function E = calc_E_rew(t,N0,rewsize)

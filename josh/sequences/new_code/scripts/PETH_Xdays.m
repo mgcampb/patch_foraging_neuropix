@@ -101,6 +101,93 @@ for sIdx = 1:numel(sessions)
     rew_barcodes{sIdx} = rew_barcode;
 end
 
+%% Generate cross-days cell array with RX averages and peak indices per day  
+% column 1:: trial types: 10, 11
+% column 2:: avg PETHs, peak indices (from unvisualized trials)
+% column 3:: sessions
+RX_data = cell(6,2,numel(sessions)); 
+for i = 1:numel(mPFC_sessions)
+    sIdx = mPFC_sessions(i);
+    session = sessions{sIdx}(1:end-4);
+    session_name = session([1:2 end-2:end]);
+    data = load(fullfile(paths.data,session));
+    prts = data.patchCSL(:,3) - data.patchCSL(:,2);  
+    nTrials = length(prts);
+    
+    % reinitialize ms vectors
+    rew_barcode = rew_barcodes{sIdx};  
+    sec2ix = 2000 / tbin_ms;
+  
+    rew_counter = 1;
+    
+    % use results from driscoll selection
+    session_table = transients_table(transients_table.Session == session_name & transients_table.Region == "PFC",:);
+    peak_rew1plus = session_table.Rew1plus_peak_pos;
+    glm_clust = session_table.gmm_cluster;
+    
+    opt = struct;
+    opt.dvar = "timesince";
+    opt.decVar_bins = linspace(0,2,41); 
+    opt.sort = false; % don't sort yet... just get the peak indices 
+    opt.preRew_buffer = round(FR_calcOpt.smoothSigma_time * 3 * 1000 / tbin_ms); 
+    opt.postStop_buffer = 1000 / tbin_ms; % no first reward 
+    opt.tbin_ms = FR_calcOpt.tbin * 1000;  
+    % $$$ CHANGE THIS TO USE Transients table $$$$
+%     opt.neurons = find(~isnan(peak_rew1plus));  % only use neurons w/ significant peak
+    opt.neurons = ~isnan(glm_clust); % find(~isnan(peak_rew1plus)); 
+    for iRewsize = [1 2 4] 
+        trials10x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == 0 & prts > 2.5);
+        trials11x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & prts > 2.5);
+
+        [RX_data{rew_counter,1,sIdx},RX_data{rew_counter,2,sIdx}] = avgPETH(FR_decVar(sIdx),trials10x,setdiff(1:nTrials,trials10x),sec2ix,opt);
+        [RX_data{rew_counter+1,1,sIdx},RX_data{rew_counter+1,2,sIdx}] = avgPETH(FR_decVar(sIdx),trials11x,setdiff(1:nTrials,trials11x),sec2ix,opt);
+
+        rew_counter = rew_counter + 2;
+    end
+    fprintf("%s PETH Creation Complete \n",session_name)
+end 
+
+%% Now collect PETH across days with cross validated sort  
+session_grps = {[1:18 23 25]}; % 
+% mouse_grps = {1:2,3,[5 7],[4 6 8:9]};
+RX_avgPETHs = cell(8,numel(session_grps));
+for iSessionGrp = 1:numel(session_grps)
+    these_sessions = session_grps{iSessionGrp};
+    for cond = 1:6
+        cond_frmat_cell = squeeze(RX_data(cond,1,these_sessions));
+        cond_frmat = cat(1,cond_frmat_cell{:});  
+        cond_frmat(all(isnan(cond_frmat),2),:) = []; % get rid of filler
+        cond_peakIx_cell = squeeze(RX_data(cond,2,these_sessions));
+        cond_peakIx = cat(1,cond_peakIx_cell{:});   
+        cond_peakIx(isnan(cond_peakIx)) = []; % get rid of filler
+        [~,peak_sort] = sort(cond_peakIx); 
+        cond_fr_mat_sorted = cond_frmat(peak_sort,:);  
+        RX_avgPETHs{cond,iSessionGrp} = cond_fr_mat_sorted;
+    end
+end 
+
+%% Now visualize  
+close all
+
+session_grp_titles = ["All Mice GLM"];  
+conditions = ["10","11","20","22","40","44"];
+    
+for iMouse = 1:numel(session_grps)
+    session_grp_title = session_grp_titles{iMouse};
+    figure();
+    for cIdx = 1:6
+        subplot(3,2,cIdx);colormap('parula')
+        imagesc(flipud(RX_avgPETHs{cIdx,iMouse}));colormap('parula')
+        title(sprintf("%s %s",session_grp_title,conditions{cIdx}))
+        xticks([0 50 100])
+        xticklabels([0 1 2]) 
+        xlabel("Time on Patch (sec)")  
+        caxis([-3,3])
+        colorbar() 
+%         colormap(flipud(cbrewer('div','RdBu',100)))
+    end 
+end
+
 %% Generate cross-days cell array with RXX averages and peak indices per day  
 % column 1:: trial types: 100, 110, 101, 111, etc... 
 % column 2:: avg PETHs, peak indices (from unvisualized trials)
@@ -122,7 +209,7 @@ for i = 1:numel(mPFC_sessions)
     
     % use results from driscoll selection
     session_table = transients_table(transients_table.Session == session_name & transients_table.Region == "PFC",:);
-    peak_rew1plus = session_table.Rew1plus_peak_neg;
+    peak_rew1plus = session_table.Rew1plus_peak_pos;
     glm_clust = session_table.gmm_cluster;
     
     opt = struct;
@@ -133,8 +220,10 @@ for i = 1:numel(mPFC_sessions)
     opt.postStop_buffer = 1000 / tbin_ms; % no first reward 
     opt.tbin_ms = FR_calcOpt.tbin * 1000;  
     % $$$ CHANGE THIS TO USE Transients table $$$$
-%     opt.neurons = find(~isnan(driscoll_struct(sIdx).peak_ix)); % only use neurons w/ significant peak
-    opt.neurons = find(~isnan(peak_rew1plus)); 
+%     opt.neurons = find(~isnan(peak_rew1plus));  % only use neurons w/ significant peak
+    opt.neurons = find(~isnan(glm_clust)); % find(~isnan(peak_rew1plus)); 
+%     opt.neurons = 1:size(session_table,1);
+%     opt
     for iRewsize = [2,4] 
         trials100x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == 0 & rew_barcode(:,3) == 0 & prts > 3.5);
         trials110x = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) == 0 & prts > 3.5);
@@ -152,7 +241,8 @@ for i = 1:numel(mPFC_sessions)
 end 
 
 %% Now collect PETH across days with cross validated sort  
-session_grps = {[1:2] ,[4 6 8:9],10:13,(14:18),[23 25],[1:18  23 25]}; % 
+% session_grps = {[1:2] ,[4 6 8:9],10:13,(14:18),[23 25],[1:18  23 25]}; % 
+session_grps = {[1:18  23 25]}; % 
 % mouse_grps = {1:2,3,[5 7],[4 6 8:9]};
 RXX_avgPETHs = cell(8,numel(session_grps));
 for iSessionGrp = 1:numel(session_grps)
@@ -171,23 +261,30 @@ for iSessionGrp = 1:numel(session_grps)
 end 
 
 %% Now visualize  
-close all
+% close all
 
-session_grp_titles = ["m75","m76","m78","m79","m80","PFC"];  
+session_grp_titles = [""]; % ,"m76","m78","m79","m80","PFC"];  
 conditions = ["200","220","202","222","400","440","404","444"];
 
 for iMouse = 1:numel(session_grps)
     session_grp_title = session_grp_titles{iMouse};
     figure();
-    for cIdx = 1:8
-        subplot(2,4,cIdx);colormap('parula')
+    for cIdx = 5:8
+        subplot(1,4,cIdx-4);colormap('parula')
         imagesc(flipud(RXX_avgPETHs{cIdx,iMouse}));colormap('parula')
         title(sprintf("%s %s",session_grp_title,conditions{cIdx}))
         xticks([0 50 100 150])
         xticklabels([0 1 2 3]) 
         xlabel("Time on Patch (sec)")  
+        if cIdx == 1 || cIdx == 5
+            ylabel("Neurons") 
+        end
         caxis([-3,3])
-        colorbar() 
+        if cIdx == 8
+            colorbar()
+        end 
+%         yticks([])
+        set(gca,'fontsize',14)
 %         colormap(flipud(cbrewer('div','RdBu',100)))
     end 
 end

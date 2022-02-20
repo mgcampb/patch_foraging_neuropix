@@ -244,8 +244,14 @@ end
 
 % other options
 dataset_opt.rewsizes = [1 2 4]; % which reward size trials will we train to
+
+% from training
+% dataset_opt.numFolds = 5; % number of xval folds  
+% dataset_opt.vars = [1 2 3 4];    
+
+% for making supp fig
 dataset_opt.numFolds = 5; % number of xval folds  
-dataset_opt.vars = [1 2 3 4];    
+dataset_opt.vars = 1;    
 
 [X_dataset,y_dataset,xval_table] = gen_nb_dataset3(X,X_clusters,X_cellIDs,X_vel,X_accel,X_pos,y,rewsize,xval_table,dataset_opt);
 

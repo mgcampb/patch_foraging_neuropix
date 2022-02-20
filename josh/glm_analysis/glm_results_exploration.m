@@ -20,6 +20,8 @@ sessions = dir(fullfile(paths.data,'*.mat'));
 sessions = {sessions.name}; 
 mouse_grps = {1:2,3:8,10:13,15:18,[23 25]}; 
 mPFC_sessions = [1:8 10:13 15:18 23 25]; 
+load('./structs/transients_table_gmm.mat')
+
 
 %% Load mPFC results 
 
@@ -363,3 +365,41 @@ for i = 1:18
     num_cells(i) = numel(sCellIDs);  
     fprintf("%s Sig Cells: %i \n",sessions{sIdx}(1:end-4),numel(sCellIDs))
 end
+
+%% Load transients table and see proportion sig cells we have per session and mouse 
+all_sessions = unique(transients_table.Session); 
+proportion_sig = nan(length(all_sessions),1);
+proportion_sig_and_ttest = nan(length(all_sessions),1);
+for i_session = 1:numel(all_sessions)
+    this_session_name = all_sessions(i_session); 
+    session_table = transients_table(transients_table.Session == this_session_name & transients_table.Region == "PFC",:);
+    nNeurons = height(session_table); 
+    proportion_sig(i_session) = length(find(~isnan(session_table.gmm_cluster))) / nNeurons; 
+    proportion_sig_and_ttest(i_session) = length(find(~isnan(session_table.kmeans_cluster))) / nNeurons; 
+end
+
+all_mice = unique(transients_table.Mouse); 
+proportion_sig_mouse = nan(length(all_mice),1); 
+proportion_sig_mouse_and_ttest = nan(length(all_mice),1); 
+for i_mouse = 1:numel(all_mice) 
+    this_mouse_name = all_mice(i_mouse); 
+    mouse_table = transients_table(transients_table.Mouse == this_mouse_name & transients_table.Region == "PFC",:);
+    nNeurons = height(mouse_table); 
+    proportion_sig_mouse(i_mouse) = length(find(~isnan(mouse_table.gmm_cluster))) / nNeurons; 
+    proportion_sig_mouse_and_ttest(i_mouse) = length(find(~isnan(mouse_table.kmeans_cluster))) / nNeurons; 
+end
+%% Visualize proportion significant acr mice
+figure() 
+bar(100 * proportion_sig_mouse) 
+xticklabels(all_mice)
+set(gca,'fontsize',14)
+ylabel("% Responsive Cells")
+
+%% Visualize proportion significant acr sessions 
+
+figure() 
+bar(100 * proportion_sig) 
+xticks(1:length(all_sessions))
+xticklabels(all_sessions)
+set(gca,'fontsize',14)
+ylabel("% Responsive Cells")

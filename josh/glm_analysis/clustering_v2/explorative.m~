@@ -1,0 +1,37 @@
+%% Some more out there ideas 
+
+%% Load data
+
+% paths
+data_path = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_20211105_50ms_bins/GLM_coeffs_20211105_50_ms_bins.mat';
+old_clusters_path = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_20211105_50ms_bins/GMM_clust_20211105_50_ms_bins.mat';
+
+glm_dat = load(data_path);
+old_gmm_dat = load(old_clusters_path); 
+coeffs_to_cluster = cellfun(@(this_var) any(strcmp(this_var,old_gmm_dat.var_name)),glm_dat.var_name);
+
+% pull off friends with nonzero cognitive variables
+any_nonzero_mask = sum(abs(glm_dat.beta_all(coeffs_to_cluster,:))>0)'>0;
+all_nonzero_cellIDs = glm_dat.cellID(any_nonzero_mask);
+pfc_mask = strcmp("PFC",glm_dat.brain_region_rough);
+pfc_nonzero_cellIDs = glm_dat.cellID(pfc_mask & any_nonzero_mask);
+
+beta_all = glm_dat.beta_all(coeffs_to_cluster,any_nonzero_mask);
+beta_subpfc = glm_dat.beta_all(coeffs_to_cluster,~pfc_mask & any_nonzero_mask);
+beta_pfc = glm_dat.beta_all(coeffs_to_cluster,pfc_mask & any_nonzero_mask);
+
+
+%% plot time integration versus avg reward response
+
+beta_all_norm = zscore(beta_all,[],2);
+beta_pfc_norm = zscore(beta_pfc,[],2);
+
+rew_mask = cellfun(@(x) strcmp(x(1:3),'Rew') && strcmp(x(end-2:end),'4uL') ,old_gmm_dat.var_name); 
+time_mask = cellfun(@(x) strcmp(x(1:4),'Time') && strcmp(x(end-2:end),'4uL'),old_gmm_dat.var_name); 
+
+rew_coeff = mean(beta_pfc_norm(rew_mask,:),1);
+time_coeff = mean(beta_pfc_norm(time_mask,:),1);
+figure()
+binscatter(rew_coeff(abs(rew_coeff) > 0.2),time_coeff(abs(rew_coeff) > 0.1),'xlimits',[-2,2],'ylimits',[-2,2])
+ylim([-2,2])
+xlim([-2,2])

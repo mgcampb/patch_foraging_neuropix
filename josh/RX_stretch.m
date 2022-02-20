@@ -10,9 +10,9 @@ paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix
 % paths.data = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/all_mgc';
 paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs 
 paths.rampIDs = 'Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/ramping_neurons';
-paths.transients_table = '/Users/joshstern/Documents/UchidaLab_NeuralData/patch_foraging_neuropix/josh/structs/transients_table.mat';
+paths.transients_table = '/Users/joshstern/Documents/UchidaLab_NeuralData/patch_foraging_neuropix/josh/structs/transients_table_gmm.mat';
 load(paths.transients_table); 
-paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/sig_cells/sig_cells_mb_cohort_PFC.mat';
+paths.sig_cells = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results/gmm/sig_cells_table_gmm_mb_cohort_PFC.mat';
 load(paths.sig_cells);  
 addpath('/Users/joshstern/Documents/UchidaLab_NeuralData');
 
@@ -46,6 +46,7 @@ for i = 1:numel(mPFC_sessions)
     FR_decVar_tmp = genSeqStructs(paths,sessions,FR_calcOpt,sIdx);
     % assign to sIdx
     FR_decVar(sIdx).fr_mat = FR_decVar_tmp.fr_mat;
+    FR_decVar(sIdx).vel = FR_decVar_tmp.vel;
     FR_decVar(sIdx).goodcell_IDs = FR_decVar_tmp.goodcell_IDs;
     FR_decVar(sIdx).decVarTime = FR_decVar_tmp.decVarTime;
     FR_decVar(sIdx).decVarTimeSinceRew = FR_decVar_tmp.decVarTimeSinceRew;
@@ -71,7 +72,7 @@ for i = 1:numel(mPFC_sessions)
     rewsize = mod(patches(:,2),10);
     
     % make barcode matrices also want to know where we have no more rewards
-    nTimesteps = 15;
+    nTimesteps = 40;
     rew_barcode = zeros(length(patchCSL) , nTimesteps);
     for iTrial = 1:length(patchCSL)
         rew_indices = round(rew_ms(rew_ms >= patchstop_ms(iTrial) & rew_ms < patchleave_ms(iTrial)) - patchstop_ms(iTrial)) + 1;
@@ -98,9 +99,11 @@ for i = 1:numel(mPFC_sessions)
     % use results from driscoll selection
     session_table = transients_table(transients_table.Session == session_name & transients_table.Region == "PFC",:);
     peak_rew1plus = session_table.Rew1plus_peak_pos;
-    glm_clust = session_table.GLM_Cluster;
+    glm_clust = session_table.gmm_cluster;
     nTrials = length(i_prts);
-    neuron_selection = ~isnan(peak_rew1plus) & peak_rew1plus < 1.25 & peak_rew1plus > .25;
+%     neuron_selection = ~isnan(peak_rew1plus) & peak_rew1plus < 1.25 & peak_rew1plus > .25;
+%     neuron_selection = ~isnan(glm_clust); 
+    neuron_selection = 1:size(FR_decVar(sIdx).fr_mat{1},1);
     nNeurons = length(find(neuron_selection));  
     sec1ix = 1000 / tbin_ms;
     
@@ -108,6 +111,7 @@ for i = 1:numel(mPFC_sessions)
     for iRewsize = [1,2,4] 
         % Collect RXNil trials
         trialsR0Nil = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) < 0 & i_prts > 1.55);
+        trials20Nil = find(rew_barcode(:,1) == 2 & rew_barcode(:,2) < 0 & i_prts > 1.55);
         trialsRRNil = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) < 0 & i_prts > 1.55);
         
         % Get median PRTs - 1 to stretch to 
@@ -119,15 +123,15 @@ for i = 1:numel(mPFC_sessions)
         % also do this for R0Nil to match part of trial that is stretched
 %         R0Nil_tmpCell = cellfun(@(x) imresize(x,[nNeurons,medianPRT_R0Nil_ix]),FR_decVar(sIdx).fr_mat(trialsR0Nil),'UniformOutput',false);
         R0Nil_tmpCell = cellfun(@(x) cat(2,x(neuron_selection,1:sec1ix),imresize(x(neuron_selection,sec1ix:end),[nNeurons,medianPRT_R0Nil_ix])) ... 
-                                                            ,FR_decVar(sIdx).fr_mat(trialsR0Nil),'UniformOutput',false);
+                                                            ,FR_decVar(sIdx).fr_mat(trialsR0Nil),'un',false);
         RRNil_tmpCell = cellfun(@(x) cat(2,x(neuron_selection,1:sec1ix),imresize(x(neuron_selection,sec1ix:end),[nNeurons,medianPostRewRT_RRNil_ix])) ... 
-                                                            ,FR_decVar(sIdx).fr_mat(trialsRRNil),'UniformOutput',false);
+                                                            ,FR_decVar(sIdx).fr_mat(trialsRRNil),'un',false);
         
         % get sorts from trials not in pool  
         dvar = "timesince"; 
         decVar_bins = linspace(0,2,41);
         peakSortOpt = struct; 
-        peakSortOpt.trials = setdiff(1:nTrials,trialsR0Nil); % peak sort by heldout trials
+        peakSortOpt.trials = trials20Nil; % setdiff(1:nTrials,trialsR0Nil); % peak sort by heldout trials
         peakSortOpt.suppressVis = true; 
         peakSortOpt.neurons = find(neuron_selection); 
         [~,neuron_orderR0Nil] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,peakSortOpt); 
@@ -137,7 +141,7 @@ for i = 1:numel(mPFC_sessions)
         % take average over stretched trials
         if ~isempty(trialsR0Nil)
             RXNil_peakSortPETH{sIdx,rew_counter} = zscore(mean(cat(3,R0Nil_tmpCell{:}),3),[],2);
-            RXNil_peakSortPETH{sIdx,rew_counter} = RXNil_peakSortPETH{sIdx,rew_counter}(neuron_orderR0Nil,:);
+            RXNil_peakSortPETH{sIdx,rew_counter} = RXNil_peakSortPETH{sIdx,rew_counter}(neuron_orderR0Nil,:); 
         else
             RXNil_peakSortPETH{sIdx,rew_counter} = zeros(10,10);
         end
@@ -158,7 +162,7 @@ close all
 conditions = ["10Nil","20Nil","40Nil","11Nil","22Nil","44Nil"]; 
 % session_names = ["PFC mc2 10/05" "PFC mc2 10/16" "STR mc2 10/20" "STR mc4 10/24" "PFC mc4 10/25" "STR mc4 10/26" "PFC mc4 10/27" "STR mc4 10/31" "STR mc4 11/01"];
 
-for i = 1:numel(mPFC_sessions)
+for i = 18 % 1:numel(mPFC_sessions)
     sIdx = mPFC_sessions(i); 
     session = sessions{sIdx}; 
     session_title = session([1:2 end-6:end-4]); %  session_names(sIdx); %  session([1:2 end-6:end-4]);
@@ -173,6 +177,148 @@ for i = 1:numel(mPFC_sessions)
         xticklabels((0:50:t_len) * tbin_ms / 1000)
     end
 end 
+
+%% Pool across sessions 
+
+pool_sessions = {[1:19]}; 
+RXNil_peakSortPETH_pool = cell(6,1); 
+peak_ix = cell(6,1); 
+mean_vel_pool = cell(6,1); 
+sem_vel_pool = cell(6,1); 
+for i_grp = 1:numel(pool_sessions) 
+    these_sessions = mPFC_sessions(pool_sessions{i_grp}); 
+    
+    session = arrayfun(@(x) sessions{x}(1:end-4),these_sessions,'un',0); 
+    session_name = cellfun(@(x) string(x([1:2 end-2:end])),session,'un',0); 
+    session_name = cat(1,session_name{:});
+    
+    i_prts = prts(these_sessions); 
+    i_prts = cat(1,i_prts{:});  
+    rew_barcode = rew_barcodes(these_sessions); 
+    rew_barcode = cat(1,rew_barcode{:});  
+    
+    sec1ix = 1000 / tbin_ms;
+    counter = 1; 
+    median_ix = nan(6,1); 
+    for iRewsize = [1,2,4] 
+        % Collect RXNil trials
+        trialsR0Nil = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) < 0 & i_prts > 1.55);
+        trials20Nil = find(rew_barcode(:,1) == 2 & rew_barcode(:,2) < 0 & i_prts > 1.55);
+        trialsRRNil = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) < 0 & i_prts > 1.55);
+        
+        % Get median PRTs - 1 to stretch to 
+        medianPRT_R0Nil_ix = round((1000 * median(i_prts(trialsR0Nil) - 1) / tbin_ms)); 
+        median_ix(counter) = medianPRT_R0Nil_ix;
+        medianPostRewRT_RRNil_ix = round((1000 * (median(i_prts(trialsRRNil) - 1)) / tbin_ms)); 
+        median_ix(counter + 3) = medianPostRewRT_RRNil_ix; 
+        counter = counter + 1;
+    end   
+    
+    for i_session = 1:numel(pool_sessions{i_grp})
+        sIdx = mPFC_sessions(pool_sessions{i_grp}(i_session)); 
+        this_session_name = session_name(i_session);
+        rew_barcode = rew_barcodes{sIdx}; 
+        i_prts = prts{sIdx}; 
+        
+        % use results from driscoll selection
+        session_table = transients_table(transients_table.Session == this_session_name & transients_table.Region == "PFC",:);
+        peak_rew1plus = session_table.Rew1plus_peak_pos;
+        glm_clust = session_table.gmm_cluster;
+        nTrials = length(i_prts);
+        %     neuron_selection = ~isnan(peak_rew1plus) & peak_rew1plus < 1.25 & peak_rew1plus > .25;
+%         neuron_selection = ~isnan(glm_clust);
+        neuron_selection = 1:size(FR_decVar(sIdx).fr_mat{1},1);
+        nNeurons = length(find(neuron_selection));
+        
+        if nNeurons > 0
+            rew_counter = 1;
+            for iRewsize = [1 2 4]
+                % Collect RXNil trials
+                trialsR0Nil = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) < 0 & i_prts > 1.55);
+                trialsRRNil = find(rew_barcode(:,1) == iRewsize & rew_barcode(:,2) == iRewsize & rew_barcode(:,3) < 0 & i_prts > 1.55);
+                
+                % collect stretched firing rates in cell
+                R0Nil_tmpCell = cellfun(@(x) cat(2,x(neuron_selection,1:sec1ix),imresize(x(neuron_selection,sec1ix:end),[nNeurons,median_ix(rew_counter)])) ...
+                    ,FR_decVar(sIdx).fr_mat(trialsR0Nil),'un',false);
+                RRNil_tmpCell = cellfun(@(x) cat(2,x(neuron_selection,1:sec1ix),imresize(x(neuron_selection,sec1ix:end),[nNeurons,median_ix(rew_counter + 3)])) ...
+                    ,FR_decVar(sIdx).fr_mat(trialsRRNil),'un',false);
+                r0_vel = cellfun(@(x) cat(2,x(1,1:sec1ix),imresize(x(1,sec1ix:end),[1,median_ix(rew_counter)])) ...
+                    ,FR_decVar(sIdx).vel(trialsR0Nil),'un',false);
+                r0_vel = cat(1,r0_vel{:}); 
+                mean_vel_pool{rew_counter} = [mean_vel_pool{rew_counter} ; r0_vel];
+                rr_vel = cellfun(@(x) cat(2,x(1,1:sec1ix),imresize(x(1,sec1ix:end),[1,median_ix(rew_counter + 3)])) ...
+                    ,FR_decVar(sIdx).vel(trialsRRNil),'un',false);
+                rr_vel = cat(1,rr_vel{:}); 
+                mean_vel_pool{rew_counter+3} = [mean_vel_pool{rew_counter+3} ; rr_vel];
+                
+                % get sorts from trials not in pool
+                dvar = "timesince";
+                decVar_bins = linspace(0,2,41);
+                peakSortOpt = struct;
+                peakSortOpt.trials = setdiff(1:nTrials,trialsR0Nil); % peak sort by heldout trials
+                peakSortOpt.suppressVis = true;
+                peakSortOpt.neurons = find(neuron_selection);
+                [~,~,~,peak_ix_R0Nil_tmp] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,peakSortOpt);
+                peakSortOpt.trials = setdiff(1:nTrials,trialsRRNil);
+                [~,~,~,peak_ix_RRNil_tmp] = peakSortPETH(FR_decVar(sIdx),dvar,decVar_bins,peakSortOpt);
+                
+                % take average over stretched trials
+                if ~isempty(R0Nil_tmpCell)
+                    RXNil_peakSortPETH_pool{rew_counter} = [RXNil_peakSortPETH_pool{rew_counter} ; zscore(mean(cat(3,R0Nil_tmpCell{:}),3),[],2)];
+                    peak_ix{rew_counter} = [peak_ix{rew_counter} ; peak_ix_R0Nil_tmp'];
+                end
+                if ~isempty(RRNil_tmpCell)
+                    RXNil_peakSortPETH_pool{rew_counter+3} = [RXNil_peakSortPETH_pool{rew_counter+3} ; zscore(mean(cat(3,RRNil_tmpCell{:}),3),[],2)];
+                    peak_ix{rew_counter+3} = [peak_ix{rew_counter+3} ; peak_ix_RRNil_tmp'];
+                end
+                rew_counter = rew_counter + 1;
+            end
+        end
+    end
+    
+    for tt = 1:6 
+        [~,xval_peaksort] = sort(peak_ix{tt}); 
+        RXNil_peakSortPETH_pool{tt} = RXNil_peakSortPETH_pool{tt}(xval_peaksort,:); 
+        nTrials = size(mean_vel_pool{tt},1); 
+        sem_vel_pool{tt} = 1.96 * std(mean_vel_pool{tt},[],1) / sqrt(nTrials);
+        mean_vel_pool{tt} = mean(mean_vel_pool{tt},1); 
+    end
+end
+
+%% Now visualize   
+close all
+cool6 = [cool(3) ; cool(3)]; 
+conditions = ["10Nil","20Nil","40Nil","11Nil","22Nil","44Nil"]; 
+% session_names = ["PFC mc2 10/05" "PFC mc2 10/16" "STR mc2 10/20" "STR mc4 10/24" "PFC mc4 10/25" "STR mc4 10/26" "PFC mc4 10/27" "STR mc4 10/31" "STR mc4 11/01"];
+grp_names = ["m80"];
+for i_grp = 1:numel(pool_sessions) 
+    figure() 
+    for cIdx = 1:6 
+        subplot(2,3,cIdx);colormap('parula')
+        imagesc(flipud(RXNil_peakSortPETH_pool{cIdx}))
+        title(sprintf("%s %s",grp_names{i_grp},conditions{cIdx})) 
+        caxis([-3,3])  
+        t_len = size(RXNil_peakSortPETH_pool{cIdx},2);
+        xticks(0:50:t_len) 
+        xticklabels((0:50:t_len) * tbin_ms / 1000)
+    end
+    figure() 
+    subplot(1,2,1);hold on
+    for cIdx = 1:3
+        shadedErrorBar(1:length(mean_vel_pool{cIdx}),mean_vel_pool{cIdx},sem_vel_pool{cIdx},'lineprops',{'color',cool6(cIdx,:)})
+        t_len = size(RXNil_peakSortPETH_pool{cIdx},2);
+        xticks(0:50:t_len) 
+        xticklabels((0:50:t_len) * tbin_ms / 1000)
+    end
+    subplot(1,2,2);hold on
+    for cIdx = 4:6
+        shadedErrorBar(1:length(mean_vel_pool{cIdx}),mean_vel_pool{cIdx},sem_vel_pool{cIdx},'lineprops',{'color',cool6(cIdx,:)})
+        t_len = size(RXNil_peakSortPETH_pool{cIdx},2);
+        xticks(0:50:t_len) 
+        xticklabels((0:50:t_len) * tbin_ms / 1000)
+    end
+end 
+
 
 %% Now separate RNil trials by early vs late PRT 
 % start w/ just m80? 

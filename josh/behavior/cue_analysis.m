@@ -200,7 +200,9 @@ for mIdx = 1:numel(mouse_grps)
     prop_engage_half2 = nanmean(pooled_patchStop_bool(:,sessions_half+1:end),2);   
     prop_engage_recording = nanmean(pooled_patchStop_bool(:,recording_session_bool_mice{mIdx}),2);   
     prop_engage = nanmean(pooled_patchStop_bool,2);
-    title(mouse_names(mIdx));
+    title(mouse_names(mIdx),'fontsize',13);
+    ax = gca;
+    ax.FontSize = 13; 
     
     subplot(2,numel(mouse_grps),numel(mouse_grps) + mIdx);hold on
 %     plot(smoothdata(prop_engage_early,'gaussian',20),'color',[.5 .5 .5],'linewidth',1.5) 
@@ -212,10 +214,10 @@ for mIdx = 1:numel(mouse_grps)
 %     plot(smoothdata(prop_engage,'gaussian',20),'color',[0 0 0],'linewidth',1.5)  
     xlim([0 200]) 
     ylim([0 1])  
-    xlabel("Trial Number") 
-    ylabel("Proportion Hit Trials") 
+    xlabel("Trial Number",'fontsize',13) 
+    ylabel("Proportion Hit Trials",'fontsize',13) 
     if mIdx == 1 
-        legend("First half of training","Second half of training") % ,"Recording Sessions")
+        legend("First half of training","Second half of training",'fontsize',13)  % ,"Recording Sessions")
     end
 end 
 
@@ -272,7 +274,7 @@ max_timepoint = 100;
 cue_ix = round(pre_cue_sec/tbin_sec);
 figure()
 for mIdx = 1:numel(mouse_grps) 
-    subplot(3,5,mIdx);hold on
+    subplot(2,5,mIdx);hold on
     mouse_prts_zscored = cat(1,prts_zscored{mIdx}{:});  
     [~,~,zscored_prt_decile] = histcounts(mouse_prts_zscored,quantile(mouse_prts_zscored,0:.2:1));
     mouse_patchStop_bool = cat(1,patchStop_bool{mIdx}{:}); 
@@ -311,13 +313,14 @@ for mIdx = 1:numel(mouse_grps)
     xticklabels((-max_timepoint/2:25:max_timepoint/2) * tbin_sec) 
     yl = ylim();
     
-    if mIdx == 1 
-        ylabel("Velocity (a.u.)") 
-    end 
     v2 = [cue_ix yl(1);cue_ix yl(2);max_timepoint yl(2);max_timepoint yl(1)];
     f2 = [1 2 3 4];
     patch('Faces',f2,'Vertices',v2,'FaceColor',[1 1 0],'FaceAlpha',.2,'LineStyle','none'); 
     title(mouse_names(mIdx))
+    if mIdx == 1
+        ylabel("Velocity (a.u.)")
+        legend("Shortest PRTs","","","","Longest PRTs","Miss Trials","Proximity Cue",'fontsize',13)
+    end
 
     % Now investigate correlations between velocity and zscored PRT @ diff timepoints 
     % Stopping is trivially correlated w/ speed
@@ -339,32 +342,34 @@ for mIdx = 1:numel(mouse_grps)
         [tr_stop,tp_stop] = corrcoef(vel_all(~isnan(vel_all)),double(mouse_patchStop_bool(~isnan(vel_all))));  
         r_stop(t) = tr_stop(2); p_stop(t) = tp_stop(2);  
         if p_stop(t) < .01 
-            subplot(3,5,numel(mouse_grps) + mIdx);hold on
+            subplot(2,5,numel(mouse_grps) + mIdx);hold on
             text(t,-.05,'*','HorizontalAlignment','center') 
         end
         if p_prt(t) < .01
-            subplot(3,5,2*numel(mouse_grps) + mIdx);hold on
+            subplot(2,5,numel(mouse_grps) + mIdx);hold on
             text(t,.1,'*','HorizontalAlignment','center') 
         end
     end
     
-    % Visualize significance 
-    subplot(3,5,numel(mouse_grps) + mIdx) 
-    plot(1:round(pre_cue_sec/tbin_sec),r_stop(1:round(pre_cue_sec/tbin_sec)),'r','linewidth',1.5);hold on  
-    plot(round(pre_cue_sec/tbin_sec):length(r_stop)-1,r_stop(round(pre_cue_sec/tbin_sec)+1:end),'r--','linewidth',1.5);hold on  
-    ylim([-1 0])  
-    xlim([0 max_timepoint])   
-    % note some hard coding here for now
-    xticks(0:25:max_timepoint) 
-    xticklabels((-max_timepoint/2:25:max_timepoint/2) * tbin_sec) 
-    v2 = [cue_ix -1;cue_ix 0 ;max_timepoint 0;max_timepoint -1];
-    f2 = [1 2 3 4];
-    patch('Faces',f2,'Vertices',v2,'FaceColor',[1 1 0],'FaceAlpha',.2,'LineStyle','none'); 
-    if mIdx == 1
-        ylabel("Pearson Correlation Stop")
-    end
-    
-    subplot(3,5,2*numel(mouse_grps) + mIdx)
+%     % Visualize significance 
+%     subplot(3,5,numel(mouse_grps) + mIdx) 
+%     plot(1:round(pre_cue_sec/tbin_sec),r_stop(1:round(pre_cue_sec/tbin_sec)),'r','linewidth',1.5);hold on  
+%     plot(round(pre_cue_sec/tbin_sec):length(r_stop)-1,r_stop(round(pre_cue_sec/tbin_sec)+1:end),'r--','linewidth',1.5);hold on  
+%     ylim([-1 0])  
+%     xlim([0 max_timepoint])   
+%     % note some hard coding here for now
+%     xticks(0:25:max_timepoint) 
+%     xticklabels((-max_timepoint/2:25:max_timepoint/2) * tbin_sec) 
+%     v2 = [cue_ix -1;cue_ix 0 ;max_timepoint 0;max_timepoint -1];
+%     f2 = [1 2 3 4];
+%     patch('Faces',f2,'Vertices',v2,'FaceColor',[1 1 0],'FaceAlpha',.2,'LineStyle','none'); 
+%     if mIdx == 1
+%         ylabel("Pearson Correlation Stop")
+%     end
+    subplot(2,5,mIdx)
+    ax = gca;
+    ax.FontSize = 13; 
+    subplot(2,5,numel(mouse_grps) + mIdx)
     plot(r_prt,'linewidth',1.5);hold on
     ylim([-.2 .15])  
     xlim([0 max_timepoint])   
@@ -374,10 +379,11 @@ for mIdx = 1:numel(mouse_grps)
     f2 = [1 2 3 4];
     patch('Faces',f2,'Vertices',v2,'FaceColor',[1 1 0],'FaceAlpha',.2,'LineStyle','none'); 
     if mIdx == 1
-        ylabel("Pearson Correlation PRT")
+        ylabel("PearsonR Vel-PRT")
     end 
-    xlabel(sprintf("Time Since Proximity Cue Onset (sec)")) 
-    
+    xlabel(sprintf("Time Since\n Proximity Cue Onset (sec)")) 
+    ax = gca;
+    ax.FontSize = 13; 
 end
 
 %% 3) Patch history effects: does previous trial type affect P(stop)

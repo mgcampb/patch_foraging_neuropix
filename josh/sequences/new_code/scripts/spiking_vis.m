@@ -7,13 +7,13 @@ addpath(genpath('/Users/joshstern/Documents/UchidaLab_neuralData'));
 
 % make these from cue_reward_responsive.m
 load('./structs/transients_table.mat');
-load('./structs/taskvar_peth.mat');
+% load('./structs/taskvar_peth.mat');
 
 sessions = dir(fullfile(paths.data,'*.mat'));
 sessions = {sessions.name};
 
-mPFC_sessions = [1:8 10:13 15:18 23 25];   
-mouse_grps = {1:2,3:8,10:13,15:18,[23 25]};  
+mPFC_sessions = [1:8 10:13 14:18 23 25];   
+mouse_grps = {1:2,3:8,10:13,14:18,[23 25]};  
 mouse_names = ["m75","m76","m78","m79","m80"]; 
 session_titles = cell(numel(mPFC_sessions),1); 
 for i = 1:numel(mPFC_sessions)
@@ -40,15 +40,15 @@ for mIdx = 5 % 1:numel(mouse_grps)
         good_cells = data.sp.cids(data.sp.cgs==2); % going to need to map back to this
         nNeurons = numel(good_cells);   
         session_transients_table = transients_table(transients_table.Session == session_title,:);  
-        pos_Rew0_peaks = session_transients_table.Rew0_peak_pos; 
-        pos_Rew1plus_peaks = session_transients_table.Rew1plus_peak_pos; 
+        pos_Rew0_peaks_roi = session_transients_table.Rew0_peak_pos(region == ROI & ~isnan(session_transients_table.Rew0_peak_pos)); 
+        pos_Rew1plus_peaks_roi = session_transients_table.Rew1plus_peak_pos(region == ROI & ~isnan(session_transients_table.Rew1plus_peak_pos)); 
         region = session_transients_table.Region;   
         
         % subselect brain region
         ROI = "PFC";  
         good_cells_roi = good_cells(region == ROI);  
-        pos_Rew0_peaks_roi = pos_Rew0_peaks(region == ROI);  
-        pos_Rew1plus_peaks_roi = pos_Rew1plus_peaks(region == ROI); 
+%         pos_Rew0_peaks_roi = pos_Rew0_peaks(region == ROI);  
+%         pos_Rew1plus_peaks_roi = pos_Rew1plus_peaks(region == ROI); 
         
         % Load trial information
         nTrials = length(data.patchCSL); 
@@ -62,20 +62,22 @@ for mIdx = 5 % 1:numel(mouse_grps)
         [~,rew0_sort] = sort(pos_Rew0_peaks_roi);
         [~,rew1plus_sort] = sort(pos_Rew1plus_peaks_roi);
         rew0_sorted_cellIDs = good_cells_roi(rew0_sort(ismember(rew0_sort,find(~isnan(pos_Rew0_peaks_roi))))); % get rid of non significant cells
-        rew1plus_sorted_cellIDs = good_cells_roi(rew1plus_sort(ismember(rew1plus_sort,find(~isnan(pos_Rew1plus_peaks_roi))))); % get rid of non significant cells
-        
+%         rew1plus_sorted_cellIDs = good_cells_roi(rew1plus_sort(ismember(rew1plus_sort,find(~isnan(pos_Rew1plus_peaks_roi))))); % get rid of non significant cells
+        rew1plus_sorted_cellIDs = good_cells(region == ROI & ~isnan(session_transients_table.Rew1plus_peak_pos)); % good_cells_roi(rew1plus_sort);
+        rew1plus_sorted_cellIDs = rew1plus_sorted_cellIDs(rew1plus_sort);
         pre_cue_sec = 1; % time to include before cue in seconds
         post_leave_sec = 1; % time to include after leave in seconds
         
         % get PETH for visualization
-        session_peth_rew0 = taskvar_peth{2}(transients_table.Session == session_title,:);  
-        session_peth_rew1plus = taskvar_peth{3}(transients_table.Session == session_title,:);  
-        % select for ROI 
-        session_peth_rew0 = session_peth_rew0(region == ROI,:); 
-        session_peth_rew1plus = session_peth_rew1plus(region == ROI,:); 
+        session_peth_rew0 = taskvar_peth{2,1}(transients_table.Session == session_title & ismember(transients_table.CellID,rew0_sorted_cellIDs),:);  
+        session_peth_rew1plus = taskvar_peth{3,1}(transients_table.Session == session_title & ismember(transients_table.CellID,rew1plus_sorted_cellIDs),:);  
+%         % select for ROI 
+%         session_peth_rew0 = session_peth_rew0(region == ROI,:); 
+%         session_peth_rew1plus = session_peth_rew1plus(region == ROI,:); 
         % sort
         session_peth_rew0 = session_peth_rew0(rew0_sort(ismember(rew0_sort,find(~isnan(pos_Rew0_peaks_roi)))),:); 
-        session_peth_rew1plus = session_peth_rew1plus(rew1plus_sort(ismember(rew1plus_sort,find(~isnan(pos_Rew1plus_peaks_roi)))),:); 
+%         session_peth_rew1plus = session_peth_rew1plus(rew1plus_sort(ismember(rew1plus_sort,find(~isnan(pos_Rew1plus_peaks_roi)))),:); 
+        session_peth_rew1plus = session_peth_rew1plus(rew1plus_sort,:); 
         
         these_sorted_IDs = rew1plus_sorted_cellIDs; 
         nNeurons_sig = length(these_sorted_IDs); 
@@ -110,7 +112,7 @@ end
 colors = cool(3); 
 rew_vis_time = 250; 
 % close all
-for iTrial = 1:10
+for iTrial = 39
     iTrial_rew_ts = [1000 * (patchstop_sec(iTrial) - patchcue_sec(iTrial) + pre_cue_sec) ; 1000 * ((patchstop_sec(iTrial) - patchcue_sec(iTrial) + pre_cue_sec) +  rew_sec(rew_sec > patchstop_sec(iTrial) & rew_sec < patchleave_sec(iTrial)) - patchstop_sec(iTrial))]; 
     n_rews = numel(iTrial_rew_ts);
     figure() 

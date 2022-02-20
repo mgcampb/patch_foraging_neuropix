@@ -101,6 +101,7 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,opt,sIdx)
     FR_decVar.decVarTimeSinceRew = cell(length(dat.patchCSL),1);
     FR_decVar.rew_sec = cell(length(dat.patchCSL),1);
     FR_decVar.rew_num = cell(length(dat.patchCSL),1);
+    FR_decVar.vel = cell(length(dat.patchCSL),1);
     for iTrial = 1:length(dat.patchCSL)
         FR_decVar.fr_mat{iTrial} = fr_mat(:,patchstop_ix(iTrial):patchleave_ix(iTrial));
         trial_len_ix = size(FR_decVar.fr_mat{iTrial},2);
@@ -108,6 +109,7 @@ function [FR_decVar,FRandTimes] = genSeqStructs(paths,sessions,opt,sIdx)
         FR_decVar.decVarTimeSinceRew{iTrial} = (1:trial_len_ix) * tbin_ms / 1000;  
         FR_decVar.rew_sec{iTrial} = zeros(1,trial_len_ix);
         FR_decVar.rew_num{iTrial} = zeros(1,trial_len_ix);
+        FR_decVar.vel{iTrial} = dat.vel(patchstop_ix(iTrial):patchleave_ix(iTrial));
         
         for r = 1:numel(rew_sec_cell{iTrial})
             rew_ix = (rew_sec_cell{iTrial}(r) - 1) * 1000 / tbin_ms;

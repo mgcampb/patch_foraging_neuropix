@@ -8,7 +8,8 @@ if ~isfolder(paths.figs)
     mkdir(paths.figs);
 end
 load(paths.sig_cells);
-opt.data_set = 'mb';
+opt.data_set = 'mb'; 
+opt.brain_region = "PFC";
 %% get sessions
 session_all = dir(fullfile(paths.results,'*.mat'));
 session_all = {session_all.name}';
@@ -46,6 +47,7 @@ for i = 1:numel(session_all)
     
     fit = load(fullfile(paths.results,session_all{i}));
     dat = load(fullfile(paths.data,session_all{i}),'anatomy3d');
+    dat_cortex = load(fullfile(paths.data,session_all{i}),'anatomy');
 %     if ~isfield(dat,'anatomy3d')
 %         continue;
 %     end
@@ -74,6 +76,9 @@ for i = 1:numel(session_all)
         coordsAP = [coordsAP; dat.anatomy3d.Coords.AP(keep)];
         coordsML = [coordsML; dat.anatomy3d.Coords.ML(keep)];
         coordsDV = [coordsDV; dat.anatomy3d.Coords.DV(keep)]; 
+%         coordsAP = [coordsAP; dat.anatomy3d.Coords.AP];
+%         coordsML = [coordsML; dat.anatomy3d.Coords.ML];
+%         coordsDV = [coordsDV; dat.anatomy3d.Coords.DV]; 
     else  
         coordsAP = [coordsAP; nan(length(sig_cells),1)];
         coordsML = [coordsML; nan(length(sig_cells),1)];
@@ -95,13 +100,13 @@ end
 
 % anova
 anova_pval = nan(3,1);
-tmp = anovan(coordsAP,{gmm_idx,mouse},'display','off');
+tmp = anovan(coordsAP,{gmm_idx,mouse}); % ,'display','off')
 anova_pval(1) = tmp(1);
 
-tmp = anovan(coordsML,{gmm_idx,mouse},'display','off');
+tmp = anovan(coordsML,{gmm_idx,mouse}); % ,'display','off')
 anova_pval(2) = tmp(1);
 
-tmp = anovan(coordsDV,{gmm_idx,mouse},'display','off');
+tmp = anovan(coordsDV,{gmm_idx,mouse}); % ,'display','off')
 anova_pval(3) = tmp(1);
 
 %% plot anatomical coords of k means clusters
@@ -149,26 +154,89 @@ for i = 1:num_clust
 end
 
 %% Binscatter visualization 
-ML_lim = [min(coordsML) max(coordsML)];
-DV_lim = [min(coordsDV) max(coordsDV)];
+ML_lim = [min(coordsML) max(coordsML)] - 5710 ;
+DV_lim = [min(coordsDV) max(coordsDV)] - 1500;
+gmm_colors = [68 119 170; 238 102 119; 34 136 51; 204 187 68; 102 204 238]/255;
 N = 20; 
-noise_mag = 30;
+noise_mag =  0.001 * 30;
 figure()
-a = scatterhist(noise_mag * randn(size(coordsML)) + coordsML,noise_mag * randn(size(coordsML)) + coordsDV,...
+a = scatterhist(noise_mag * randn(size(coordsML)) + 0.001 * -(coordsML - 5710),noise_mag * randn(size(coordsML)) + 0.001 * (coordsDV - 1500),...
                     'Group',gmm_idx,'Kernel','on',... 
                     'LineStyle',{'-'},...
-                    'LineWidth',[2,2,2],...
+                    'LineWidth',[3,3,3],...
                     'Marker','.',...
-                    'MarkerSize',10);
+                    'MarkerSize',10,...
+                    'color',gmm_colors);
+% a = scatterhist(noise_mag * randn(size(coordsML)) + coordsML,noise_mag * randn(size(coordsML)) + coordsDV,...
+%                     'Group',gmm_idx,'Kernel','on',... 
+%                     'LineStyle',{'-'},...
+%                     'LineWidth',[2,2,2],...
+%                     'Marker','.',...
+%                     'MarkerSize',10,...
+%                     'color',gmm_colors);                
 set(gca, 'YDir','reverse')
-set(a(3),'XDir','reverse')
+% set(a(3),'XDir','reverse')
 legend("Cluster 1","Cluster 2","Cluster 3","Cluster 4","Cluster 5") 
-set(gca,'FontSize',14) 
-xlabel("ML Coordinate")
-ylabel("DV Coordinate")
+set(gca,'FontSize',20) 
+xlabel("Lateral Distance From Midline  (mm)")
+ylabel("Depth From Brain Surface (mm)")
 % for i_clust = 1:num_clust 
 %     subplot(1,num_clust,i_clust)
 %     scatterhist(coordsML(gmm_idx==i_clust),coordsDV(gmm_idx==i_clust))
 % %     h = binscatter(coordsML(gmm_idx==i_clust),coordsDV(gmm_idx==i_clust),N,'Xlimits',ML_lim,'Ylimits',DV_lim,'ShowEmptyBins','on'); 
 % %     imagesc(h.Values)
 % end
+
+%% On top of brain
+
+figure()
+colors = lines(4); 
+black_brain = true;
+fwireframe = plotBrainGrid([], [], [], black_brain);
+hold on;
+fwireframe.InvertHardcopy = 'off';
+for i_clust = 1:4 
+    nNeurons = length(find(gmm_idx==i_clust)); 
+    scatter3((noise_mag * randn([nNeurons 1])+coordsAP(gmm_idx==i_clust))/10,(noise_mag * randn([nNeurons 1])+coordsML(gmm_idx==i_clust))/10, (noise_mag * randn([nNeurons 1])+coordsDV(gmm_idx==i_clust))/10 ,[],gmm_colors(i_clust,:),'.' )
+end
+% 
+% % Make a gif
+% el = 30;
+% degStep = 1;
+% maxDeg = 360-37.49; 
+% minDeg = -37.50; 
+% detlaT = 0.1;
+% fCount = length(maxDeg:-degStep:-minDeg);
+% f = getframe(gcf);
+% [im,map] = rgb2ind(f.cdata,256,'nodither');
+% im(1,1,1,fCount) = 0;
+% k = 1;
+% 
+% % spin left
+% for i = minDeg:degStep:maxDeg
+%   az = i;
+%   view([az,el])
+% %   disp([az,el])
+%   f = getframe(gcf);
+%   im(:,:,1,k) = rgb2ind(f.cdata,map,'nodither');
+%   k = k + 1;
+% end
+% 
+% savepath = '../../presentations/brain_rotate.gif';
+% imwrite(im,map,savepath,'DelayTime',detlaT,'LoopCount',inf);
+
+%% 
+
+Z = peaks;
+surf(Z)
+axis tight
+set(gca,'nextplot','replacechildren','visible','off')
+f = getframe;
+[im,map] = rgb2ind(f.cdata,256,'nodither');
+im(1,1,1,20) = 0;
+for k = 1:20
+  surf(cos(2*pi*k/20)*Z,Z)
+  f = getframe;
+  im(:,:,1,k) = rgb2ind(f.cdata,map,'nodither');
+end
+imwrite(im,map,'../../presentations/DancingPeaks.gif','DelayTime',0,'LoopCount',inf) %g443800

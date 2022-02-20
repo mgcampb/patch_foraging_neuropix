@@ -4,7 +4,7 @@
 
 paths = struct;
 % paths.results = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/all_mice';
-paths.figs = '/Users/joshstern/Documents/UchidaLab_NeuralData/neural_data_figs'; % where to save figs
+paths.figs = '/Users/joshstern/Documents/Undergraduate Thesis/results_figures/figure4'; % where to save figs
 paths.results = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/glm_results'; 
 % 
 % paths = struct;
@@ -89,13 +89,13 @@ beta_norm = zscore(beta_all_sig);
 
 %% visualize normalized beta matrix
 hfig = figure('Position',[50 50 1300 800]);
+cool3 = cool(3); 
 hfig.Name = sprintf('Normalized beta matrix significant cells %s cohort %s',opt.data_set,opt.brain_region);
 imagesc(beta_norm);
 yticks(1:numel(var_name));
 yticklabels(var_name);
 set(gca,'TickLabelInterpreter','none');
-xlabel('Cell (pooled across sessions, mice)')
-set(gca,'FontSize',14);
+xlabel('Cells')
 title(sprintf('%d %s cells from %d sessions in %d mice',size(beta_norm,2),opt.brain_region,numel(session_all),numel(uniq_mouse)));
 
 % plot colored bars indicating mouse
@@ -104,10 +104,23 @@ for i = 1:size(beta_norm,2)
     col_this = plot_col(strcmp(uniq_mouse,mouse(sesh_all(i))),:);
     patch([i-0.5 i+0.5 i+0.5 i-0.5],[0.5 0.5 -0.5 -0.5],col_this,'EdgeColor',col_this);
 end
+
+n_regressors = size(coeff,1); 
+regressor_rewsize = [1 + zeros(n_regressors/3,1) ; 2 + zeros(n_regressors/3,1) ; 3 + zeros(n_regressors/3,1)];
+% plot colored bars indicating reward size
+plot_col = lines(numel(uniq_mouse));
+for i = 1:size(beta_norm,1)
+    col_this = cool3(regressor_rewsize(i,:),:);
+    patch([0.5 0.5 -10 -10],[i-0.5 i+0.5 i+0.5 i-0.5],col_this,'EdgeColor',col_this);
+end
 ylim([-0.5 max(ylim)]);
+xlim([-10 max(xlim)]);
+yticks([])
+ylabel("Regressors")
 box off
 colorbar
-saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
+set(gca,'FontSize',14);
+% saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 
 %% scree plot 
 variance_threshold = 75; 
@@ -175,7 +188,7 @@ saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 hfig = figure(); % 'Position',[50 50 2000 700]);
 hfig.Name = sprintf('Proj onto top PCs %s cohort %s',opt.data_set,opt.brain_region);
 
-num_pcs = 5; 
+num_pcs = 3; 
 for iPC = 2:num_pcs
     % scatter PCs 1 and iPC, color by mouse  
     if num_pcs > 6
@@ -455,7 +468,7 @@ mean_clust_d2 = nan(numel(opt.num_pcs),numel(opt.num_clust));
 median_clust_l2 = nan(numel(opt.num_pcs),numel(opt.num_clust)); 
 mean_clust_l2 = nan(numel(opt.num_pcs),numel(opt.num_clust)); 
 gmm_opt.lambda = 1; 
-gmm_opt.replicates = 50;
+gmm_opt.replicates = 100;
 options = statset('MaxIter',1000);
 rng(3);  
 for n_num_pcs = opt.num_pcs
@@ -505,6 +518,7 @@ for i_pcs = 1:(max(opt.num_pcs)-1)
 end 
 ylim([0 10])
 legend(arrayfun(@(x) sprintf("%i PCs",x),1:max(opt.num_pcs)))
+ylabel("Argmin BIC over # Clusters")
 set(gca,'Fontsize',14) 
 xlabel("# PCs Clustered")
 
@@ -672,37 +686,63 @@ ylabel("Min AIC/BIC # Clusters")
 % Shuffle reward kernel ix together, otherwise coeffs shuffle across cells
 beta_all_sig_norm = zscore(beta_all_sig);
 [~,~,~,~,expl_unshuffled] = pca(beta_all_sig_norm');
+n_pcs_var_expl = 10; 
+b0_b1_unshuffled = [ones(1,n_pcs_var_expl) ; 1:(n_pcs_var_expl)]' \ log(expl_unshuffled(1:n_pcs_var_expl));
 n_vars = size(beta_all_sig,1); 
 n_shuffles = 1000; 
 expl_complete = nan(n_shuffles,n_vars);
 expl_kern_together = nan(n_shuffles,n_vars);
 expl_taskvar_together = nan(n_shuffles,n_vars);
+b0_b1_complete = nan(n_shuffles,2); 
+b0_b1_kern_together = nan(n_shuffles,2); 
+b0_b1_taskvar_together = nan(n_shuffles,2); 
 
 for i_shuffle = 1:n_shuffles
     [~,~,~,expl_complete(i_shuffle,:)] = shuffle_coeffs(beta_all_sig,"complete");
+    b0_b1_complete(i_shuffle,:) = [ones(1,n_pcs_var_expl) ; 1:(n_pcs_var_expl)]' \ log(expl_complete(i_shuffle,1:n_pcs_var_expl))';
     [~,~,~,expl_kern_together(i_shuffle,:)] = shuffle_coeffs(beta_all_sig,"kern_together");
+    b0_b1_kern_together(i_shuffle,:) = [ones(1,n_pcs_var_expl) ; 1:(n_pcs_var_expl)]' \ log(expl_kern_together(i_shuffle,1:n_pcs_var_expl))';
     [~,~,~,expl_taskvar_together(i_shuffle,:)] = shuffle_coeffs(beta_all_sig,"taskvar_together");
+    b0_b1_taskvar_together(i_shuffle,:) = [ones(1,n_pcs_var_expl) ; 1:(n_pcs_var_expl)]' \ log(expl_taskvar_together(i_shuffle,1:n_pcs_var_expl))';
 end
-
+%% visualize eigenspectra
+colors = lines(3); 
 % look at shuffled eigenspectrum
 figure() ;hold on 
 plot(expl_unshuffled(1:10),'linewidth',3,'color','k')
-shadedErrorBar(1:10,mean(expl_complete(:,1:10)),1.96 * std(expl_complete(:,1:10)),'lineProps',{'linewidth',2})
-shadedErrorBar(1:10,mean(expl_kern_together(:,1:10)),1.96 * std(expl_kern_together(:,1:10)),'lineProps',{'linewidth',2})
-shadedErrorBar(1:10,mean(expl_taskvar_together(:,1:10)),1.96 * std(expl_taskvar_together(:,1:10)),'lineProps',{'linewidth',2})
-ylabel("Variance Explained") 
+% shadedErrorBar(1:10,cumsum(mean(expl_complete(:,1:10))),1.96 * std(cumsum(expl_complete(:,1:10),2)),'lineProps',{'linewidth',2,'color',colors(1,:)})
+% shadedErrorBar(1:10,cumsum(mean(expl_kern_together(:,1:10))),1.96 * std(cumsum(expl_kern_together(:,1:10),2)),'lineProps',{'linewidth',2,'color',colors(2,:)})
+% shadedErrorBar(1:10,cumsum(mean(expl_taskvar_together(:,1:10))),1.96 * std(cumsum(expl_taskvar_together(:,1:10),2)),'lineProps',{'linewidth',2,'color',colors(3,:)})
+shadedErrorBar(1:10,mean(expl_complete(:,1:10)),1.96 * std(expl_complete(:,1:10)),'lineProps',{'linewidth',2,'color',colors(1,:)})
+shadedErrorBar(1:10,mean(expl_kern_together(:,1:10)),1.96 * std(expl_kern_together(:,1:10)),'lineProps',{'linewidth',2,'color',colors(2,:)})
+shadedErrorBar(1:10,mean(expl_taskvar_together(:,1:10)),1.96 * std(expl_taskvar_together(:,1:10)),'lineProps',{'linewidth',2,'color',colors(3,:)})
+ylabel("Variance Explained (%)") 
 xlabel("Principal Component") 
-legend(["Unshuffled","Shuffle All Independently","Shuffle Kernels together",sprintf("Shuffle Kernels together and \n Taskvars together acr rewsizes")])
+legend(["Unshuffled","Shuffle All Independently","Shuffle Kernels together",sprintf("Shuffle Kernels together and \n all vars together rewsizes")])
+set(gca,'fontsize',14)
+title("GLM Coefficient Matrix Eigenspectrum",'fontsize',16)
+
+%% visualize distn of expo fits
+
+figure();set(gca,'colorOrder',[colors(1,:);colors(3,:);colors(2,:)]);hold on
+violinplot([b0_b1_complete(:,2) ; b0_b1_kern_together(:,2) ; b0_b1_taskvar_together(:,2)], repelem([1,2,3],n_shuffles),'width',.25,'violinalpha',.05); 
+yline(b0_b1_unshuffled(2),'linewidth',3,'linestyle','--','color','k')
+ylim([-.2,0])
+% xticks([1,2,3])
+xticklabels(["Shuffle All Independently","Shuffle Kernels together",sprintf("Shuffle Kernels + Vars Together")])
+xtickangle(45)
+ylabel(sprintf("Eigenspectrum exponential \n regression slope"))
+set(gca,'fontsize',14)
 
 %% Visualize what shuffled data looks like
 
 beta_norm = zscore(beta_all_sig);
 % beta_norm = beta_all_sig;
 shuffle_type_names = ["Total Shuffle","Kernels together","Same acr rewsize","Unshuffled"];
-% [~,score_unshuffled] = pca(beta_norm');
-% [~,~,score_complete] = shuffle_coeffs(beta_all_sig,"complete");
-% [~,~,score_kern_together] = shuffle_coeffs(beta_all_sig,"kern_together");
-% [~,~,score_taskvar_together] = shuffle_coeffs(beta_all_sig,"taskvar_together");
+[~,score_unshuffled] = pca(beta_norm');
+[~,~,score_complete] = shuffle_coeffs(beta_all_sig,"complete");
+[~,~,score_kern_together] = shuffle_coeffs(beta_all_sig,"kern_together");
+[~,~,score_taskvar_together] = shuffle_coeffs(beta_all_sig,"taskvar_together");
 
 num_pcs = 6;  
 score_cell = {score_complete,score_kern_together,score_taskvar_together,score_unshuffled};
@@ -833,23 +873,28 @@ end
 %% Visualize comparison to shuffled distribution 
 
 % I ACTUALLY DONT THINK THIS BIC/AIC THING IS LEGAL!! ... different
-% dependent variables
+% dependent variables (so just look at l2)
 
 figure(); 
-xline(median_l2_unshuffled,'k--','linewidth',2) ;hold on; 
+yline(median_l2_unshuffled,'k--','linewidth',3) ;hold on; 
 for i_shuffle_type = 1:numel(shuffle_types)
-%     histogram(median_l2_shuffled(i_shuffle_type,:),0:.05:1) 
-%     hold on;
-    i_pdf = pdf(fitdist(median_l2_shuffled(i_shuffle_type,:)','kernel','Kernel','Normal'),0:.005:1); 
-    plot(0:.005:1,i_pdf,'linewidth',2)
+% %     histogram(median_l2_shuffled(i_shuffle_type,:),0:.05:1) 
+% %     hold on;
+%     i_pdf = pdf(fitdist(median_l2_shuffled(i_shuffle_type,:)','kernel','Kernel','Normal'),0:.005:1); 
+    disp(length(find(median_l2_shuffled(i_shuffle_type,:)' < median_l2_unshuffled)) / n_shuffles)
+%     plot(0:.005:1,i_pdf,'linewidth',2)
 end 
+set(gca,'colorOrder',[colors(1,:);colors(3,:);colors(2,:)])
+
+violinplot(median_l2_shuffled', repelem([1,2,3],n_shuffles),'width',.2,'violinalpha',.5); 
+
 title(sprintf("Median Intracluster Euclidean Distance (Normalized) \n 3 PCs, 5 Clusters"))
-xlabel("Median Intracluster Euclidean Distance (Normalized)")
-legend(["Unshuffled","Shuffle All Independently","Shuffle Kernels together",... 
-        sprintf("Shuffle Kernels together and \n Taskvars together acr rewsizes")])
+ylabel("Median Intracluster Euclidean Distance (Normalized)")
+xticklabels(["Shuffle All Independently","Shuffle Kernels together",... 
+        sprintf("Vars together acr rewsizes")])
 % legend(["Unshuffled","Shuffle Kernels together",... 
 %         sprintf("Shuffle Kernels together and \n Taskvars together acr rewsizes")])    
-set(gca,'FontSize',14) 
+set(gca,'FontSize',15) 
 
 %% Align GMM clusters by mean param
 % First just look at effect of # replicates on consistency of clustering,
@@ -1049,13 +1094,13 @@ opt.num_pcs = 3;
 gmm_opt.lambda = 1; 
 gmm_opt.replicates = 100; 
 options = statset('MaxIter',1000);
+rng(3);
+% plot_col = [68 119 170; 238 102 119; 34 136 51; 204 187 68; 102 204 238]/255;
 
 % fit model
 GMM = fitgmdist(score(:,1:opt.num_pcs),opt.num_clust,'RegularizationValue',gmm_opt.lambda,...
                                                      'replicates',gmm_opt.replicates,'options',options);
 gmm_idx = cluster(GMM,score(:,1:opt.num_pcs)); 
-
-
 
 % PC1-sorted alignment
 % [~,pc1_order] = sort(GMM.mu(:,1));
@@ -1069,11 +1114,11 @@ end
 % num_vis_pcs = 5; 
 %% cluster_gscatter(num_vis_pcs,score,final_gmm_labels,opt.num_clust)
 % colors = cbrewer('qual','Set1',5);  % winter(opt.num_clust); 
-colors = lines(5); 
+gmm_colors = [68 119 170; 238 102 119; 34 136 51; 204 187 68; 102 204 238]/255;
 h = figure();
 for i_clust = 1:opt.num_clust 
     hold on
-    scatter3(score(final_gmm_labels == i_clust,1),score(final_gmm_labels == i_clust,2),score(final_gmm_labels == i_clust,3),150,colors(i_clust,:),'.');
+    scatter3(score(final_gmm_labels == i_clust,1),score(final_gmm_labels == i_clust,2),score(final_gmm_labels == i_clust,3),150,gmm_colors(i_clust,:),'.');
 end  
 legend(arrayfun(@(x) sprintf("Cluster %i",x),1:max(opt.num_clust)))
 grid() 
@@ -1083,7 +1128,8 @@ zlabel("PC3")
 view(35,35) 
 set(gca,'FontSize',14); 
 
-colors = cbrewer('qual','Set1',5);
+% colors = cbrewer('qual','Set1',5);
+colors = lines(5); 
 h = figure(); hold on
 for i_mouse = 1:numel(uniq_mouse) 
     this_mouse = cellfun(@str2double, mouse(sesh_all)) == str2double(uniq_mouse{i_mouse});
@@ -1091,7 +1137,7 @@ for i_mouse = 1:numel(uniq_mouse)
 end
 legend(arrayfun(@(x) sprintf("m%s",uniq_mouse{x}),1:numel(uniq_mouse)))
 grid() 
-xlabel("PC1")
+xlabel("PC1") 
 ylabel("PC2")
 zlabel("PC3")
 view(35,35) 
@@ -1103,6 +1149,41 @@ for i_mouse = 1:numel(uniq_mouse)
     subplot(1,opt.num_clust,i_mouse)
     histogram(final_gmm_labels(mouse_vec == str2double(uniq_mouse{i_mouse})))
 end
+
+%% Visualize clustered matrix 
+[sorted_clusters,cluster_sort] = sort(final_gmm_labels);
+beta_norm_sorted = beta_norm(:,cluster_sort);
+hfig = figure('Position',[50 50 1300 800]);
+cool3 = cool(3); 
+% hfig.Name = sprintf('Normalized beta matrix significant cells %s cohort %s',opt.data_set,opt.brain_region);
+imagesc(beta_norm_sorted);
+yticks(1:numel(var_name));
+yticklabels(var_name);
+set(gca,'TickLabelInterpreter','none');
+xlabel('Cells')
+title(sprintf('%d %s cells from %d sessions in %d mice',size(beta_norm,2),opt.brain_region,numel(session_all),numel(uniq_mouse)));
+
+% plot colored bars indicating mouse
+for i = 1:size(beta_norm,2)
+    col_this = gmm_colors(sorted_clusters(i),:);
+    patch([i-0.5 i+0.5 i+0.5 i-0.5],[0.5 0.5 -0.5 -0.5],col_this,'EdgeColor',col_this);
+end
+
+n_regressors = size(coeff,1); 
+regressor_rewsize = [1 + zeros(n_regressors/3,1) ; 2 + zeros(n_regressors/3,1) ; 3 + zeros(n_regressors/3,1)];
+% plot colored bars indicating reward size
+plot_col = lines(numel(uniq_mouse));
+for i = 1:size(beta_norm,1)
+    col_this = cool3(regressor_rewsize(i,:),:);
+    patch([0.5 0.5 -10 -10],[i-0.5 i+0.5 i+0.5 i-0.5],col_this,'EdgeColor',col_this);
+end
+ylim([-0.5 max(ylim)]);
+xlim([-10 max(xlim)]);
+yticks([])
+ylabel("Regressors")
+box off
+colorbar
+set(gca,'FontSize',14);
 
 %% plot coefficients for clusters
 % vis_cluster_mean_beta(opt,beta_norm,var_name,final_gmm_labels)  
@@ -1172,26 +1253,31 @@ for i_cluster = 1:opt.num_clust
 %     plot(t_basis_rew,mean_rewResp_1uL(i_cluster,:),'color',cool3(1,:),'linewidth',1.5)
 %     plot(t_basis_rew,mean_rewResp_2uL(i_cluster,:),'color',cool3(2,:),'linewidth',1.5)
 %     plot(t_basis_rew,mean_rewResp_4uL(i_cluster,:),'color',cool3(3,:),'linewidth',1.5)
-    shadedErrorBar(t_basis_rew,mean_rewResp_1uL(i_cluster,:),sem_rewResp_1uL(i_cluster,:),'lineProps',{'color',cool3(1,:)})
-    shadedErrorBar(t_basis_rew,mean_rewResp_2uL(i_cluster,:),sem_rewResp_2uL(i_cluster,:),'lineProps',{'color',cool3(2,:)})
-    shadedErrorBar(t_basis_rew,mean_rewResp_4uL(i_cluster,:),sem_rewResp_4uL(i_cluster,:),'lineProps',{'color',cool3(3,:)})
+    shadedErrorBar(t_basis_rew,mean_rewResp_1uL(i_cluster,:),sem_rewResp_1uL(i_cluster,:),'lineProps',{'linewidth',2,'color',cool3(1,:)})
+    shadedErrorBar(t_basis_rew,mean_rewResp_2uL(i_cluster,:),sem_rewResp_2uL(i_cluster,:),'lineProps',{'linewidth',2,'color',cool3(2,:)})
+    shadedErrorBar(t_basis_rew,mean_rewResp_4uL(i_cluster,:),sem_rewResp_4uL(i_cluster,:),'lineProps',{'linewidth',2,'color',cool3(3,:)})
     clust_ylim = max(abs(mean_rewResp_4uL(i_cluster,:)+sem_rewResp_4uL(i_cluster,:)))+ 2 * max(abs(sem_rewResp_4uL(i_cluster,:))); 
     yline(0,'k--','linewidth',1.5)
 %     ylim([-clust_ylim clust_ylim]) 
     ylim([-.05,.1])
     title(sprintf("Cluster %i",i_cluster)) 
     ylabel("Convolved Reward Response")
+    legend("1 μL Trained","2 μL Trained","4 μL Trained","Perfect Decoding")
     set(gca,'FontSize',14)
+    
+    [~,max_rew_resp_ix] = max(abs(mean_rewResp_4uL(i_cluster,:)));
+    mean_max_rew_resp = [mean_rewResp_1uL(i_cluster,max_rew_resp_ix) mean_rewResp_2uL(i_cluster,max_rew_resp_ix) mean_rewResp_4uL(i_cluster,max_rew_resp_ix)];
+    sem_max_rew_resp = [sem_rewResp_1uL(i_cluster,max_rew_resp_ix) sem_rewResp_2uL(i_cluster,max_rew_resp_ix) sem_rewResp_4uL(i_cluster,max_rew_resp_ix)];
     
     subplot(2,opt.num_clust,opt.num_clust+i_cluster); 
     colororder(cool3);hold on
-    cluster_means = [mean_timesince(i_cluster,:) ; mean_timepatch(i_cluster,:) ; mean_totalrew(i_cluster,:)];
-    cluster_sems = [sem_timesince(i_cluster,:) ; sem_timepatch(i_cluster,:) ; sem_totalrew(i_cluster,:)];
+    cluster_means = [mean_timesince(i_cluster,:) ; mean_timepatch(i_cluster,:) ; mean_totalrew(i_cluster,:) ; mean_max_rew_resp];
+    cluster_sems = [sem_timesince(i_cluster,:) ; sem_timepatch(i_cluster,:) ; sem_totalrew(i_cluster,:) ; sem_max_rew_resp];
     b = bar(cluster_means);
     x = [b(1).XEndPoints b(2).XEndPoints b(3).XEndPoints];
     errorbar(x,cluster_means(:),cluster_sems(:),'k.')
-    xticks(1:3)
-    xticklabels(["Time Since Rew","Time on Patch","Total Rew"])
+    xticks(1:4)
+    xticklabels(["Time Since Rew","Time on Patch","Total Rew","Max Reward Response"])
     xtickangle(45)
     ylabel("Mean Coefficient")
     set(gca,'FontSize',14) 
@@ -1210,7 +1296,7 @@ end
 figure()
 % colororder(lines(opt.num_clust))
 p = pie(histcounts(final_gmm_labels));
-colormap(lines(opt.num_clust)) 
+colormap(gmm_colors) 
 for k = 2:2:(2*opt.num_clust )
     set(p(k),'FontSize',14)
 end
@@ -1273,3 +1359,26 @@ opt.data_set = 'mb';
 save(fullfile(paths.results_save,sprintf('sig_cells_table_gmm_%s_cohort_%s.mat',opt.data_set,opt.brain_region)),'sig_cells');
 
 
+%% Testing w/ malcolm's code 
+X = score(:,1:3);
+rng(3); % for reproducibility
+gmm_opt = statset; % GMM options
+gmm_opt.Display = 'off';
+gmm_opt.MaxIter = 1000;
+gmm_opt.Lambda = 1;
+gmm_opt.Replicates = 100;
+gmm_opt.TolFun = 1e-6;
+gm = fitgmdist(X,opt.num_clust,'RegularizationValue',gmm_opt.Lambda,'Replicates',gmm_opt.Replicates,'Options',gmm_opt); % fit GM model
+clust_gmm = cluster(gm,X); % hard clustering
+
+% order clusters by size
+clust_count = crosstab(clust_gmm);
+[~,sort_idx] = sort(clust_count,'descend');
+clust_reorder = nan(size(clust_gmm));
+for i = 1:opt.num_clust
+    clust_reorder(clust_gmm==sort_idx(i))=i;
+end
+clust_gmm = clust_reorder;
+
+crosstab(clust_gmm,clust_orig)
+crosstab(final_gmm_labels,clust_orig)

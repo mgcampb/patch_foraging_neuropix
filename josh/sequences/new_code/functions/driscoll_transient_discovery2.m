@@ -1,4 +1,4 @@
-function [transients_struct,unshuffled_peths,pvalue_peths] = driscoll_transient_discovery2(fr_mat_trials,task_vars_trialed,trial_selection,tbin_ms,var_bins,opt)
+function [transients_struct,unshuffled_peths,pvalue_peths,i_shufflePETH] = driscoll_transient_discovery2(fr_mat_trials,task_vars_trialed,trial_selection,tbin_ms,var_bins,opt)
 % DRISCOLL_TRANSIENT_DISCOVERY2 
 % Electric boogaloo. 
 % Updated taskvar transient discovery within new framework that allows cue
@@ -130,6 +130,7 @@ function [transients_struct,unshuffled_peths,pvalue_peths] = driscoll_transient_
         C_greater = conv2(significant_peaks,ones(1,consec_peak_width),'same');
         % find peak indices
         peak_ix_pos = nan(nNeurons,1);
+        peak_ix_pos_sigOrNot = nan(nNeurons,1);
         doublepeak_pos = false(nNeurons,1);
         for neuron = 1:nNeurons
             neuron_sig_ix = find(C_greater(neuron,:) >= consec_peak_width); % find where we had significant peak in a row
@@ -141,7 +142,10 @@ function [transients_struct,unshuffled_peths,pvalue_peths] = driscoll_transient_
             if ~isempty(neuron_peak_ix)
                 peak_ix_pos(neuron) = neuron_sig_ix(neuron_peak_ix);
             end
+            [~,neuron_peak_ix_sigOrNot] = max(unshuffled_peth(neuron,:));
+            peak_ix_pos_sigOrNot(neuron) = neuron_peak_ix_sigOrNot; 
         end
+        transients_struct(counter).peak_ix_pos_sigOrNot = peak_ix_pos_sigOrNot;
 
         % log information
         bin_tbin = diff(var_bins{iVar}(1:2)); % convert bins to seconds
@@ -164,6 +168,7 @@ function [transients_struct,unshuffled_peths,pvalue_peths] = driscoll_transient_
         C_lesser = conv2(significant_peaks,ones(1,consec_peak_width),'same');
         % find peak indices
         peak_ix_neg = nan(nNeurons,1);
+        peak_ix_neg_sigOrNot = nan(nNeurons,1);
         doublepeak_neg = false(nNeurons,1);
         for neuron = 1:nNeurons
             neuron_sig_ix = find(C_lesser(neuron,:) >= consec_peak_width); % find where we had significant peak in a row
@@ -175,7 +180,10 @@ function [transients_struct,unshuffled_peths,pvalue_peths] = driscoll_transient_
             if ~isempty(neuron_peak_ix)
                 peak_ix_neg(neuron) = neuron_sig_ix(neuron_peak_ix);
             end
+            [~,neuron_peak_ix_sigOrNot] = min(unshuffled_peth(neuron,:));
+            peak_ix_neg_sigOrNot(neuron) = neuron_peak_ix_sigOrNot;
         end
+        transients_struct(counter).peak_ix_neg_sigOrNot = peak_ix_neg_sigOrNot;
 
         % log information
         transients_struct(counter).peak_ix_neg = peak_ix_neg * bin_tbin; 

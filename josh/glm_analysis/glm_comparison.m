@@ -2,6 +2,8 @@
 %  Esp interested in diversity of time since reward kernels
 %  Relation of GLM results to transients selection 
 
+%  Note that this turns into figure 9
+
 %% GLM and transient selection path 
 
 paths = struct;
@@ -481,68 +483,177 @@ end
 % 2) Differences in timing of reward response?
 rew1plus_peak = transients_table.Rew1plus_peak_pos;
 rew1plus_trough = transients_table.Rew1plus_peak_neg;
+gmm_colors = [68 119 170; 238 102 119; 34 136 51; 204 187 68; 102 204 238]/255;
 peak_binary = [0 1 0 1]; % look at peak or trough
-figure();hold on 
-lines4 = lines(4); 
-p = []; 
-for i_cluster = 1:3
-    kernel_coeffs = beta_sig_cells_cat(sig_cells.GMM_cluster == i_cluster,rew_kernel_bool{3}); 
-    if peak_binary(i_cluster) == true
-        rew_resp_ix_cluster = rew1plus_peak(transients_table.gmm_cluster == i_cluster);
-%         [~,rew_resp_ix_cluster] =  max(kernel_coeffs,[],2); 
-    else
-        rew_resp_ix_cluster = rew1plus_trough(transients_table.gmm_cluster == i_cluster);
-%         [~,rew_resp_ix_cluster] =  min(kernel_coeffs,[],2); 
-    end
-%     histogram(rew_resp_ix_cluster) % ,0:.1:2)
-    %     disp(nanmean(rew_resp_ix_cluster)) (rew_resp_ix_cluster >= .2)
-    if i_cluster == 2
-        i_pdf = pdf(fitdist(rew_resp_ix_cluster(rew_resp_ix_cluster >= .2),'kernel','Kernel','Normal'), (0:.01:2));
-        plot((0:.01:2),i_pdf,'color',lines4(i_cluster,:),'linewidth',2,'linestyle',':');
-        xline(mean(fitdist(rew_resp_ix_cluster(rew_resp_ix_cluster >= .2),'kernel','Kernel','Normal')),'linewidth',2,'color',lines4(i_cluster,:),'linestyle',':');
-    end
-    
-    i_pdf = pdf(fitdist(rew_resp_ix_cluster,'kernel','Kernel','Normal'), (0:.01:2)); 
-    p(i_cluster) = plot((0:.01:2),i_pdf,'color',lines4(i_cluster,:),'linewidth',2,'linestyle','-');
-    xline(mean(fitdist(rew_resp_ix_cluster,'kernel','Kernel','Normal')),'linewidth',2,'color',lines4(i_cluster,:),'linestyle','-');
 
+if ~ismember('numeric_waveform_type',transients_table.Properties.VariableNames)
+    % load waveform stuff if we don't have it 
+    paths.waveform_clusters = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/waveform_cluster.mat';
+    paths.waveforms = '/Users/joshstern/Documents/UchidaLab_NeuralData/processed_neuropix_data/waveforms';
+    load(paths.waveform_clusters) 
+    waveforms = []; 
+    session_all = unique(sig_cells.Session);
+    for sIdx = 1:numel(session_all) 
+        dat = load(fullfile(paths.waveforms,session_all{sIdx}));   
+        waveforms = [waveforms ; dat.mean_waveform]; 
+    end 
+    %  Across all cells, not just sig cells
+    waveform_types = ["Narrow","Regular","TriPhasic"]; 
+    numeric_waveform_types = nan(size(waveform_cluster.WaveformType,1),1);
+    for i_waveform_type = 1:numel(waveform_types)
+        this_waveform_type = waveform_types(i_waveform_type);  
+        this_waveform_type = this_waveform_type{:}; 
+        these_cells = cellfun(@(x) strcmp(this_waveform_type,x),waveform_cluster.WaveformType);  
+        numeric_waveform_types(these_cells) = i_waveform_type;
+    end
+    transients_table.numeric_waveform_types = numeric_waveform_types;
+end
+
+figure();hold on 
+% lines4 = lines(4); 
+p = []; 
+H = [];
+peak_distns = cell(5,1); 
+counter = 1;
+for i_cluster = 1:4
+%     kernel_coeffs = beta_sig_cells_cat(sig_cells.GMM_cluster == i_cluster,rew_kernel_bool{3}); 
+    if i_cluster ~= 2
+        if peak_binary(i_cluster) == true
+            rew_resp_ix_cluster = rew1plus_peak(transients_table.gmm_cluster == i_cluster);
+    %         [~,rew_resp_ix_cluster] =  max(kernel_coeffs,[],2); 
+        else
+            rew_resp_ix_cluster = rew1plus_trough(transients_table.gmm_cluster == i_cluster);
+    %         [~,rew_resp_ix_cluster] =  min(kernel_coeffs,[],2); 
+        end
+    %     histogram(rew_resp_ix_cluster) % ,0:.1:2)
+        %     disp(nanmean(rew_resp_ix_cluster)) (rew_resp_ix_cluster >= .2)
+    %     if i_cluster == 2
+    %         i_pdf = pdf(fitdist(rew_resp_ix_cluster(rew_resp_ix_cluster >= .2),'kernel','Kernel','Normal'), (0:.01:2));
+    %         plot((0:.01:2),i_pdf,'color',lines4(i_cluster,:),'linewidth',2,'linestyle',':');
+    %         xline(mean(fitdist(rew_resp_ix_cluster(rew_resp_ix_cluster >= .2),'kernel','Kernel','Normal')),'linewidth',2,'color',lines4(i_cluster,:),'linestyle',':');
+    %     end
+
+        i_pdf = pdf(fitdist(rew_resp_ix_cluster,'kernel','Kernel','Normal'), (0:.01:2)); 
+        p(i_cluster) = plot((0:.01:2),i_pdf,'color',gmm_colors(i_cluster,:),'linewidth',2,'linestyle','-');
+%         h = histogram(rew_resp_ix_cluster,(0:.05:2),'normalization','pdf'); 
+%         h.FaceColor = gmm_colors(i_cluster,:); 
+%         h.FaceAlpha = .2;
+       
+%         xline(mean(fitdist(rew_resp_ix_cluster,'kernel','Kernel','Normal')),'linewidth',2,'color',gmm_colors(i_cluster,:),'linestyle','-');
+        H = [H calc_shannonH(rew_resp_ix_cluster,0:.2:2)];
+        peak_distns{counter} = rew_resp_ix_cluster; 
+        counter = counter + 1; 
+    elseif i_cluster == 2
+        rew_resp_ix_cluster_ns = rew1plus_peak(transients_table.gmm_cluster == i_cluster & transients_table.numeric_waveform_types == 1);
+        rew_resp_ix_cluster_rs = rew1plus_peak(transients_table.gmm_cluster == i_cluster & transients_table.numeric_waveform_types == 2);
+        
+        i_pdf = pdf(fitdist(rew_resp_ix_cluster_ns,'kernel','Kernel','Normal'), (0:.01:2)); 
+        p(2) = plot((0:.01:2),i_pdf,'color',gmm_colors(i_cluster,:),'linewidth',2,'linestyle',':');
+%         h = histogram(rew_resp_ix_cluster_ns,(0:.05:2),'normalization','pdf'); 
+%         h.FaceColor = gmm_colors(i_cluster,:); 
+%         h.LineStyle = ':'; 
+        i_pdf = pdf(fitdist(rew_resp_ix_cluster_rs,'kernel','Kernel','Normal'), (0:.01:2)); 
+        p(4) = plot((0:.01:2),i_pdf,'color',gmm_colors(i_cluster,:),'linewidth',2,'linestyle','--');
+%         h = histogram(rew_resp_ix_cluster_rs,(0:.05:2),'normalization','pdf'); 
+%         h.FaceColor = gmm_colors(i_cluster,:); 
+%         h.LineStyle = '--'; 
+        H = [H calc_shannonH(rew_resp_ix_cluster_ns,0:.2:2)];
+        H = [H calc_shannonH(rew_resp_ix_cluster_rs,0:.2:2)];
+        peak_distns{counter} = rew_resp_ix_cluster_ns; 
+        peak_distns{counter + 1} = rew_resp_ix_cluster_rs; 
+        counter = counter + 2;
+    end
     ylabel("Distribution of Peak/Trough Time") 
     xlabel("Peak/Trough Time")
-end 
-legend(p,"Cluster 1 Trough","Cluster 2 Peak","Cluster 3 Trough","Cluster 4 Peak") 
-set(gca,'FontSize',13)
+    
+    
+end
+legend(p,sprintf("Cluster 1 Trough; H = %.3f",H(1)),sprintf("Cluster 2 NS Peak; H = %.3f",H(2)),sprintf("Cluster 3 Trough; H = %.3f",H(4)),...
+sprintf("Cluster 2 WS Peak; H = %.3f",H(3)),'fontsize',16) 
+set(gca,'FontSize',14)
 
-%% 1v.ecdfs
+%% 1v.5.1) Bootstrap entropy estimate to get p-value 
+n_bootstrap_resamples = 1000; 
+bootstrap_resample_size = round(min(cellfun(@length,peak_distns))); 
+
+H = nan(n_bootstrap_resamples,5); 
+for i_distn = 1:numel(peak_distns)
+    this_distn = peak_distns{i_distn}; 
+    for k_resample = 1:n_bootstrap_resamples 
+        this_resample = datasample(this_distn,bootstrap_resample_size,'Replace',false); 
+        H(k_resample,i_distn) = calc_shannonH(this_resample,0:.2:2); 
+    end
+end
+
+p = nan(numel(peak_distns),numel(peak_distns)); 
+for i_distn1 = 1:numel(peak_distns)
+    for i_distn2 = 1:numel(peak_distns) 
+        p(i_distn1,i_distn2) = length(find(H(:,i_distn1) < H(:,i_distn2))) / n_bootstrap_resamples; 
+    end
+end
+
+% now visualize bootstrap results
+b = bar(nanmean(H,1)','LineWidth',1.5);hold on
+b.FaceColor = 'Flat'; 
+b.CData(1,:) = gmm_colors(1,:); 
+b.CData(2,:) = gmm_colors(2,:); 
+b.CData(3,:) = gmm_colors(2,:); 
+b.CData(4,:) = gmm_colors(3,:); 
+b.CData(5,:) = gmm_colors(4,:); 
+errorbar(1:5,nanmean(H,1),nanstd(H,1),'.k','linewidth',1.5)
+fig = gca; 
+xticklabels({"Cluster 1","Cluster 2 NS","Cluster 2 WS","Cluster 3","Cluster 4"})
+ylabel(sprintf("Shannon Entropy of\n Peak/Trough Time"))
+ylim([0 3])
+set(fig,'fontsize',14)
+p
+
+%% 1v.ecdfs; test for significance
 rew1plus_peak = transients_table.Rew1plus_peak_pos;
 rew1plus_trough = transients_table.Rew1plus_peak_neg;
 peak_binary = [0 1 0 1]; % look at peak or trough
 figure();hold on 
 lines4 = lines(4); 
-p = []; 
+rew_resp_ix = cell(4,1); 
+counter = 1; 
 for i_cluster = 1:3
-    kernel_coeffs = beta_sig_cells_cat(sig_cells.GMM_cluster == i_cluster,rew_kernel_bool{3}); 
-    if peak_binary(i_cluster) == true
-        rew_resp_ix_cluster = rew1plus_peak(transients_table.gmm_cluster == i_cluster);
-%         [~,rew_resp_ix_cluster] =  max(kernel_coeffs,[],2); 
-    else
-        rew_resp_ix_cluster = rew1plus_trough(transients_table.gmm_cluster == i_cluster);
-%         [~,rew_resp_ix_cluster] =  min(kernel_coeffs,[],2); 
+    if i_cluster ~= 2
+        if peak_binary(i_cluster) == true
+            rew_resp_ix_cluster = rew1plus_peak(transients_table.gmm_cluster == i_cluster);
+        else
+            rew_resp_ix_cluster = rew1plus_trough(transients_table.gmm_cluster == i_cluster);
+        end
+        [f,x,~,fup] = ecdf(rew_resp_ix_cluster);  
+        shadedErrorBar(x,f,fup - f,'lineProps',{'color',gmm_colors(i_cluster,:),'linewidth',2,'linestyle','-'}) 
+        rew_resp_ix{counter} = rew_resp_ix_cluster; 
+        counter = counter + 1; 
+    else 
+        rew_resp_ix_cluster_ns = rew1plus_peak(transients_table.gmm_cluster == i_cluster & transients_table.numeric_waveform_types == 1);
+        rew_resp_ix_cluster_rs = rew1plus_peak(transients_table.gmm_cluster == i_cluster & transients_table.numeric_waveform_types == 2);
+        
+        [f,x,~,fup] = ecdf(rew_resp_ix_cluster_ns);
+        shadedErrorBar(x,f,fup - f,'lineProps',{'color',gmm_colors(i_cluster,:),'linewidth',2,'linestyle',':'})
+        [f,x,~,fup] = ecdf(rew_resp_ix_cluster_rs);
+        shadedErrorBar(x,f,fup - f,'lineProps',{'color',gmm_colors(i_cluster,:),'linewidth',2,'linestyle','--'})
+        rew_resp_ix{counter} = rew_resp_ix_cluster_ns; 
+        rew_resp_ix{counter + 1} = rew_resp_ix_cluster_rs; 
+        counter = counter + 2; 
     end
-%     histogram(rew_resp_ix_cluster) % ,0:.1:2)
-%     disp(nanmean(rew_resp_ix_cluster)) (rew_resp_ix_cluster >= .2) 
-    [f,x,flo,fup] = ecdf(rew_resp_ix_cluster);  
-    shadedErrorBar(x,f,fup - f,'lineProps',{'linewidth',2,'color',lines4(i_cluster,:)}) 
-%     plot(x,flo,'linewidth',.5,'color',lines4(i_cluster,:)) 
-%     plot(x,fup,'linewidth',.5,'color',lines4(i_cluster,:)) 
-%     i_pdf = pdf(fitdist(rew_resp_ix_cluster,'kernel','Kernel','Normal'), (0:.01:2)); 
-%     p(i_cluster) = plot((0:.01:2),i_pdf,'linewidth',2);
-%     xline(mean(fitdist(rew_resp_ix_cluster,'kernel','Kernel','Normal')),'linewidth',2,'color',lines4(i_cluster,:));
-    ylabel("ECDF of Peak/Trough Time") 
-    xlabel("Peak/Trough Time") 
-    ylim([0 1])
-end 
-legend(p,"Cluster 1 Trough","Cluster 2 Peak","Cluster 3 Trough","Cluster 4 Peak") 
+end
+
+legend("Cluster 1 Trough","Cluster 2 NS Peak","Cluster 2 WS Peak","Cluster 3 Trough",'fontsize',16)
+ylabel("ECDF of Peak/Trough Time")
+xlabel("Peak/Trough Time")
+ylim([0 1])
 set(gca,'FontSize',13)
+
+
+[h,p] = kstest2(rew_resp_ix_cluster_ns,rew_resp_ix_cluster_rs); % use this to get significance!
+
+%% Bootstrap to test for significance of entropy differences 
+
+
+
 
 %% 1nah) Relationship between peak sort and time on patch encoding?   
 

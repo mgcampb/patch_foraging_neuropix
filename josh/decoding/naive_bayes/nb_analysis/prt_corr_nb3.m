@@ -131,10 +131,10 @@ clear y_hat % we now have this in an easier form to work with
 %% 1) Decoded time vs PRT on RXNil trials
 var_bins = nb_results.var_bins; 
 smoothing_sigma = 1; 
-trialtypes = [11 22 44]; % RXNil trialtypes to look at 
+trialtypes = [40]; % RXNil trialtypes to look at 
 var_dt = diff(nb_results.var_bins{1}{1}{1}(1:2));
 analyze_ix = round([3000 3000 5000 3000 3000] / tbin_ms); 
-vis_features = [1 2 3 5]; 
+vis_features = [5]; 
 
 r_prt = cell(numel(analysis_mice),1);
 p_prt = cell(numel(analysis_mice),1);
@@ -149,7 +149,7 @@ cell_threshold = true;
 % close all
 for i_feature = 1:numel(vis_features)
     iFeature = vis_features(i_feature); 
-    figure();hold on
+%     figure();hold on
     for m_ix = 1:numel(analysis_mice)
         mIdx = analysis_mice(m_ix); 
         % load RXNil for pooled sessions 
@@ -160,7 +160,7 @@ for i_feature = 1:numel(vis_features)
             mouse_prts = prts{mIdx}(mouse_include_sessions); 
             mouse_prts = cat(1,mouse_prts{:}); 
             % gather decoded time variable from i_feature
-            mouse_timePatch = cellfun(@(x) x{iFeature}, timeSince_hat{mIdx}(mouse_include_sessions),'un',0);
+            mouse_timePatch = cellfun(@(x) x{iFeature}, timePatch_hat{mIdx}(mouse_include_sessions),'un',0);
             mouse_timePatch = cat(1,mouse_timePatch{:});
         else
             mouse_RXNil = cat(1,RXNil{mIdx}{:});
@@ -213,7 +213,7 @@ for i_feature = 1:numel(vis_features)
                         if length(find(tercile_bin == i_tercile)) > 1
                             tt_tercile_mean = nanmean(time_on_patch_tt(tercile_bin == i_tercile,:));
                             tt_tercile_sem = nanstd(time_on_patch_tt(tercile_bin == i_tercile,:)) / sqrt(length(find(tercile_bin == i_tercile)));
-                            shadedErrorBar((1:analyze_ix(mIdx))*tbin_ms/1000,tt_tercile_mean,tt_tercile_sem,'lineProps',{'color',rdbu3(i_tercile,:)})
+%                             shadedErrorBar((1:analyze_ix(mIdx))*tbin_ms/1000,tt_tercile_mean,tt_tercile_sem,'lineProps',{'color',rdbu3(i_tercile,:)})
                         end
                     end
 
@@ -251,9 +251,11 @@ end
 %   show across features
 cell_threshold = true; 
 pool_analyze_ix = round(3000/tbin_ms); 
-vis_features = [1 2 3 5 6];
-trialtypes = [11 22 44];
+vis_features = [5];
+trialtypes = [10 11 20 22 40 44];
 % close all
+p_prt = cell(length(vis_features),1);
+p_prt_direct = cell(length(vis_features),1);
 figure();hold on 
 for i_feature = 1:numel(vis_features)
     iFeature = vis_features(i_feature); 
@@ -287,7 +289,8 @@ for i_feature = 1:numel(vis_features)
             xMouse_timePatch{m_ix} = mouse_timePatch; 
             xMouse_RXNil{m_ix} = mouse_RXNil; 
             xMouse_prts{m_ix} = mouse_prts; 
-        end
+        end 
+%         disp([mean(mouse_prts(mouse_RXNil == 10)) mean(mouse_prts(mouse_RXNil == 20)) mean(mouse_prts(mouse_RXNil == 40))])
     end
     % concatenate across mice
     xMouse_timePatch_full = cat(1,xMouse_timePatch{:}); 
@@ -316,7 +319,9 @@ for i_feature = 1:numel(vis_features)
 %                 [r,p] = corrcoef(i_time_decoding(~isnan(i_time_decoding)),prts_tt(~isnan(i_time_decoding)));
 %                 r_prt{m_ix}{i_feature}(i_tt,i_time) = r(2);
 %                 p_prt{m_ix}{i_feature}(i_tt,i_time) = p(2);
-                p_prt{m_ix}{i_feature}(i_tt,i_time) = kruskalwallis(i_time_decoding(~isnan(i_time_decoding)),tercile_bin(~isnan(i_time_decoding)),'off'); 
+                p_prt{i_feature}(i_tt,i_time) = kruskalwallis(i_time_decoding(~isnan(i_time_decoding)),tercile_bin(~isnan(i_time_decoding)),'off'); 
+                [r,p] = corrcoef(i_time_decoding(~isnan(i_time_decoding)),prts_tt(~isnan(i_time_decoding)));
+                p_prt_direct{i_feature}(i_tt,i_time) = p(2); 
             end
         end
         
@@ -325,15 +330,15 @@ for i_feature = 1:numel(vis_features)
         % terciles visualization
         for i_tercile = 1:max(tercile_bin)
             if length(find(tercile_bin == i_tercile)) > 1
-                tt_tercile_mean = nanmean(time_on_patch_tt(tercile_bin == i_tercile,:));
+                tt_tercile_mean = nanmedian(time_on_patch_tt(tercile_bin == i_tercile,:));
                 tt_tercile_sem = nanstd(time_on_patch_tt(tercile_bin == i_tercile,:)) / sqrt(length(find(tercile_bin == i_tercile)));
-                shadedErrorBar((1:pool_analyze_ix)*tbin_ms/1000,tt_tercile_mean,tt_tercile_sem,'lineProps',{'color',rdbu3(i_tercile,:)})
+                shadedErrorBar((1:pool_analyze_ix)*tbin_ms/1000,tt_tercile_mean,tt_tercile_sem,'lineProps',{'color',rdbu3(i_tercile,:),'linewidth',1.5})
             end
         end
         
         star_yloc = max(var_bins{mIdx}{this_rewsize}{1})+.55;
         for i_time = 1:max(var_bins{mIdx}{this_rewsize}{1})*1000/tbin_ms
-            if p_prt{m_ix}{i_feature}(i_tt,i_time) < .05
+            if p_prt{i_feature}(i_tt,i_time) < .05
                 % text(i_time*tbin_ms/1000,max(var_bins{mIdx}{this_rewsize}{1})+.05,'*','HorizontalAlignment','center')
                 plot([i_time i_time+1]*tbin_ms/1000,[star_yloc star_yloc],'k-','linewidth',2)
             end
@@ -348,6 +353,7 @@ for i_feature = 1:numel(vis_features)
         
         if i_tt == 1
             title(feature_names(iFeature))
+            legend(["Short PRT","Middle PRT","Long PRT"])
         end
         if i_tt == numel(trialtypes)
             xlabel("True Time (sec)");
@@ -359,11 +365,12 @@ for i_feature = 1:numel(vis_features)
 end
     
 %% 2) Decoded time since rew vs PRT after last rew 
+analyze_ix = round([3000 3000 5000 3000 3000] / tbin_ms); 
 
 trialtypes = [10 20 40];
 smoothing_sigma = 1; 
 vis_rewsizes = [1 2 4];
-vis_features = [1 2 3]; 
+vis_features = [1 2 5]; 
 
 r_prt = cell(numel(analysis_mice),1);
 p_prt = cell(numel(analysis_mice),1);
@@ -393,7 +400,7 @@ for i_feature = 1:numel(vis_features)
             mouse_postRew_prts = cat(1,mouse_postRew_prts{:}); 
             nTrials = length(mouse_postRew_prts);
             % gather decoded time variable from i_feature
-            mouse_timeSince = cellfun(@(x) x{iFeature}, timeSince_hat{mIdx}(mouse_include_sessions),'un',0);
+            mouse_timeSince = cellfun(@(x) x{iFeature}, timeUntil_hat{mIdx}(mouse_include_sessions),'un',0);
             mouse_timeSince = cat(1,mouse_timeSince{:});
         else
             % load last reward ix for pooled sessions
@@ -431,8 +438,8 @@ for i_feature = 1:numel(vis_features)
                     if length(find(~isnan(i_time_decoding))) > 1
                         [r,p] = corrcoef(i_time_decoding(~isnan(i_time_decoding)),prts_these_trials(~isnan(i_time_decoding)));
                         
-                        r_prt{m_ix}{i_feature}(i_tt,i_time) = r(2);
-                        p_prt{m_ix}{i_feature}(i_tt,i_time) = p(2);
+                        r_prt{m_ix}{i_feature}(i_rewsize,i_time) = r(2);
+                        p_prt{m_ix}{i_feature}(i_rewsize,i_time) = p(2);
                     end
                 end
                 
@@ -482,7 +489,8 @@ end
 %   show across features
 cell_threshold = true; 
 pool_analyze_ix = round(3000/tbin_ms); 
-vis_features = [1 2 3 5 6];
+vis_features = [1 2 5];
+vis_rewsizes = [4]; 
 % close all
 figure();hold on 
 
@@ -541,7 +549,7 @@ for i_feature = 1:numel(vis_features)
     xMouse_rewsize_full = cat(1,xMouse_rewsize{:}); 
     xMouse_timeSince_full = cat(1,xMouse_timeSince{:}); 
     
-    for i_tt = 1:numel(trialtypes)
+    for i_rewsize = 1:numel(vis_rewsizes)
         iRewsize = vis_rewsizes(i_rewsize);
         these_trials = find(xMouse_rewsize_full == iRewsize);
         nTrials_tt = length(these_trials);
@@ -563,13 +571,13 @@ for i_feature = 1:numel(vis_features)
             if length(find(~isnan(i_time_decoding))) > 1
                 [r,p] = corrcoef(i_time_decoding(~isnan(i_time_decoding)),prts_tt(~isnan(i_time_decoding)));
                 
-                r_prt{m_ix}{i_feature}(i_tt,i_time) = r(2);
-                p_prt{m_ix}{i_feature}(i_tt,i_time) = p(2);
+                r_prt{m_ix}{i_feature}(i_rewsize,i_time) = r(2);
+                p_prt{m_ix}{i_feature}(i_rewsize,i_time) = p(2);
 %                 p_prt{m_ix}{i_feature}(i_tt,i_time) = kruskalwallis(i_time_decoding(~isnan(i_time_decoding)),tercile_bin(~isnan(i_time_decoding)),'off'); 
             end
         end
         
-        subplot(numel(trialtypes),numel(vis_features),numel(vis_features) * (i_tt - 1) + i_feature);hold on
+        subplot(numel(vis_rewsizes),numel(vis_features),numel(vis_features) * (i_rewsize - 1) + i_feature);hold on
         % terciles visualization
         for i_tercile = 1:max(tercile_bin)
             if length(find(tercile_bin == i_tercile)) > 1
@@ -581,7 +589,7 @@ for i_feature = 1:numel(vis_features)
         
         star_yloc = max(var_bins{mIdx}{this_rewsize}{1})+1.05;
         for i_time = 1:max(var_bins{mIdx}{this_rewsize}{1})*1000/tbin_ms
-            if p_prt{m_ix}{i_feature}(i_tt,i_time) < .05
+            if p_prt{m_ix}{i_feature}(i_rewsize,i_time) < .05
                 % text(i_time*tbin_ms/1000,max(var_bins{mIdx}{this_rewsize}{1})+.05,'*','HorizontalAlignment','center')
                 plot([i_time i_time+1]*tbin_ms/1000,[star_yloc star_yloc],'k-','linewidth',2)
             end
@@ -594,7 +602,7 @@ for i_feature = 1:numel(vis_features)
         yticks(0:1:pool_analyze_ix*tbin_ms/1000)
         set(gca,'fontsize',13)
         
-        if i_tt == 1
+        if i_rewsize == 1
             title(feature_names(iFeature))
         end
 

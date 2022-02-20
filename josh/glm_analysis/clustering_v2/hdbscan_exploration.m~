@@ -1,0 +1,15 @@
+%% Try out a UMAP-> HDBSCAN first on digits dataset 
+
+%% Load digits data 
+oldpath = addpath(fullfile(matlabroot,'examples','nnet','main'));
+filenameImagesTrain = 'train-images-idx3-ubyte.gz';
+filenameLabelsTrain = 'train-labels-idx1-ubyte.gz';
+filenameImagesTest = 't10k-images-idx3-ubyte.gz';
+filenameLabelsTest = 't10k-labels-idx1-ubyte.gz';
+
+XTrain = processImagesMNIST(filenameImagesTrain);
+YTrain = processLabelsMNIST(filenameLabelsTrain);
+XTest = processImagesMNIST(filenameImagesTest);
+YTest = processLabelsMNIST(filenameLabelsTest);
+[XTrain,YTrain,anglesTrain] = digitTrain4DArrayData;
+[XTest,YTest,anglesTest] = digitTest4DArrayData;

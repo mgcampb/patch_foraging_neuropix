@@ -5,7 +5,7 @@ paths.data_proc = 'G:\My Drive\UchidaLab\PatchForaging\processed_neuropix_data';
 session = dir(paths.data);
 session = {session.name}';
 session = session(contains(session,'.mat'));
-
+%%
 mw_all = [];
 cellID = cell(10000,1);
 counter = 1;

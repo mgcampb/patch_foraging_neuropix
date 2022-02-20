@@ -144,30 +144,30 @@ for clustIdx = 1:5
             meanR0 = [meanR0; nanmean(psth_clust{cIdx}.psth_stop(keep_trial,:),1)];
         end
 
-        subplot(5,numel(opt.rew_size),ctr); hold on;
-        shadedErrorBar(t,nanmean(meanRR),nanstd(meanRR)/sqrt(size(meanRR,1)),'lineprops',{'Color',plot_col(rIdx,:)});
-        shadedErrorBar(t,nanmean(meanR0),nanstd(meanR0)/sqrt(size(meanR0,1)),'lineprops','k');
+        subplot(numel(opt.rew_size),5,5 * (rIdx - 1) + clustIdx); hold on;
+        shadedErrorBar(t,nanmean(meanRR),nanstd(meanRR)/sqrt(size(meanRR,1)),'lineprops',{'Color',plot_col(rIdx,:),'linewidth',1.25});
+        shadedErrorBar(t,nanmean(meanR0),nanstd(meanR0)/sqrt(size(meanR0,1)),'lineprops',{'Color','k','linewidth',1.25});
         xlim([0 2]);
         miny = min(miny,min(ylim));
         maxy = max(maxy,max(ylim));
+        xline(1,'k--')
         
-        title(sprintf('Cluster %d, %d%d vs %d0',clustIdx,rew_size,rew_size,rew_size));
+        if rIdx == 1
+            title(sprintf('Cluster %d',clustIdx),'fontsize',14);
+        end
         
-        if rIdx==1
-            ylabel('Firing rate');
+        if clustIdx == 1
+            ylabel('Firing rate (Hz)');
         end
         
         ctr = ctr+1;
+        ylim([miny maxy]);
+        if rIdx == 3 
+            subplot(numel(opt.rew_size),5,5 * (rIdx - 1) + clustIdx);
+            subplot(numel(opt.rew_size),5,5 * (rIdx - 1) + clustIdx); xlabel('Time from patch stop (s)');
+        end
     end
-    
-    subplot(5,numel(opt.rew_size),ctr-3); ylim([miny maxy]);
-    subplot(5,numel(opt.rew_size),ctr-2); ylim([miny maxy]);
-    subplot(5,numel(opt.rew_size),ctr-1); ylim([miny maxy]);
 end
-
-subplot(5,numel(opt.rew_size),ctr-3); xlabel('Time from patch stop (s)');
-subplot(5,numel(opt.rew_size),ctr-2); xlabel('Time from patch stop (s)');
-subplot(5,numel(opt.rew_size),ctr-1); xlabel('Time from patch stop (s)');
 
 saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 
@@ -179,6 +179,7 @@ opt.rew_size = [1 2 4];
 plot_col = cool(3);
 
 ctr = 1;
+for rIdx = 1:numel(opt.rew_size)
 for clustIdx = 1:5
 
     psth_clust = psth_all(sig_cells.GMM_cluster ==clustIdx);
@@ -186,7 +187,7 @@ for clustIdx = 1:5
     miny = 100;
     maxy = 0;
 
-    for rIdx = 1:numel(opt.rew_size)
+    
         rew_size = opt.rew_size(rIdx);
         meanR00 = [];
         meanRR0 = [];
@@ -210,7 +211,7 @@ for clustIdx = 1:5
             meanRRR = [meanRRR; nanmean(psth_clust{cIdx}.psth_stop(keep_trial,:),1)];
         end
 
-        subplot(5,numel(opt.rew_size),ctr); hold on;
+        subplot(numel(opt.rew_size),5,ctr); hold on;
         shadedErrorBar(t,nanmean(meanRRR),nanstd(meanRRR)/sqrt(size(meanRRR,1)),'lineprops',{'Color',plot_col(rIdx,:)});
         shadedErrorBar(t,nanmean(meanRR0),nanstd(meanRR0)/sqrt(size(meanRR0,1)),'lineprops',{'Color',plot_col(rIdx,:)*0.7});
         shadedErrorBar(t,nanmean(meanR0R),nanstd(meanR0R)/sqrt(size(meanR0R,1)),'lineprops',{'Color',plot_col(rIdx,:)*0.3});
@@ -220,25 +221,31 @@ for clustIdx = 1:5
         miny = min(miny,min(ylim));
         maxy = max(maxy,max(ylim));
         
-        title(sprintf('Cluster%d, %duL RXX',clustIdx,rew_size));
+        title(sprintf('Cluster %d, %iXX',clustIdx,rew_size));
+        set(gca,'fontsize',13)
         
         if rIdx==1
-            ylabel('Firing rate');
+            ylabel('Firing rate (Hz)');
         end
         
         ctr = ctr+1;
     end
-    
-    subplot(5,numel(opt.rew_size),ctr-3); ylim([miny maxy]);
-    subplot(5,numel(opt.rew_size),ctr-2); ylim([miny maxy]);
-    subplot(5,numel(opt.rew_size),ctr-1); ylim([miny maxy]);
+    subplot(numel(opt.rew_size),5,ctr-5);%  ylim([miny maxy]);
+    subplot(numel(opt.rew_size),5,ctr-4);%  ylim([miny maxy]);
+    subplot(numel(opt.rew_size),5,ctr-3);%  ylim([miny maxy]);
+    subplot(numel(opt.rew_size),5,ctr-2);%  ylim([miny maxy]);
+    subplot(numel(opt.rew_size),5,ctr-1);% ylim([miny maxy]);
+    legend(sprintf("%i00",rew_size),sprintf("%i%i0",rew_size,rew_size),sprintf("%i0%i",rew_size,rew_size),sprintf("%i%i%i",rew_size,rew_size,rew_size))
+
+    set(gca,'fontsize',13)
 end
+subplot(numel(opt.rew_size),5,ctr-5); xlabel('Time from patch stop (s)');
+subplot(numel(opt.rew_size),5,ctr-4); xlabel('Time from patch stop (s)');
+subplot(numel(opt.rew_size),5,ctr-3); xlabel('Time from patch stop (s)');
+subplot(numel(opt.rew_size),5,ctr-2); xlabel('Time from patch stop (s)');
+subplot(numel(opt.rew_size),5,ctr-1); xlabel('Time from patch stop (s)');
 
-subplot(5,numel(opt.rew_size),ctr-3); xlabel('Time from patch stop (s)');
-subplot(5,numel(opt.rew_size),ctr-2); xlabel('Time from patch stop (s)');
-subplot(5,numel(opt.rew_size),ctr-1); xlabel('Time from patch stop (s)');
-
-saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
+% saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
 
 %% avg psth around patch leave
 
@@ -246,6 +253,8 @@ hfig = figure('Position',[200 200 300 600]);
 hfig.Name = sprintf('PSTH patch leave sig cells %s cohort %s',opt.data_set,opt.brain_region);
 opt.rew_size = [1 2 4];
 plot_col = cool(3);
+
+
 
 for clustIdx = 1:5
 
@@ -278,3 +287,83 @@ end
 xlabel('Time from patch leave (s)');
 
 saveas(hfig,fullfile(paths.figs,hfig.Name),'png');
+
+%% PSTH aligned to patch stop and patch leave ... in same figure!!
+
+
+opt.rew_size = [1 2 4];
+plot_col = cool(3);
+
+hfig = figure;
+hfig.Name = sprintf('PSTH patch stop sig cells RR vs R0 and leave %s cohort %s',opt.data_set,opt.brain_region);
+
+ctr = 1;
+for clustIdx = 1:5
+
+    psth_clust = psth_all(sig_cells.GMM_cluster==clustIdx);
+    
+    miny = 100;
+    maxy = 0;
+
+    for rIdx = 1:numel(opt.rew_size)
+        rew_size = opt.rew_size(rIdx);
+        meanRR = [];
+        meanR0 = [];
+        t = opt.min_stop:0.01:opt.max_stop;
+        for cIdx = 1:numel(psth_clust)
+            keep_trial = psth_clust{cIdx}.rew_barcode(:,1)==rew_size & psth_clust{cIdx}.rew_barcode(:,2)==rew_size & psth_clust{cIdx}.rew_barcode(:,3)>-1;
+            meanRR = [meanRR; nanmean(psth_clust{cIdx}.psth_stop(keep_trial,:),1)];
+
+            keep_trial = psth_clust{cIdx}.rew_barcode(:,1)==rew_size & psth_clust{cIdx}.rew_barcode(:,2)==0 & psth_clust{cIdx}.rew_barcode(:,3)>-1;
+            meanR0 = [meanR0; nanmean(psth_clust{cIdx}.psth_stop(keep_trial,:),1)];
+        end
+
+        subplot(numel(opt.rew_size) + 1,5,5 * (rIdx - 1) + clustIdx); hold on;
+        shadedErrorBar(t,nanmean(meanRR),nanstd(meanRR)/sqrt(size(meanRR,1)),'lineprops',{'Color',plot_col(rIdx,:),'linewidth',1.25});
+        shadedErrorBar(t,nanmean(meanR0),nanstd(meanR0)/sqrt(size(meanR0,1)),'lineprops',{'Color','k','linewidth',1.25});
+        xlim([0 2]);
+        miny = min(miny,min(ylim));
+        maxy = max(maxy,max(ylim));
+        xline(1,'k--')
+        
+        if rIdx == 1
+            title(sprintf('Cluster %d',clustIdx),'fontsize',14);
+        end
+        
+        if clustIdx == 1
+            ylabel('Firing rate (Hz)');
+        end
+        
+        ctr = ctr+1;
+        ylim([miny maxy]);
+        if rIdx == 3 
+            subplot(numel(opt.rew_size)+1,5,5 * (rIdx - 1) + clustIdx);
+            subplot(numel(opt.rew_size)+1,5,5 * (rIdx - 1) + clustIdx); xlabel('Time from patch stop (s)');
+        end
+        if clustIdx==1
+            legend({sprintf('%i%i',opt.rew_size(rIdx),opt.rew_size(rIdx)),sprintf('%i0',opt.rew_size(rIdx))});
+        end
+    end
+    
+    subplot(numel(opt.rew_size)+1,5,5 * 3 + clustIdx); hold on;
+    
+    for rIdx = 1:numel(opt.rew_size)
+        rew_size = opt.rew_size(rIdx);
+        meanFR = [];
+        t = opt.min_leave:0.01:opt.max_leave;
+        for cIdx = 1:numel(psth_clust)
+            keep_trial = psth_clust{cIdx}.rew_barcode(:,1)==rew_size;
+            meanFR = [meanFR; nanmean(psth_clust{cIdx}.psth_leave(keep_trial,:),1)];
+        end
+        shadedErrorBar(t,nanmean(meanFR),nanstd(meanFR)/sqrt(size(meanFR,1)),'lineprops',{'Color',plot_col(rIdx,:)});
+
+    end
+    xline(0,'k--')
+    xlim([-2 1]);
+    xlabel("Time from patch leave (sec)")
+    if clustIdx==1
+        ylabel('Firing rate (Hz)');
+        legend({'1uL','2uL','4uL'});
+    end
+end
+

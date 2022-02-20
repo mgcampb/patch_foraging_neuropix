@@ -2,6 +2,7 @@ function cluster_gscatter(num_vis_pcs,score,labels,n_clust)
     %CLUSTER_GSCATTER Function to plot clustered data across pcs 
     % Visualize gmm results
     figure(); hold on
+%     if num_vis_pcs == 
     for iPC = 2:num_vis_pcs
         if num_vis_pcs > 6
             subplot(2,round(num_vis_pcs/2),iPC-1); hold on; 

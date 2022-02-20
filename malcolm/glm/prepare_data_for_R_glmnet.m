@@ -25,7 +25,7 @@ session_all = {session_all.name}';
 for i = 1:numel(session_all)
     session_all{i} = session_all{i}(1:end-4);
 end
-
+%%
 % analysis opts
 opt = struct;
 
@@ -78,8 +78,8 @@ t_basis_rew = 0:opt.tbin:opt.basis_length_rew;
 db = (max(t_basis_rew) - min(t_basis_rew))/(opt.nbasis_rew-1);
 c = min(t_basis_rew):db:max(t_basis_rew);
 bas_rew = nan(opt.nbasis_rew,length(t_basis_rew));
-for k = 1:opt.nbasis_rew
-  bas_rew(k,:) = (cos(max(-pi, min(pi,pi*(t_basis_rew - c(k))/(db))) ) + 1) / 2;
+for k = 5 % :opt.nbasis_rew
+  bas_rew(k,:) = (cos(max(-pi, min(pi,pi*(t_basis_rew - c(k))/(db))  ) ) + 1) / 2;
 end
 
 %%

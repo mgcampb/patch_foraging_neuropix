@@ -45,6 +45,7 @@ rdbu3 = cbrewer('div',"RdBu",10);
 rdbu3 = rdbu3([3 7 end],:);
 var_bins = nb_results.var_bins;
 var_dt = diff(nb_results.var_bins{1}{1}{1}(1:2));
+clu_pool_sessions = nb_results.clu_pool_sessions;
 
 %% 0) Reformat decoded time, load rewsize, RXNil, prts, and postRew_prts
 %   Cell format: timeSince_hat{mIdx}{i}{trained_rewsize}{i_feature}{iTrial}
@@ -115,72 +116,137 @@ clear y_hat % we now have this in an easier form to work with
 % color by time since last rew 
 
 analyze_ix = [3000/tbin_ms 3000/tbin_ms 5000 / tbin_ms 3000/tbin_ms 3000/tbin_ms];
+pool_analyze_ix = [2000 / tbin_ms 3000/tbin_ms 3000/tbin_ms]; 
 smoothing_sigma = 1; 
 vis_rewsizes = [1 2 4];
+vis_features = [1 2 5]; 
+xMouse_timeUntil = cell(numel(vis_features),1);
+xMouse_rewsize = cell(numel(vis_features),1);
+xMouse_postRew_prts = cell(numel(vis_features),1); 
+xMouse_last_rew_ix = cell(numel(vis_features),1); 
 
-vis_mice = 1:5;
+cell_threshold = true; 
+
 close all
-for i_feature = [1 2 5 6]
+for i_feature = 1:numel(vis_features) 
+    iFeature = vis_features(i_feature); 
     figure();hold on
     for m_ix = 1:numel(analysis_mice)
         mIdx = analysis_mice(m_ix);  % 1:numel(mouse_grps)
-        session_var_bins = var_bins{mIdx}{iRewsize}{timeUntil_ix};
-        % load last reward ix for pooled sessions
-        mouse_last_rew_ix = cat(1,last_rew_ix{mIdx}{:}); 
-        % load post rew residence times
-        mouse_postRew_prts = cat(1,postRew_prts{mIdx}{:}); 
-        nTrials = length(mouse_postRew_prts); 
-        % load reward size .. would probably be good to divide by this
-        mouse_rewsize = cat(1,rewsize{mIdx}{:}); 
         
-        % gather decoded time variable from i_feature
-        mouse_timeUntil = cellfun(@(x) x{i_feature}, timeUntil_hat{mIdx},'un',0);
-        mouse_timeUntil = cat(1,mouse_timeUntil{:});
-        % now just pull off decoded timesince after last reward
-        mouse_timeUntil = arrayfun(@(iTrial) mouse_timeUntil{iTrial}(mouse_last_rew_ix(iTrial):end-25),(1:nTrials)','un',0); 
-        % concatenate and pad to make [nTrials x analyze_ix] sized matrix that will be nice to work with
-        pad_timeUntil = cellfun(@(x) [nan(max(0,analyze_ix(mIdx) - (length(x)-1)),1) ; x(end-min((length(x)-1),analyze_ix(mIdx)):end)]',mouse_timeUntil,'un',0);
-        mouse_timeUntil = var_dt * cat(1,pad_timeUntil{:}); % now this is a matrix
-        
-        for i_rewsize = 1:numel(vis_rewsizes) 
-            iRewsize = vis_rewsizes(i_rewsize); 
-            these_trials = find(mouse_rewsize == iRewsize);
-            nTrials_tt = length(these_trials);
-            cmap = cbrewer('div',"RdBu",nTrials_tt);
-            
-            % grab decoded variable
-            timeuntil_tt = mouse_timeUntil(these_trials,:); 
-            prts_these_trials = mouse_postRew_prts(these_trials);
-            
-            terciles = [0 quantile(prts_these_trials,2) max(prts_these_trials)];
-            [~,~,tercile_bin] = histcounts(prts_these_trials,terciles);
-            
-            subplot(numel(vis_rewsizes),numel(analysis_mice),numel(analysis_mice) * (i_rewsize - 1) + m_ix);hold on
-            for i_tercile = 1:max(tercile_bin)
-                tt_tercile_mean = nanmean(timeuntil_tt(tercile_bin == i_tercile,:));
-                tt_tercile_sem = nanstd(timeuntil_tt(tercile_bin == i_tercile,:)) / sqrt(length(find(tercile_bin == i_tercile))); 
-                shadedErrorBar((0:analyze_ix(mIdx))*tbin_ms/1000,tt_tercile_mean,tt_tercile_sem,'lineProps',{'color',rdbu3(i_tercile,:)})
-            end
-            
-            xlim([0 analyze_ix(mIdx)*tbin_ms/1000]) 
-            ylim([0 max(session_var_bins)]) 
-            xticks(0:1:analyze_ix(mIdx)*tbin_ms/1000)
-            xticklabels(fliplr(0:1:analyze_ix(mIdx)*tbin_ms/1000))
-            
-            if i_rewsize == 1
-                title(mouse_names(mIdx))
-            end
-            if m_ix == 1 && i_rewsize == 1
-                legend(["Earliest Leaves","Middle Leaves","Late Leaves"])
-            end
-            if i_rewsize == numel(vis_rewsizes)
-                xlabel("Time Until Leave (sec)");
-            end
-            if m_ix == 1
-                ylabel(sprintf("%i uL \n Decoded Time Until Leave (sec)",iRewsize));
-            end 
-            
+        if iFeature <= 3 && cell_threshold == true % introduce # cell session inclusion criterion 
+            mouse_include_sessions = ismember(pool_sessions{mIdx},clu_pool_sessions{iFeature}{mIdx}); 
+            mouse_last_rew_ix = cat(1,last_rew_ix{mIdx}(mouse_include_sessions));
+            mouse_last_rew_ix = cat(1,mouse_last_rew_ix{:}); 
+            mouse_postRew_prts = cat(1,postRew_prts{mIdx}(mouse_include_sessions));
+            mouse_postRew_prts = cat(1,mouse_postRew_prts{:}); 
+            mouse_rewsize = cat(1,rewsize{mIdx}(mouse_include_sessions)); 
+            mouse_rewsize = cat(1,mouse_rewsize{:}); 
+            mouse_timeUntil = cellfun(@(x) x{iFeature}, timeUntil_hat{mIdx}(mouse_include_sessions),'un',0);
+            mouse_timeUntil = cat(1,mouse_timeUntil{:});
+        else
+            % load last reward ix for pooled sessions
+            mouse_last_rew_ix = cat(1,last_rew_ix{mIdx}{:});
+            % load post rew residence times
+            mouse_postRew_prts = cat(1,postRew_prts{mIdx}{:});
+            % load reward size .. would probably be good to divide by this
+            mouse_rewsize = cat(1,rewsize{mIdx}{:});
+            % gather decoded time variable from i_feature
+            mouse_timeUntil = cellfun(@(x) x{iFeature}, timeUntil_hat{mIdx},'un',0);
+            mouse_timeUntil = cat(1,mouse_timeUntil{:});
         end
-    end 
-    suptitle(feature_names(i_feature))
+
+        nTrials = length(mouse_last_rew_ix); 
+        if nTrials > 0
+            % now just pull off decoded timesince after last reward
+            mouse_timeUntil = arrayfun(@(iTrial) mouse_timeUntil{iTrial}(mouse_last_rew_ix(iTrial):end),(1:nTrials)','un',0);
+            % concatenate and pad to make [nTrials x analyze_ix] sized matrix that will be nice to work with
+            pad_timeUntil = cellfun(@(x) [nan(max(0,analyze_ix(mIdx) - (length(x)-1)),1) ; x(end-min((length(x)-1),analyze_ix(mIdx)):end)]',mouse_timeUntil,'un',0);
+            mouse_timeUntil = var_dt * cat(1,pad_timeUntil{:}); % now this is a matrix
+            
+            for i_rewsize = 1:numel(vis_rewsizes)
+                iRewsize = vis_rewsizes(i_rewsize);
+                session_var_bins = var_bins{mIdx}{iRewsize}{timeUntil_ix};
+                these_trials = find(mouse_rewsize == iRewsize);
+                nTrials_tt = length(these_trials);
+                cmap = cbrewer('div',"RdBu",nTrials_tt);
+                
+                % grab decoded variable
+                timeuntil_tt = mouse_timeUntil(these_trials,:);
+                prts_these_trials = mouse_postRew_prts(these_trials);
+                
+                terciles = [0 quantile(prts_these_trials,2) max(prts_these_trials)];
+                [~,~,tercile_bin] = histcounts(prts_these_trials,terciles);
+                
+                subplot(numel(vis_rewsizes),numel(analysis_mice),numel(analysis_mice) * (i_rewsize - 1) + m_ix);hold on
+                for i_tercile = 1:max(tercile_bin)
+                    xMouse_timeUntil{iFeature}{i_rewsize}{i_tercile}{m_ix} = timeuntil_tt(tercile_bin == i_tercile,end-pool_analyze_ix(i_rewsize):end);
+                    tt_tercile_mean = nanmean(timeuntil_tt(tercile_bin == i_tercile,:));
+                    tt_tercile_sem = 1.96 * nanstd(timeuntil_tt(tercile_bin == i_tercile,:)) / sqrt(length(find(tercile_bin == i_tercile)));
+                    shadedErrorBar((0:analyze_ix(mIdx))*tbin_ms/1000,tt_tercile_mean,tt_tercile_sem,'lineProps',{'color',rdbu3(i_tercile,:)})
+                end
+                
+                xlim([0 analyze_ix(mIdx)*tbin_ms/1000])
+                ylim([0 max(session_var_bins)])
+                xticks(0:1:analyze_ix(mIdx)*tbin_ms/1000)
+                xticklabels(fliplr(0:1:analyze_ix(mIdx)*tbin_ms/1000))
+                
+                if i_rewsize == 1
+                    title(mouse_names(mIdx))
+                end
+                if m_ix == 1 && i_rewsize == 1
+                    legend(["Earliest Leaves","Middle Leaves","Late Leaves"])
+                end
+                if i_rewsize == numel(vis_rewsizes)
+                    xlabel("Time Until Leave (sec)");
+                end
+                if m_ix == 1
+                    ylabel(sprintf("%i uL \n Decoded Time Until Leave (sec)",iRewsize));
+                end
+                
+            end
+        end
+    end
+    suptitle(feature_names(iFeature))
+end
+
+%% Plot mean across mice
+figure();hold on
+for i_feature = 1:numel(vis_features)
+    iFeature = vis_features(i_feature);
+    for i_rewsize = 1:numel(vis_rewsizes)
+        iRewsize = vis_rewsizes(i_rewsize);
+        session_var_bins = var_bins{mIdx}{iRewsize}{timeUntil_ix};
+        these_trials = find(mouse_rewsize == iRewsize);
+        nTrials_tt = length(these_trials);
+
+        subplot(numel(vis_rewsizes),numel(vis_features),numel(vis_features) * (i_rewsize - 1) + i_feature);hold on
+        for i_tercile = 1:max(tercile_bin)
+            timeuntil_tt = cat(1,xMouse_timeUntil{iFeature}{i_rewsize}{i_tercile}{:});
+%             timeuntil_tt = cat(1,xMouse_timeUntil{iFeature}{i_rewsize}{i_tercile}(2:end));
+%             timeuntil_tt = cat(1,timeuntil_tt{:});
+            tt_tercile_mean = nanmedian(timeuntil_tt);
+            tt_tercile_sem = 1.96 * nanstd(timeuntil_tt) / sqrt(size(timeuntil_tt,1));
+            shadedErrorBar((0:pool_analyze_ix(i_rewsize))*tbin_ms/1000,tt_tercile_mean,tt_tercile_sem,'lineProps',{'color',rdbu3(i_tercile,:),'linewidth',1.5})
+        end
+        
+        xlim([0 pool_analyze_ix(i_rewsize)*tbin_ms/1000])
+        ylim([0 max(session_var_bins)])
+        xticks(0:1:pool_analyze_ix(i_rewsize)*tbin_ms/1000)
+        xticklabels(fliplr(0:1:pool_analyze_ix(i_rewsize)*tbin_ms/1000))
+        
+        if i_rewsize == 1
+            title(feature_names(iFeature))
+        end
+        if i_feature == 1 && i_rewsize == 1
+            legend(["Earliest Leaves","Middle Leaves","Late Leaves"])
+        end
+        if i_rewsize == numel(vis_rewsizes)
+            xlabel("Time Until Leave (sec)");
+        end
+        if i_feature == 1
+            ylabel(sprintf("%i uL \n Decoded Time Until Leave (sec)",iRewsize));
+        end 
+        set(gca,'fontsize',13)
+    end
 end

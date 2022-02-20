@@ -160,7 +160,7 @@ end
 
 %% 2) Plot # neurons vs normalized mutual information and RMSE
 cool3 = cool(3); 
-
+close all
 iFeature = 5; % all GLM significant cells
 n_cells_threshold = 30; 
 figure()
@@ -295,6 +295,7 @@ end
 
 %% 4) Visualize confusion matrices pooling sessions over mice 
 vis_mice = find(cellfun(@length, pool_sessions) > 0);
+close all
 figure() 
 for m_ix = 1:numel(vis_mice) 
     mIdx = vis_mice(m_ix); 
@@ -340,23 +341,41 @@ for m_ix = 1:numel(vis_mice)
     end
 end
 
+%% 4.99) chance performance
+true_t = 0:.1:3;
+n_runs = 100000; 
+chance_performance = nan(n_runs,numel(true_t));
+for i_run = 1:n_runs
+    for i_t = 1:numel(true_t)
+        this_true_t = true_t(i_t);
+        chance_performance(i_run,i_t) = (rand() * max(true_t) - this_true_t).^2;
+    end
+end
+rmse_chance = sqrt(mean(chance_performance)); 
+plot(true_t,rmse_chance,'color','k','linewidth',2,'linestyle','--')
 %% 5) Visualize confusion mats pooled across mice 
 pool_mice = 2:5; 
 pool_var_bins = var_bins{2}{4}{1};
-colors = [lines(4);0 .9 .9 ; .2 .2 .2]; 
+gmm_colors = [68 119 170; 238 102 119; 34 136 51; 204 187 68; 102 204 238]/255;
+colors = [gmm_colors(1:4,:);0 .9 .9 ; .2 .2 .2]; 
 n_bins = length(pool_var_bins) - 1;
 %  Do not include mouse 78 here
 xMouse_goodConfusion_mats = good_confusion_mats(pool_mice);
 xMouse_good_errors = good_errors(pool_mice);
 xMouse_good_y_true = good_y_true(pool_mice);
-close all
+pvals = cell(numel(vis_features),1);
 
+n_bootstramp_samples = 1000; 
+
+% close all
+vis_features = 1:6;
 for i_feature = 1:numel(vis_features) 
     confusionmat_tmp = cell(numel(pool_mice),1);
+    iFeature = vis_features(i_feature);
     for m_ix = 1:numel(pool_mice)
         for i = 1:numel(xMouse_goodConfusion_mats{m_ix}) 
-            if ~isempty(xMouse_goodConfusion_mats{m_ix}{i}{i_feature})
-                confusionmat_tmp{m_ix}{i} = xMouse_goodConfusion_mats{m_ix}{i}{i_feature}(1:n_bins,1:n_bins);
+            if ~isempty(xMouse_goodConfusion_mats{m_ix}{i}{iFeature})
+                confusionmat_tmp{m_ix}{i} = xMouse_goodConfusion_mats{m_ix}{i}{iFeature}(1:n_bins,1:n_bins);
             end
         end
     end 
@@ -367,11 +386,14 @@ for i_feature = 1:numel(vis_features)
     
     figure(1)
     subplot(2,numel(vis_features),i_feature)
-    imagesc(flipud(confusionmat_pooled)) 
+%     imagesc(flipud(confusionmat_pooled)) 
+    imagesc(flipud(confusionmat_pooled ./ sum(confusionmat_pooled))) 
+    caxis([0 .2])
+%     colorbar()
     
     % ylabel
     if i_feature == 1
-        ylabel("True Time Since Reward (sec)")
+        ylabel("True Time Since Rew (sec)")
         yticks(1:10:(length(pool_var_bins)-1));
         yticklabels(fliplr(pool_var_bins(1:10:end)))
     else
@@ -379,9 +401,9 @@ for i_feature = 1:numel(vis_features)
     end
     
     xlabel("Decoded T. Since Rew (sec)") 
-    xticks(1:10:(length(pool_var_bins)-1));
-    xticklabels(pool_var_bins(1:10:end))
-    title(dataset_opt.features{5}{2}{i_feature}.name)
+    xticks(1:20:(length(pool_var_bins)-1));
+    xticklabels(pool_var_bins(1:20:end))
+    title(dataset_opt.features{5}{2}{iFeature}.name)
     set(gca,'fontsize',12)
 
     errors_tmp = cell(numel(pool_mice),1); 
@@ -391,8 +413,8 @@ for i_feature = 1:numel(vis_features)
         errors_tmp{m_ix} = cell(numel(xMouse_goodConfusion_mats{m_ix}) ,1); 
         ytrue_tmp{m_ix} = cell(numel(xMouse_goodConfusion_mats{m_ix}) ,1);
         for i = 1:numel(xMouse_goodConfusion_mats{m_ix}) 
-            if ~isempty(xMouse_goodConfusion_mats{m_ix}{i}{i_feature})
-                errors_tmp{m_ix}{i} = xMouse_good_errors{m_ix}{i}{i_feature};
+            if ~isempty(xMouse_goodConfusion_mats{m_ix}{i}{iFeature})
+                errors_tmp{m_ix}{i} = xMouse_good_errors{m_ix}{i}{iFeature};
                 ytrue_tmp{m_ix}{i} = xMouse_good_y_true{m_ix}{i};
             end
         end
@@ -412,51 +434,60 @@ for i_feature = 1:numel(vis_features)
     ytrue_full = cat(1,ytrue_cat{:}); 
     
     rmse_mean = nan(numel(pool_var_bins),1); 
-    rmse_sem = nan(numel(pool_var_bins),1);
+    rmse_ci = nan(numel(pool_var_bins),1);
+    pvals{i_feature} = nan(numel(pool_var_bins),1);
+    chance_perf = mean(chance_performance);
     for i_time = 1:numel(pool_var_bins) 
         iTime = pool_var_bins(i_time); 
         n = length(find((abs(ytrue_full - iTime) < .001)));
-        rmse_mean(i_time) = sqrt(nanmean(errors_full(abs(ytrue_full - iTime) < .01).^2)); 
-        rmse_sem(i_time) = 1.96*nanstd(errors_full(abs(ytrue_full - iTime) < .01).^2) / sqrt(n); 
+%         rmse_mean(i_time) = sqrt(nanmean(errors_full(abs(ytrue_full - iTime) < .01).^2)); 
+        this_time_errors = errors_full(abs(ytrue_full - iTime) < .01);
+        rmse_mean(i_time) = sqrt(nanmean(this_time_errors.^2)); 
+        this_chance_rmse = min(rmse_chance(abs(true_t - iTime) < 0.01)); 
+        if ~isnan(rmse_mean(i_time))
+            this_time_bootstrap_rmse = bootstrp(n_bootstramp_samples,@(x)sqrt(nanmean(x.^2)),this_time_errors);
+            rmse_ci(i_time) = (quantile(this_time_bootstrap_rmse,.975) - quantile(this_time_bootstrap_rmse,.025));
+            pvals{i_feature}(i_time) = length(find(this_time_bootstrap_rmse > this_chance_rmse)) / n_bootstramp_samples;
+        end
     end
+    set(gca,'fontsize',15) 
     subplot(2,numel(vis_features),i_feature + numel(vis_features))
-    shadedErrorBar(pool_var_bins,rmse_mean,rmse_sem,'lineprops',{'linewidth',1.5,'color',colors(i_feature,:)}) ;hold on
+    shadedErrorBar(pool_var_bins,rmse_mean,rmse_ci,'lineprops',{'linewidth',1.5,'color',colors(iFeature,:)}) ;hold on
+    plot(true_t,rmse_chance,'color','k','linewidth',3,'linestyle','--')
     ylim([0 2]) 
-    xlabel("True Time (sec)") 
+    xlabel("True T. Since Rew (sec)") 
     if i_feature == 1
         ylabel("RMSE (sec)")
     end 
     for m_ix = 1:numel(pool_mice) 
-        plot(pool_var_bins,rmse_mean_mice{m_ix},'color',colors(i_feature,:))
+        plot(pool_var_bins,rmse_mean_mice{m_ix},'color',colors(iFeature,:))
     end
-    set(gca,'fontsize',13) 
-    
+    set(gca,'fontsize',16) 
+%     
     % now add same to other figure 
-    if ismember(i_feature,[1 2 4 5])
+    if ismember(i_feature,[1 2 5])
         figure(2) 
-        shadedErrorBar(pool_var_bins,rmse_mean,rmse_sem,'lineprops',{'linewidth',1.5,'color',colors(i_feature,:)}) ;hold on
+        shadedErrorBar(pool_var_bins,rmse_mean,rmse_ci,'lineprops',{'linewidth',1.5,'color',colors(i_feature,:)}) ;hold on
         ylim([0 2]) 
         xlabel("True Time (sec)") 
-        set(gca,'fontsize',13)  
-        legend(feature_names([1 2 4 5])) 
         title("Decoding Timecourse Across Sub-Populations") 
         ylabel("RMSE (sec)")
     end 
-    
-    if ismember(i_feature,[1 2 4]) || i_feature == 6
-        figure(3) 
-        shadedErrorBar(pool_var_bins,rmse_mean,rmse_sem,'lineprops',{'linewidth',1.5,'color',colors(i_feature,:)}) ;hold on
-        ylim([0 2]) 
-        xlabel("True Time (sec)") 
-        set(gca,'fontsize',13)  
-        legend(feature_names([1 2 4 6])) 
-        title("Decoding Timecourse Compared To Velocity") 
-        ylabel("RMSE (sec)")
-    end
-    
+%     
+%     if ismember(i_feature,[1 2 4]) || i_feature == 6
+%         figure(3) 
+%         shadedErrorBar(pool_var_bins,rmse_mean,rmse_ci,'lineprops',{'linewidth',1.5,'color',colors(i_feature,:)}) ;hold on
+%         ylim([0 2]) 
+%         xlabel("True Time (sec)") 
+%         set(gca,'fontsize',13)  
+%         legend(feature_names([1 2 4 6])) 
+%         title("Decoding Timecourse Compared To Velocity") 
+%         ylabel("RMSE (sec)")
+%     end
+%     
     if i_feature == 5 || i_feature == 6
         figure(4) 
-        shadedErrorBar(pool_var_bins,rmse_mean,rmse_sem,'lineprops',{'linewidth',1.5,'color',colors(i_feature,:)}) ;hold on
+        shadedErrorBar(pool_var_bins,rmse_mean,rmse_ci,'lineprops',{'linewidth',1.5,'color',colors(i_feature,:)}) ;hold on
         ylim([0 2]) 
         xlabel("True Time (sec)") 
         set(gca,'fontsize',13)  
@@ -465,6 +496,49 @@ for i_feature = 1:numel(vis_features)
         ylabel("RMSE (sec)")
     end 
 end 
+
+figure(2)
+plot(true_t,rmse_chance,'color','k','linewidth',3,'linestyle','--')
+set(gca,'fontsize',16)  
+
+legend([feature_names([1 2 5]) ; "Chance Performance"])
+
+figure(4)
+plot(true_t,rmse_chance,'color','k','linewidth',3,'linestyle','--')
+set(gca,'fontsize',16)  
+
+legend([feature_names([5 6]) ; "Chance Performance"])
+
+%% Convert confusionmat into data to get correlation coefficient
+vis_features = 1:6;
+pool_var_bins = var_bins{2}{4}{1};
+for i_feature = 1:numel(vis_features) 
+    confusionmat_tmp = cell(numel(pool_mice),1);
+    iFeature = vis_features(i_feature);
+    for m_ix = 1:numel(pool_mice)
+        for i = 1:numel(xMouse_goodConfusion_mats{m_ix}) 
+            if ~isempty(xMouse_goodConfusion_mats{m_ix}{i}{iFeature})
+                confusionmat_tmp{m_ix}{i} = xMouse_goodConfusion_mats{m_ix}{i}{iFeature}(1:n_bins,1:n_bins);
+            end
+        end
+    end 
+    confusionmat_tmp(cellfun(@isempty,confusionmat_tmp)) = []; 
+    confusionmat_cat = cellfun(@(x) cat(3,x{:}),confusionmat_tmp,'un',0);
+    confusionmat_cat = cat(3,confusionmat_cat{:}); 
+    confusionmat_pooled = sum(confusionmat_cat,3);
+    
+    data_full = [];
+    for i_decoded = 1:size(confusionmat_pooled,1)
+        for i_true = 1:size(confusionmat_pooled,2)
+            num_in_bin = confusionmat_pooled(i_decoded,i_true); % doesnt matter b/c we're doing R2...
+            these_time_values = [pool_var_bins(i_decoded) pool_var_bins(i_true)];
+            data_full = [data_full ; repmat(these_time_values,[num_in_bin 1])]; 
+        end
+    end
+    [r,p] = corrcoef(data_full(:,1),data_full(:,2));
+    fprintf("%s r: %.3f p: %.3f \n",feature_names(i_feature),r(2),p(2))
+end
+
 
 %% 5.5) Add session pooling information and save
 nb_results.pool_sessions = pool_sessions;
@@ -613,7 +687,7 @@ end
 %% 8) number of neurons vs time until leave decoding fidelity
 
 cool3 = cool(3); 
-
+close all
 iFeature = 5; % all GLM significant cells
 n_cells_threshold = 30; 
 figure()
@@ -736,9 +810,9 @@ for i_rewsize = 1:numel(rewsizes)
 end
 %% 10) Last, visualize time until leave confusion mats pooled across mice 
 
-pool_mice = [3 5]; 
+pool_mice = [2 3 4 5]; 
 pool_var_bins = var_bins{2}{4}{1};
-colors = [lines(4);0 .9 .9 ; .2 .2 .2]; 
+colors = [gmm_colors(1:4,:);0 .9 .9 ; .2 .2 .2]; 
 n_bins = length(pool_var_bins) - 1;
 %  Do not include mouse 78 here
 xMouse_goodConfusion_mats = good_confusion_mats(pool_mice);
@@ -772,8 +846,9 @@ for i_feature = 1:numel(vis_features)
     else
         yticks([])
     end
-    
-    xlabel("Decoded T. Until Leave (sec)") 
+    if i_feature == 1
+        xlabel("Decoded Time Until Leave (sec)")
+    end
     xticks(1:10:(length(pool_var_bins)-1));
     xticklabels(pool_var_bins(1:10:end))
     title(dataset_opt.features{5}{2}{i_feature}.name)
@@ -863,7 +938,7 @@ end
 
 %% 11) RMSE in 500 msec bins visualization, across features
 % close all
-pool_mice = [3 5]; 
+pool_mice = [2 3 4 5]; 
 pool_var_bins = var_bins{5}{1}{1};
 n_bins = length(pool_var_bins) - 1;
 %  Do not include mouse 78 here
@@ -915,7 +990,7 @@ for i_feature = 1:numel(vis_features)
     end
 end
 
-colororder([lines(4);0 .9 .9 ; .4 .4 .4])
+colororder([gmm_colors(1:4,:);0 .9 .9 ; .4 .4 .4])
 b = bar(rmse_mean');
 x = arrayfun(@(i_feature) b(i_feature).XEndPoints,1:numel(vis_features),'un',0);
 x = cat(2,x{:});
@@ -930,7 +1005,7 @@ xticklabels(binlabels)
 
 ylabel("RMSE (sec)") 
 ylim([0 2.5])
-title("m78 and m80")
+% title("m78 and m80")
 set(gca,'fontsize',13)
 
 %% 12a) Preview of one-by-one adding: Time Since Reward
